@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EasyRPG Player</title>
+  <title>EasyRPG Player (Web Localizer)</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -24,7 +24,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       margin: 0;
       color: white;
       background: black;
@@ -56,11 +56,13 @@
 
     .dialog-box h2 {
       margin-top: 0;
+      color: #fff;
     }
 
     .dialog-box p {
-      color: #aaa;
-      font-size: 0.9rem;
+      color: #ccc;
+      font-size: 0.95rem;
+      line-height: 1.5;
     }
 
     #game-file-input {
@@ -77,7 +79,8 @@
 
     #status {
       font-size: 1.2rem;
-      color: var(--color-gray);
+      color: #fff;
+      text-shadow: 1px 1px 2px black;
       text-align: center;
       margin-top: 20px;
       position: absolute;
@@ -158,7 +161,10 @@
   <div id="startup-dialog">
     <div class="dialog-box">
       <h2>ゲームを選択</h2>
-      <p>遊ぶゲームのデータ（.zipファイル）を選択してください。<br>※ブラウザ内でキャッシュを自動生成してから起動します。</p>
+      <p>
+        遊ぶゲームのデータ（.zipファイル）を選択してください。<br>
+        <small>※Shift-JIS・フォルダごと圧縮されたZIPにも対応しています。<br>※データはどこにもアップロードされません。</small>
+      </p>
       <input type="file" id="game-file-input" accept=".zip">
     </div>
   </div>
@@ -201,61 +207,9 @@ const canvas = document.getElementById('canvas');
 let easyrpgPlayer;
 let lastTouchedId;
 
-// ▼▼▼ 追加: ブラウザ内での gencache 処理 ▼▼▼
-function buildCacheTreeFromZip(zipFiles) {
-  const cache = {};
-  const paths = Object.keys(zipFiles);
-  
-  // ZIPが「1つの親フォルダ」にすべて格納されているか判定 (例: GameFolder/RPG_RT.ldb)
-  const rootKeys = paths.map(p => p.split('/')[0]);
-  const uniqueRoots = [...new Set(rootKeys)];
-  const isSingleRootFolder = uniqueRoots.length === 1 && zipFiles[uniqueRoots[0] + '/'];
-  const rootDepthIndex = isSingleRootFolder ? 1 : 0; // ルート階層とみなす深さ
-
-  for (const relativePath of paths) {
-    if (relativePath.endsWith('/')) continue; // フォルダ自体はスキップ
-    if (relativePath.toLowerCase() === 'index.json') continue; // 既存のindexは無視
-
-    const parts = relativePath.split('/');
-    let current = cache;
-
-    for (let i = 0; i < parts.length; i++) {
-      const originalName = parts[i];
-      if (!originalName) continue;
-
-      const isRootFile = (i === rootDepthIndex);
-      const isFile = (i === parts.length - 1);
-      
-      // NFKC正規化と小文字化
-      let lowerName = originalName.toLowerCase().normalize("NFKC");
-
-      if (isFile) {
-        let key = lowerName;
-        // ルートディレクトリのファイル、または .ini / .po は拡張子を残す
-        const keepExt = isRootFile || lowerName.endsWith('.ini') || lowerName.endsWith('.po');
-        
-        const dotPos = lowerName.lastIndexOf('.');
-        const stripped = dotPos === -1 ? lowerName : lowerName.substring(0, dotPos);
-
-        if (keepExt) {
-          if (stripped === 'exfont') key = 'exfont';
-        } else {
-          key = stripped;
-        }
-
-        current[key] = originalName;
-      } else {
-        // ディレクトリの場合
-        if (!current[lowerName]) {
-          current[lowerName] = { "_dirname": originalName };
-        }
-        current = current[lowerName];
-      }
-    }
-  }
-  return cache;
-}
-
+// ==========================================
+// 1. ZIPファイルの解析とゲーム起動ロジック
+// ==========================================
 const fileInput = document.getElementById('game-file-input');
 const startupDialog = document.getElementById('startup-dialog');
 const statusDiv = document.getElementById('status');
@@ -269,29 +223,101 @@ fileInput.addEventListener('change', async (event) => {
   try {
     statusDiv.innerText = "ZIPを解析し、インデックスを生成しています...";
     
-    // 1. JSZipでファイルを読み込む
-    const zip = await JSZip.loadAsync(file);
+    // JSZipで読み込み。UTF-8でない場合はShift-JISとしてデコードする
+    const zip = await JSZip.loadAsync(file, {
+      decodeFileName: function (bytes) {
+        return new TextDecoder('shift_jis').decode(bytes);
+      }
+    });
     
-    // 2. ブラウザ版の gencache 処理を実行
-    const cacheTree = buildCacheTreeFromZip(zip.files);
+    // ディレクトリ階層の解析 (フォルダごと圧縮されているか判定)
+    const paths = Object.keys(zip.files);
+    let rootPrefix = "";
+    const topLevelItems = new Set();
+    let hasFileInRoot = false;
+
+    for (const p of paths) {
+      const firstSlash = p.indexOf('/');
+      if (firstSlash === -1) {
+        hasFileInRoot = true; // ルート直下にファイルが存在する
+      } else {
+        topLevelItems.add(p.substring(0, firstSlash));
+      }
+    }
+
+    // ルートにファイルが一切なく、トップレベルのフォルダが1つだけなら、それを削除対象とする
+    if (!hasFileInRoot && topLevelItems.size === 1) {
+      rootPrefix = [...topLevelItems][0] + "/";
+    }
+
+    const newZip = new JSZip();
+    const cacheTree = {};
+
+    // 新しいZIPを作りながら、gencacheと同等の階層ツリーを構築
+    for (const relativePath of paths) {
+      if (relativePath.endsWith('/')) continue; // フォルダ自体はスキップ
+
+      const originalZipObj = zip.files[relativePath];
+
+      // 不要な親フォルダを取り除く (例: GameFolder/RPG_RT.ldb -> RPG_RT.ldb)
+      const cleanPath = relativePath.startsWith(rootPrefix) 
+        ? relativePath.substring(rootPrefix.length) 
+        : relativePath;
+
+      if (!cleanPath || cleanPath.toLowerCase() === 'index.json') continue;
+
+      // 新しいZIPにデータを移動
+      newZip.file(cleanPath, originalZipObj.async('arraybuffer'));
+
+      // キャッシュツリーの構築
+      const parts = cleanPath.split('/');
+      let current = cacheTree;
+
+      for (let i = 0; i < parts.length; i++) {
+        const originalName = parts[i];
+        const isFile = (i === parts.length - 1);
+        
+        // NFKC正規化と小文字化
+        let lowerName = originalName.toLowerCase().normalize("NFKC");
+
+        if (isFile) {
+          let key = lowerName;
+          const keepExt = (parts.length === 1) || lowerName.endsWith('.ini') || lowerName.endsWith('.po');
+          const dotPos = lowerName.lastIndexOf('.');
+          const stripped = dotPos === -1 ? lowerName : lowerName.substring(0, dotPos);
+
+          if (keepExt) {
+            if (stripped === 'exfont') key = 'exfont';
+          } else {
+            key = stripped;
+          }
+          current[key] = originalName;
+        } else {
+          // ディレクトリの場合
+          if (!current[lowerName]) {
+            current[lowerName] = { "_dirname": originalName };
+          }
+          current = current[lowerName];
+        }
+      }
+    }
+
+    // 生成した index.json を新しいZIPに追加
     const indexJsonStr = JSON.stringify({
       metadata: { version: 2, date: new Date().toISOString().split('T')[0] },
       cache: cacheTree
     });
-
-    // 3. 生成した index.json をメモリ上のZIPアーカイブに追加
-    zip.file("index.json", indexJsonStr);
+    newZip.file("index.json", indexJsonStr);
 
     statusDiv.innerText = "ゲームデータを準備しています...";
 
-    // 4. 変更を加えたZIPを新しいBlob（仮想ファイル）として出力
-    // 圧縮なし(STORE)で出力することでブラウザの負荷を最小限にする
-    const modifiedZipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+    // 階層と文字化けを直した新しいZIPを仮想Blobとして出力（圧縮なしで高速化）
+    const modifiedZipBlob = await newZip.generateAsync({ type: "blob", compression: "STORE" });
     const localZipUrl = URL.createObjectURL(modifiedZipBlob);
 
     statusDiv.innerText = "EasyRPG Player を起動しています...";
 
-    // 5. プレイヤーを起動
+    // プレイヤーの起動
     createEasyRpgPlayer({
       game: localZipUrl,
       saveFs: undefined
@@ -305,15 +331,19 @@ fileInput.addEventListener('change', async (event) => {
   } catch (err) {
     console.error(err);
     statusDiv.innerText = "エラー: ZIPファイルの解析に失敗しました。";
+    startupDialog.style.display = 'flex'; // エラー時はダイアログを再表示
   }
 });
-// ▲▲▲ ここまで ▲▲▲
 
-// Make EasyRPG player embeddable
+
+// ==========================================
+// 2. UI・コントロール系処理
+// ==========================================
+
 canvas.addEventListener('mouseenter', () => canvas.focus());
 canvas.addEventListener('click', () => canvas.focus());
 
-// Handle clicking on the fullscreen button
+// フルスクリーンボタン
 document.querySelector('#controls-fullscreen').addEventListener('click', () => {
   const viewport = document.getElementById('viewport');
   if (viewport.requestFullscreen) {
@@ -321,6 +351,7 @@ document.querySelector('#controls-fullscreen').addEventListener('click', () => {
   }
 });
 
+// キーボードイベントのシミュレーション
 function simulateKeyboardEvent(eventType, key) {
   const event = new Event(eventType, { bubbles: true });
   event.code = key;
@@ -334,8 +365,10 @@ function simulateKeyboardInput(key) {
   }, 100);
 }
 
+// タッチ操作のバインド
 function bindKey(node, key) {
   keys.set(node.id, key);
+
   node.addEventListener('touchstart', event => {
     event.preventDefault();
     simulateKeyboardEvent('keydown', key);
@@ -352,6 +385,7 @@ function bindKey(node, key) {
     }
     keysDown.delete(event.target.id);
     node.classList.remove('active');
+
     if (lastTouchedId) {
       document.getElementById(lastTouchedId).classList.remove('active');
     }
@@ -369,6 +403,7 @@ function bindKey(node, key) {
       keysDown.delete(target.id);
       document.getElementById(origTargetId).classList.remove('active');
     }
+
     if (keys.has(nextTargetId)) {
       const key = keys.get(nextTargetId);
       simulateKeyboardEvent('keydown', key);
@@ -379,6 +414,7 @@ function bindKey(node, key) {
   })
 }
 
+// ゲームパッド処理
 let gamepads = {};
 const haveEvents = 'ongamepadconnected' in window;
 
@@ -418,6 +454,7 @@ if (!haveEvents) {
 window.addEventListener('gamepadconnected', function(e) { addGamepad(e.gamepad); });
 window.addEventListener('gamepaddisconnected', function(e) { removeGamepad(e.gamepad); });
 
+// タッチコントロールの表示・非表示切り替え
 function updateTouchControlsVisibility() {
   if (hasTouchscreen && Object.keys(gamepads).length === 0) {
     for (const elem of document.querySelectorAll('#dpad, #apad')) elem.style.display = '';
@@ -427,10 +464,15 @@ function updateTouchControlsVisibility() {
 }
 
 if (hasTouchscreen) {
-  for (const button of document.querySelectorAll('[data-key]')) bindKey(button, button.dataset.key);
+  for (const button of document.querySelectorAll('[data-key]')) {
+    bindKey(button, button.dataset.key);
+  }
 } else {
+  // ネイティブのスクロール防止など
   window.addEventListener('keydown', event => {
-    if (preventNativeKeys.includes(event.key)) event.preventDefault();
+    if (preventNativeKeys.includes(event.key)) {
+      event.preventDefault();
+    }
   });
   canvas.addEventListener('contextmenu', event => event.preventDefault());
 }
