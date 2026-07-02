@@ -223,15 +223,35 @@ fileInput.addEventListener('change', async (event) => {
   try {
     statusDiv.innerText = "ZIPを解析し、インデックスを生成しています...";
     
-    // JSZipで読み込み。UTF-8でない場合はShift-JISとしてデコードする
-    const zip = await JSZip.loadAsync(file, {
-      decodeFileName: function (bytes) {
-        return new TextDecoder('shift_jis').decode(bytes);
-      }
-    });
+    // JSZipで読み込み。まずUTF-8で試し、文字化けがあればShift-JISで再試行
+    let zip;
+    try {
+      // デフォルトのUTF-8で読み込み
+      zip = await JSZip.loadAsync(file);
+    } catch (err) {
+      console.warn("UTF-8での読み込みに失敗。Shift-JISで再試行します。", err);
+      // Shift-JISでデコード (encoding-japaneseライブラリなしでも動作するよう、エラー時はそのまま通す)
+      zip = await JSZip.loadAsync(file, {
+        decodeFileName: function (bytes) {
+          try {
+            // Shift-JISデコードを試行
+            const decoder = new TextDecoder('shift-jis');
+            return decoder.decode(bytes);
+          } catch (e) {
+            // フォールバック: バイト列をそのまま文字列化
+            return Array.from(bytes, b => String.fromCharCode(b)).join('');
+          }
+        }
+      });
+    }
     
     // ディレクトリ階層の解析 (フォルダごと圧縮されているか判定)
     const paths = Object.keys(zip.files);
+    
+    if (paths.length === 0) {
+      throw new Error("ZIPファイルが空です");
+    }
+    
     let rootPrefix = "";
     const topLevelItems = new Set();
     let hasFileInRoot = false;
@@ -255,9 +275,10 @@ fileInput.addEventListener('change', async (event) => {
 
     // 新しいZIPを作りながら、gencacheと同等の階層ツリーを構築
     for (const relativePath of paths) {
-      if (relativePath.endsWith('/')) continue; // フォルダ自体はスキップ
-
       const originalZipObj = zip.files[relativePath];
+      
+      // フォルダ自体、または空のエントリはスキップ
+      if (!originalZipObj || originalZipObj.dir) continue;
 
       // 不要な親フォルダを取り除く (例: GameFolder/RPG_RT.ldb -> RPG_RT.ldb)
       const cleanPath = relativePath.startsWith(rootPrefix) 
@@ -331,8 +352,8 @@ fileInput.addEventListener('change', async (event) => {
     });
 
   } catch (err) {
-    console.error(err);
-    statusDiv.innerText = "エラー: ZIPファイルの解析に失敗しました。";
+    console.error("ZIPファイル処理エラー:", err);
+    statusDiv.innerText = `エラー: ${err.message || 'ZIPファイルの解析に失敗しました'}`;
     startupDialog.style.display = 'flex'; // エラー時はダイアログを再表示
   }
 });
