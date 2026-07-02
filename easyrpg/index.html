@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EasyRPG Player (Web Localizer)</title>
+  <title>EasyRPG Player - ZIP Game Loader</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -127,19 +127,29 @@
       object-fit: contain;
     }
 
-    #dpad, #apad {
+    #dpad,
+    #apad {
       position: fixed;
       bottom: 1rem;
     }
-    #dpad { left: 1rem; }
-    #apad { right: 1rem; }
+
+    #dpad {
+      left: 1rem;
+    }
+
+    #apad {
+      right: 1rem;
+    }
 
     #dpad svg {
       width: calc(2 * var(--controls-size));
       height: calc(2 * var(--controls-size));
       fill: var(--color-gray);
     }
-    #dpad svg rect { opacity: 0.4; }
+
+    #dpad svg rect {
+      opacity: 0.4;
+    }
 
     #apad > * {
       width: var(--controls-size);
@@ -147,36 +157,28 @@
       background-color: var(--color-gray);
       border-radius: 50%;
     }
+
     #apad > :last-child {
       position: relative;
       right: var(--controls-size);
     }
-    #dpad path:not(.active), #apad > *:not(.active) {
+
+    #dpad path:not(.active),
+    #apad > *:not(.active) {
       opacity: 0.4;
     }
   </style>
 </head>
 <body>
-
-  <div id="startup-dialog" style="display: none;">
+  <!-- 起動時のダイアログ -->
+  <div id="startup-dialog">
     <div class="dialog-box">
-      <h2>ゲームを選択</h2>
-      <p>
-        遊ぶゲームのデータ（.zipファイル）を選択してください。<br>
-        <small>※Shift-JIS・フォルダごと圧縮されたZIPにも対応しています。<br>※データはどこにもアップロードされません。</small>
-      </p>
-      <input type="file" id="game-file-input" accept=".zip">
+      <h2>RPGツクール2000/2003 ゲームローダー</h2>
+      <p>ゲームのZIPファイルを選択してください。</p>
+      <p style="font-size: 0.85rem; color: #999;">UTF-8とShift_JISエンコーディングに対応しています。</p>
+      <input type="file" id="game-file-input" accept=".zip" />
     </div>
   </div>
-
-<script>
-// sessionStorageをチェックして、起動ダイアログの表示を制御
-const hasGameData = sessionStorage.getItem('easyrpg_game_data');
-const startupDialogElem = document.getElementById('startup-dialog');
-if (!hasGameData) {
-  startupDialogElem.style.display = 'flex';
-}
-</script>
 
   <div id="controls">
     <button id="controls-fullscreen" class="unselectable">
@@ -184,7 +186,7 @@ if (!hasGameData) {
     </button>
   </div>
 
-  <div id="status"></div>
+  <div id="status">ZIPファイルを選択してください...</div>
 
   <div id="viewport">
     <canvas id="canvas" tabindex="-1" class="unselectable"></canvas>
@@ -206,39 +208,231 @@ if (!hasGameData) {
   </div>
 
 <script>
-// ==========================================
-// window.Moduleの定義（index.jsより前に実行される必要がある）
-// ==========================================
 
-const hasTouchscreen = window.matchMedia('(hover: none), (pointer: coarse)').matches;
-const preventNativeKeys = ['ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', ' ', 'F12'];
-const keys = new Map();
-const keysDown = new Map();
-const canvas = document.getElementById('canvas');
-let easyrpgPlayer;
-let lastTouchedId;
+// ZIP処理用のユーティリティ関数
+function detectEncoding(uint8Array) {
+  // Shift-JISかUTF-8かを簡易的に判定
+  // 0x80-0x9F, 0xE0-0xEF あたりが Shift-JIS の2バイト文字の1バイト目
+  let shift_jis_score = 0;
+  let utf8_score = 0;
 
-// ページロード時にsessionStorageからゲームデータを復元
-const gameDataJson = sessionStorage.getItem('easyrpg_game_data');
-const filesReady = sessionStorage.getItem('easyrpg_files_ready');
+  for (let i = 0; i < Math.min(uint8Array.length, 1000); i++) {
+    const byte = uint8Array[i];
+    
+    // Shift-JIS判定
+    if ((byte >= 0x81 && byte <= 0x9F) || (byte >= 0xE0 && byte <= 0xEF)) {
+      if (i + 1 < uint8Array.length) {
+        const nextByte = uint8Array[i + 1];
+        if ((nextByte >= 0x40 && nextByte <= 0x7E) || (nextByte >= 0x80 && nextByte <= 0xFC)) {
+          shift_jis_score += 2;
+          i++; // 2バイト文字なのでスキップ
+        }
+      }
+    }
+    
+    // UTF-8判定
+    if (byte >= 0xC0 && byte <= 0xDF && i + 1 < uint8Array.length) {
+      utf8_score += 1;
+    } else if (byte >= 0xE0 && byte <= 0xEF && i + 2 < uint8Array.length) {
+      utf8_score += 1;
+    }
+  }
 
-if (filesReady) {
-  // ファイルは既に仮想FSに書き込み済み、preRunで/gameから起動
-  console.log("Files ready flag detected, starting with /game");
-  sessionStorage.removeItem('easyrpg_files_ready');
-  sessionStorage.removeItem('easyrpg_game_data');
+  return shift_jis_score > utf8_score ? 'shift-jis' : 'utf-8';
+}
+
+function decodeFilename(uint8Array, encoding) {
+  if (encoding === 'shift-jis' && typeof TextDecoder !== 'undefined') {
+    try {
+      // Shift-JISデコード
+      const decoder = new TextDecoder('shift-jis');
+      return decoder.decode(uint8Array);
+    } catch (e) {
+      console.warn("Shift-JIS decoding failed, falling back to UTF-8:", e);
+    }
+  }
   
-  window.Module = {
-    game: '/game'
-  };
+  // UTF-8またはフォールバック
+  const decoder = new TextDecoder('utf-8');
+  return decoder.decode(uint8Array);
+}
+
+// index.json生成関数（gencache.jsと同等）
+function generateIndexJson(files) {
+  const index = {};
   
-  console.log("window.Module configured for /game");
-} else if (gameDataJson) {
-  console.log("Game data found in sessionStorage, setting up preRun");
+  files.forEach(file => {
+    let path = file.path;
+    
+    // Normalize: 小文字化
+    path = path.toLowerCase();
+    
+    // Normalize: NFKC正規化（簡易版）
+    path = path.normalize('NFKC');
+    
+    // 拡張子を除去（.ini, .po は除く）
+    const extMatch = path.match(/\.(ini|po)$/i);
+    if (!extMatch) {
+      path = path.replace(/\.[^.]*$/, '');
+    }
+    
+    index[path] = null; // gencacheと同じくnull
+  });
+  
+  return JSON.stringify(index, null, 2);
+}
+
+// Uint8ArrayをBase64に変換（チャンク処理で大きいファイルに対応）
+function uint8ArrayToBase64(bytes) {
+  const CHUNK_SIZE = 0x8000; // 32KB chunks
+  let binary = '';
+  
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  
+  return btoa(binary);
+}
+
+// ZIP処理
+async function processZipFile(file) {
+  const startupDialog = document.getElementById('startup-dialog');
+  const statusDiv = document.getElementById('status');
+  
+  statusDiv.textContent = 'ZIPファイルを処理中...';
+  
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    
+    // JSZipにdecodeFileNameオプションを追加してShift-JISに対応
+    const zip = await JSZip.loadAsync(arrayBuffer, {
+      decodeFileName: function(bytes) {
+        // バイト配列からShift-JISまたはUTF-8をデコード
+        // まず簡易判定
+        let isShiftJIS = false;
+        for (let i = 0; i < bytes.length; i++) {
+          const b = bytes[i];
+          if ((b >= 0x81 && b <= 0x9F) || (b >= 0xE0 && b <= 0xEF)) {
+            isShiftJIS = true;
+            break;
+          }
+        }
+        
+        if (isShiftJIS) {
+          // Shift-JISデコード（簡易版）
+          try {
+            // TextDecoderでshift-jisをサポートしている場合
+            const decoder = new TextDecoder('shift-jis');
+            return decoder.decode(new Uint8Array(bytes));
+          } catch (e) {
+            // フォールバック: Latin1として読んでからShift-JIS文字列として扱う
+            let str = '';
+            for (let i = 0; i < bytes.length; i++) {
+              str += String.fromCharCode(bytes[i]);
+            }
+            return str;
+          }
+        } else {
+          // UTF-8
+          const decoder = new TextDecoder('utf-8');
+          return decoder.decode(new Uint8Array(bytes));
+        }
+      }
+    });
+    
+    console.log(`ZIP loaded with ${Object.keys(zip.files).length} entries`);
+    
+    // ファイル抽出
+    const gameFiles = [];
+    
+    // フォルダ構造を検出
+    let rootFolder = '';
+    const filePaths = Object.keys(zip.files);
+    
+    // 共通のルートフォルダを検出
+    if (filePaths.length > 0) {
+      const firstPath = filePaths[0];
+      const slashIndex = firstPath.indexOf('/');
+      if (slashIndex > 0) {
+        const potentialRoot = firstPath.substring(0, slashIndex + 1);
+        if (filePaths.every(p => p.startsWith(potentialRoot))) {
+          rootFolder = potentialRoot;
+          console.log(`Detected root folder: ${rootFolder}`);
+        }
+      }
+    }
+    
+    for (const [filename, zipEntry] of Object.entries(zip.files)) {
+      if (zipEntry.dir) continue;
+      
+      // ルートフォルダをスキップ
+      let relativePath = filename;
+      if (rootFolder && filename.startsWith(rootFolder)) {
+        relativePath = filename.substring(rootFolder.length);
+      }
+      
+      if (!relativePath) continue;
+      
+      const content = await zipEntry.async('uint8array');
+      const base64Data = uint8ArrayToBase64(content);
+      
+      gameFiles.push({
+        path: relativePath,
+        data: base64Data
+      });
+      
+      if (gameFiles.length <= 5 || gameFiles.length > (Object.keys(zip.files).length - 5)) {
+        console.log(`Extracted: ${relativePath} (${content.length} bytes)`);
+      } else if (gameFiles.length === 6) {
+        console.log(`... extracting files ...`);
+      }
+    }
+    
+    // index.json生成
+    const indexJsonContent = generateIndexJson(gameFiles);
+    const indexJsonBase64 = uint8ArrayToBase64(new TextEncoder().encode(indexJsonContent));
+    gameFiles.push({
+      path: 'index.json',
+      data: indexJsonBase64
+    });
+    
+    console.log(`Total files extracted: ${gameFiles.length}`);
+    
+    // sessionStorageに保存
+    const gameData = {
+      files: gameFiles
+    };
+    
+    sessionStorage.setItem('easyrpg_game_data', JSON.stringify(gameData));
+    
+    statusDiv.textContent = 'ゲームをロード中...';
+    
+    // ダイアログを非表示
+    startupDialog.style.display = 'none';
+    
+    // EasyRPGを起動
+    await loadEasyRPG();
+    
+  } catch (error) {
+    console.error('Error processing ZIP:', error);
+    statusDiv.textContent = 'エラー: ' + error.message;
+    alert('ZIPファイルの処理中にエラーが発生しました: ' + error.message);
+  }
+}
+
+// EasyRPG起動関数
+async function loadEasyRPG() {
+  const gameDataJson = sessionStorage.getItem('easyrpg_game_data');
+  
+  if (!gameDataJson) {
+    console.error("No game data found in sessionStorage");
+    return;
+  }
   
   const gameData = JSON.parse(gameDataJson);
   
-  // Base64からUint8Arrayに変換するヘルパー関数（チャンク処理）
+  // Base64からUint8Arrayに変換
   function base64ToUint8Array(base64) {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
@@ -248,594 +442,141 @@ if (filesReady) {
     return bytes;
   }
   
+  // ファイルを変換
   const files = gameData.files.map(entry => ({
     path: entry.path,
     data: base64ToUint8Array(entry.data)
   }));
   
-  // グローバルなModuleオブジェクトでpreRunを設定
-  window.Module = {
-    preRun: [function() {
-      const Module = this; // thisを使ってModuleを参照
-      console.log("===== preRun EXECUTING =====");
-      console.log("preRun: Loading", files.length, "files from sessionStorage");
-      console.log("Module object:", Module);
-      console.log("Module.FS:", Module.FS);
-      
-      // /gamesをアンマウント
-      if (Module.FS && Module.FS.analyzePath('/games').exists) {
-        try {
-          Module.FS.unmount('/games');
-          console.log("Unmounted /games");
-        } catch (e) {
-          console.error("Failed to unmount /games:", e);
-        }
-      }
-      
-      // ゲームディレクトリを作成
-      try {
-        Module.FS.mkdir('/game');
-        console.log("Created /game");
-      } catch (e) {
-        console.warn("Failed to create /game:", e);
-      }
-      
-      // ファイルを展開
-      let count = 0;
-      for (const entry of files) {
-        const filePath = '/game/' + entry.path;
-        const pathParts = entry.path.split('/');
-        
-        if (pathParts.length > 1) {
-          let currentPath = '/game';
-          for (let i = 0; i < pathParts.length - 1; i++) {
-            currentPath += '/' + pathParts[i];
-            try {
-              Module.FS.mkdir(currentPath);
-            } catch (e) {}
+  console.log(`Preparing ${files.length} files for EasyRPG...`);
+  
+  // カスタムpreRun関数
+  const customPreRun = function() {
+    console.log("=== Custom preRun executing ===");
+    
+    const files = window.EASYRPG_CUSTOM_FILES;
+    if (!files || files.length === 0) {
+      console.error("No files in window.EASYRPG_CUSTOM_FILES");
+      return;
+    }
+    
+    console.log(`Loading ${files.length} custom game files`);
+    
+    // /gamesディレクトリを完全に削除
+    try {
+      if (this.FS.analyzePath('/games').exists) {
+        // /games内のすべてのファイルとサブディレクトリを削除
+        function rmrf(path) {
+          try {
+            const stat = this.FS.stat(path);
+            if (this.FS.isDir(stat.mode)) {
+              const entries = this.FS.readdir(path);
+              for (const entry of entries) {
+                if (entry !== '.' && entry !== '..') {
+                  rmrf(path + '/' + entry);
+                }
+              }
+              this.FS.rmdir(path);
+            } else {
+              this.FS.unlink(path);
+            }
+          } catch (e) {
+            console.warn(`Could not remove ${path}:`, e);
           }
         }
         
-        Module.FS.writeFile(filePath, entry.data);
-        count++;
+        rmrf.call(this, '/games');
+        console.log("Removed /games directory");
       }
-      
-      console.log("✓ Loaded", count, "files in preRun");
-      console.log("✓ Game directory:", Module.FS.readdir('/game').slice(0, 10));
-      console.log("===== preRun COMPLETED =====");
-    }],
-    game: '/game'
+    } catch (e) {
+      console.warn("Could not remove /games:", e);
+    }
+    
+    // ファイルをルートに書き込み
+    files.forEach((file, index) => {
+      try {
+        const fullPath = '/' + file.path;
+        const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
+        
+        if (dir && dir !== '/') {
+          try {
+            this.FS.mkdirTree(dir);
+          } catch (e) {
+            // すでに存在
+          }
+        }
+        
+        this.FS.writeFile(fullPath, file.data);
+        
+        if (index < 3 || index >= files.length - 2) {
+          console.log(`Wrote: ${fullPath}`);
+        } else if (index === 3) {
+          console.log(`... ${files.length - 5} more files ...`);
+        }
+      } catch (e) {
+        console.error(`Failed to write ${file.path}:`, e);
+      }
+    });
+    
+    console.log("=== Custom game files loaded ===");
   };
   
-  console.log("window.Module configured:", window.Module);
-}
-</script>
-
-<!-- window.Moduleが定義された後にindex.jsを読み込む -->
-<script type="text/javascript" src="index.js"></script>
-
-<script>
-// ==========================================
-// 1. ZIPファイルの解析とゲーム起動ロジック
-// ==========================================
-const fileInput = document.getElementById('game-file-input');
-const startupDialog = document.getElementById('startup-dialog');
-const statusDiv = document.getElementById('status');
-
-// sessionStorageからゲームをロードした場合の自動起動
-if (gameDataJson && !filesReady && typeof createEasyRpgPlayer !== 'undefined') {
-  console.log("Auto-starting EasyRPG Player with loaded game data...");
-  statusDiv.innerText = "ゲームを起動しています...";
+  // createEasyRpgPlayerを呼び出す前に既存のpreRunを上書き
+  window.Module = window.Module || {};
+  const originalPreRun = window.Module.preRun || [];
   
-  // データをコピーしてから削除
-  const savedGameData = gameDataJson;
-  sessionStorage.removeItem('easyrpg_game_data');
+  window.Module.preRun = [
+    customPreRun,
+    ...(Array.isArray(originalPreRun) ? originalPreRun : [originalPreRun])
+  ];
   
-  // 通常起動（preRunは使用されない）
-  createEasyRpgPlayer({}).then(async function(Module) {
-    console.log("EasyRPG Player module loaded, loading custom game...");
-    
-    const gameData = JSON.parse(savedGameData);
-    
-    // Base64からUint8Arrayに変換
-    function base64ToUint8Array(base64) {
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      return bytes;
-    }
-    
-    const files = gameData.files.map(entry => ({
-      path: entry.path,
-      data: base64ToUint8Array(entry.data)
-    }));
-    
-    console.log("Converting", files.length, "files...");
-    
-    // /gamesをアンマウント
-    if (Module.FS.analyzePath('/games').exists) {
-      try {
-        Module.FS.unmount('/games');
-        console.log("Unmounted /games");
-      } catch (e) {
-        console.warn("Failed to unmount:", e);
-      }
-    }
-    
-    // /gameディレクトリを作成
-    try {
-      Module.FS.mkdir('/game');
-      console.log("Created /game");
-    } catch (e) {
-      console.warn("/game exists");
-    }
-    
-    // ファイルを書き込み
-    let count = 0;
-    for (const entry of files) {
-      const filePath = '/game/' + entry.path;
-      const pathParts = entry.path.split('/');
-      
-      if (pathParts.length > 1) {
-        let currentPath = '/game';
-        for (let i = 0; i < pathParts.length - 1; i++) {
-          currentPath += '/' + pathParts[i];
-          try {
-            Module.FS.mkdir(currentPath);
-          } catch (e) {}
-        }
-      }
-      
-      try {
-        Module.FS.writeFile(filePath, entry.data);
-        count++;
-      } catch (e) {
-        console.error("Failed to write", filePath, ":", e);
-      }
-    }
-    
-    console.log("✓ Wrote", count, "files to /game");
-    console.log("✓ Files:", Module.FS.readdir('/game').slice(0, 10));
-    
-    // index.jsonを確認
-    if (Module.FS.analyzePath('/game/index.json').exists) {
-      console.log("✓ index.json exists");
-      
-      // sessionStorageに「ファイル準備完了」フラグを設定
-      sessionStorage.setItem('easyrpg_files_ready', 'true');
-      console.log("Files are ready in virtual FS, reloading to start with /game...");
-      
-      // ページをリロード（今度はpreRunでファイルが読み込まれる）
-      window.location.reload();
-      return;
-    } else {
-      console.error("✗ index.json not found!");
-    }
-    
-    easyrpgPlayer = Module;
+  // createEasyRpgPlayerを呼び出し
+  createEasyRpgPlayer({
+    game: '', // ルートディレクトリを使用
+    saveFs: undefined
+  }).then(function(Module) {
+    console.log("EasyRPG Player initialized!");
+    Module.initApi();
     canvas.focus();
-    statusDiv.innerText = "";
-  }).catch(function(err) {
-    console.error("Failed to start EasyRPG:", err);
-    statusDiv.innerText = "エラー: ゲームの起動に失敗しました";
-    startupDialog.style.display = 'flex';
+  }).catch(function(error) {
+    console.error("Failed to create EasyRPG Player:", error);
+    document.getElementById('status').textContent = 'エラー: EasyRPGの初期化に失敗しました';
   });
 }
 
-fileInput.addEventListener('change', async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  // createEasyRpgPlayer が読み込まれているか確認
-  if (typeof createEasyRpgPlayer === 'undefined') {
-    statusDiv.innerText = "エラー: EasyRPG Player のスクリプトが読み込まれていません";
-    console.error("index.js が正しく読み込まれていません");
-    return;
-  }
-
-  startupDialog.style.display = 'none';
+// ページロード時の処理
+window.addEventListener('load', () => {
+  const fileInput = document.getElementById('game-file-input');
+  const canvas = document.getElementById('canvas');
   
-  try {
-    statusDiv.innerText = "ZIPを解析し、インデックスを生成しています...";
-    
-    // JSZipで読み込み。まずUTF-8で試し、文字化けがあればShift-JISで再試行
-    let zip;
-    try {
-      // デフォルトのUTF-8で読み込み
-      zip = await JSZip.loadAsync(file);
-      
-      // UTF-8でのファイル名を確認
-      const firstFile = Object.keys(zip.files)[0];
-      if (firstFile && /[\x00-\x1F\x7F-\x9F]/.test(firstFile)) {
-        // 制御文字が含まれている場合はShift-JISで再読み込み
-        throw new Error("Non-UTF8 encoding detected");
-      }
-    } catch (err) {
-      console.warn("UTF-8での読み込みに失敗。CP932(Shift-JIS)で再試行します。", err);
-      // encoding-japaneseの代わりに、ブラウザのTextDecoderを利用
-      zip = await JSZip.loadAsync(file, {
-        decodeFileName: function (bytes) {
-          try {
-            // CP932/Shift-JISでデコード（Windowsの日本語環境）
-            return new TextDecoder('shift-jis').decode(new Uint8Array(bytes));
-          } catch (e) {
-            // フォールバック: windows-1252やlatin1を試す
-            try {
-              return new TextDecoder('windows-1252').decode(new Uint8Array(bytes));
-            } catch (e2) {
-              // 最終フォールバック
-              return new TextDecoder('utf-8', {fatal: false}).decode(new Uint8Array(bytes));
-            }
-          }
-        }
-      });
+  // ファイル選択イベント
+  fileInput.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      await processZipFile(file);
     }
-    
-    // ディレクトリ階層の解析 (フォルダごと圧縮されているか判定)
-    const paths = Object.keys(zip.files);
-    
-    if (paths.length === 0) {
-      throw new Error("ZIPファイルが空です");
+  });
+  
+  // Fullscreen button
+  document.querySelector('#controls-fullscreen').addEventListener('click', () => {
+    const viewport = document.getElementById('viewport');
+    if (viewport.requestFullscreen) {
+      viewport.requestFullscreen();
     }
-    
-    let rootPrefix = "";
-    const topLevelItems = new Set();
-    let hasFileInRoot = false;
-
-    for (const p of paths) {
-      const firstSlash = p.indexOf('/');
-      if (firstSlash === -1) {
-        hasFileInRoot = true; // ルート直下にファイルが存在する
-      } else {
-        topLevelItems.add(p.substring(0, firstSlash));
-      }
-    }
-
-    // ルートにファイルが一切なく、トップレベルのフォルダが1つだけなら、それを削除対象とする
-    if (!hasFileInRoot && topLevelItems.size === 1) {
-      rootPrefix = [...topLevelItems][0] + "/";
-    }
-
-    const newZip = new JSZip();
-    const cacheTree = {};
-
-    // 新しいZIPを作りながら、gencacheと同等の階層ツリーを構築
-    for (const relativePath of paths) {
-      const originalZipObj = zip.files[relativePath];
-      
-      // フォルダ自体、または空のエントリはスキップ
-      if (!originalZipObj || originalZipObj.dir) continue;
-
-      // 不要な親フォルダを取り除く (例: GameFolder/RPG_RT.ldb -> RPG_RT.ldb)
-      const cleanPath = relativePath.startsWith(rootPrefix) 
-        ? relativePath.substring(rootPrefix.length) 
-        : relativePath;
-
-      if (!cleanPath || cleanPath.toLowerCase() === 'index.json') continue;
-
-      // 新しいZIPにデータを移動
-      newZip.file(cleanPath, originalZipObj.async('arraybuffer'));
-
-      // キャッシュツリーの構築
-      const parts = cleanPath.split('/');
-      let current = cacheTree;
-
-      for (let i = 0; i < parts.length; i++) {
-        const originalName = parts[i];
-        const isFile = (i === parts.length - 1);
-        
-        // NFKC正規化と小文字化
-        let lowerName = originalName.toLowerCase().normalize("NFKC");
-
-        if (isFile) {
-          let key = lowerName;
-          const keepExt = (parts.length === 1) || lowerName.endsWith('.ini') || lowerName.endsWith('.po');
-          const dotPos = lowerName.lastIndexOf('.');
-          const stripped = dotPos === -1 ? lowerName : lowerName.substring(0, dotPos);
-
-          if (keepExt) {
-            if (stripped === 'exfont') key = 'exfont';
-          } else {
-            key = stripped;
-          }
-          current[key] = originalName;
-        } else {
-          // ディレクトリの場合
-          if (!current[lowerName]) {
-            current[lowerName] = { "_dirname": originalName };
-          }
-          current = current[lowerName];
-        }
-      }
-    }
-
-    // 生成した index.json を新しいZIPに追加
-    const indexJsonStr = JSON.stringify({
-      metadata: { version: 2, date: new Date().toISOString().split('T')[0] },
-      cache: cacheTree
-    });
-    newZip.file("index.json", indexJsonStr);
-    
-    // デバッグ: 生成されたindex.jsonの内容を確認
-    console.log("Generated index.json:", indexJsonStr);
-    console.log("Cache tree:", cacheTree);
-    
-    // index.jsonが追加されたか確認
-    const zipFilesList = Object.keys(newZip.files);
-    console.log("ZIP files count:", zipFilesList.length);
-    console.log("index.json in ZIP:", newZip.files["index.json"] ? "YES" : "NO");
-    console.log("First 10 files:", zipFilesList.slice(0, 10));
-
-    statusDiv.innerText = "ゲームデータを準備しています...";
-
-    // 階層と文字化けを直した新しいZIPをUint8Arrayとして生成
-    const modifiedZipData = await newZip.generateAsync({ 
-      type: "uint8array", 
-      compression: "STORE" 
-    });
-    
-    // ZIPファイルの内容を事前に展開
-    const reloadedZip = await JSZip.loadAsync(modifiedZipData);
-    const fileEntries = [];
-    
-    for (const filename of Object.keys(reloadedZip.files)) {
-      const zipEntry = reloadedZip.files[filename];
-      if (!zipEntry.dir) {
-        const fileData = await zipEntry.async('uint8array');
-        fileEntries.push({ path: filename, data: fileData });
-      }
-    }
-    
-    console.log("Prepared", fileEntries.length, "files for extraction");
-
-    statusDiv.innerText = "EasyRPG Player を起動しています...";
-
-    // プレイヤーの起動（起動後にファイルをセットアップ）
-    createEasyRpgPlayer({}).then(async function(Module) {
-      console.log("EasyRPG Player module loaded, setting up game files...");
-      
-      // デフォルトのゲームパッケージをクリア
-      if (Module.FS.analyzePath('/games').exists) {
-        console.log("Unmounting /games");
-        try {
-          Module.FS.unmount('/games');
-        } catch (e) {
-          console.warn("Failed to unmount /games:", e);
-        }
-      }
-      
-      // ゲームディレクトリを作成
-      try {
-        Module.FS.mkdir('/game');
-        console.log("Created /game directory");
-      } catch (e) {
-        console.log("/game already exists");
-      }
-      
-      // ファイルを展開
-      let successCount = 0;
-      for (const entry of fileEntries) {
-        const filePath = '/game/' + entry.path;
-        
-        // 親ディレクトリが存在しない場合は作成
-        const pathParts = entry.path.split('/');
-        if (pathParts.length > 1) {
-          let currentPath = '/game';
-          for (let i = 0; i < pathParts.length - 1; i++) {
-            currentPath += '/' + pathParts[i];
-            try {
-              Module.FS.mkdir(currentPath);
-            } catch (e) {
-              // 既に存在する場合は無視
-            }
-          }
-        }
-        
-        try {
-          Module.FS.writeFile(filePath, entry.data);
-          successCount++;
-        } catch (e) {
-          console.error("Failed to write", filePath, ":", e);
-        }
-      }
-      
-      console.log("Successfully wrote", successCount, "files to /game");
-      console.log("Game directory contents (first 10):", Module.FS.readdir('/game').slice(0, 10));
-      
-      // index.jsonが存在するか確認
-      const indexJsonPath = '/game/index.json';
-      if (Module.FS.analyzePath(indexJsonPath).exists) {
-        const content = Module.FS.readFile(indexJsonPath, { encoding: 'utf8' });
-        console.log("✓ index.json found! Length:", content.length, "bytes");
-        
-        // sessionStorageにデータを保存（Base64エンコード）
-        console.log("Saving game data to sessionStorage...");
-        
-        // Uint8ArrayをBase64に変換するヘルパー関数（チャンク処理）
-        function uint8ArrayToBase64(bytes) {
-          let binary = '';
-          const chunkSize = 8192;
-          for (let i = 0; i < bytes.length; i += chunkSize) {
-            const chunk = bytes.subarray(i, i + chunkSize);
-            binary += String.fromCharCode.apply(null, chunk);
-          }
-          return btoa(binary);
-        }
-        
-        const gameData = {
-          files: fileEntries.map(entry => ({
-            path: entry.path,
-            data: uint8ArrayToBase64(entry.data)
-          }))
-        };
-        
-        try {
-          sessionStorage.setItem('easyrpg_game_data', JSON.stringify(gameData));
-          console.log("Game data saved, reloading page...");
-          window.location.reload();
-        } catch (e) {
-          console.error("Failed to save to sessionStorage:", e);
-          statusDiv.innerText = "エラー: ゲームデータが大きすぎます";
-        }
-      } else {
-        console.error("✗ index.json NOT found!");
-        statusDiv.innerText = "エラー: index.jsonが見つかりません";
-      }
-    });
-
-  } catch (err) {
-    console.error("ZIPファイル処理エラー:", err);
-    statusDiv.innerText = `エラー: ${err.message || 'ZIPファイルの解析に失敗しました'}`;
-    startupDialog.style.display = 'flex'; // エラー時はダイアログを再表示
+  });
+  
+  // sessionStorageにデータがある場合は自動ロード
+  const gameDataJson = sessionStorage.getItem('easyrpg_game_data');
+  if (gameDataJson) {
+    document.getElementById('startup-dialog').style.display = 'none';
+    document.getElementById('status').textContent = 'ゲームをロード中...';
+    loadEasyRPG();
   }
 });
 
-
-// ==========================================
-// 2. UI・コントロール系処理
-// ==========================================
-
-canvas.addEventListener('mouseenter', () => canvas.focus());
-canvas.addEventListener('click', () => canvas.focus());
-
-// フルスクリーンボタン
-document.querySelector('#controls-fullscreen').addEventListener('click', () => {
-  const viewport = document.getElementById('viewport');
-  if (viewport.requestFullscreen) {
-    viewport.requestFullscreen();
-  }
-});
-
-// キーボードイベントのシミュレーション
-function simulateKeyboardEvent(eventType, key) {
-  const event = new Event(eventType, { bubbles: true });
-  event.code = key;
-  canvas.dispatchEvent(event);
-}
-
-function simulateKeyboardInput(key) {
-  simulateKeyboardEvent('keydown', key);
-  window.setTimeout(() => {
-    simulateKeyboardEvent('keyup', key);
-  }, 100);
-}
-
-// タッチ操作のバインド
-function bindKey(node, key) {
-  keys.set(node.id, key);
-
-  node.addEventListener('touchstart', event => {
-    event.preventDefault();
-    simulateKeyboardEvent('keydown', key);
-    keysDown.set(event.target.id, node.id);
-    node.classList.add('active');
-  });
-
-  node.addEventListener('touchend', event => {
-    event.preventDefault();
-    const pressedKey = keysDown.get(event.target.id);
-    if (pressedKey && keys.has(pressedKey)) {
-      const key = keys.get(pressedKey);
-      simulateKeyboardEvent('keyup', key);
-    }
-    keysDown.delete(event.target.id);
-    node.classList.remove('active');
-
-    if (lastTouchedId) {
-      document.getElementById(lastTouchedId).classList.remove('active');
-    }
-  });
-
-  node.addEventListener('touchmove', event => {
-    const { target, clientX, clientY } = event.changedTouches[0];
-    const origTargetId = keysDown.get(target.id);
-    const nextTargetId = document.elementFromPoint(clientX, clientY).id;
-    if (origTargetId === nextTargetId) return;
-
-    if (origTargetId) {
-      const key = keys.get(origTargetId);
-      simulateKeyboardEvent('keyup', key);
-      keysDown.delete(target.id);
-      document.getElementById(origTargetId).classList.remove('active');
-    }
-
-    if (keys.has(nextTargetId)) {
-      const key = keys.get(nextTargetId);
-      simulateKeyboardEvent('keydown', key);
-      keysDown.set(target.id, nextTargetId);
-      lastTouchedId = nextTargetId;
-      document.getElementById(nextTargetId).classList.add('active');
-    }
-  })
-}
-
-// ゲームパッド処理
-let gamepads = {};
-const haveEvents = 'ongamepadconnected' in window;
-
-function addGamepad(gamepad) {
-  if (gamepad == undefined) return;
-  gamepads[gamepad.index] = gamepad;
-  updateTouchControlsVisibility();
-}
-
-function removeGamepad(gamepad) {
-  if (gamepad == undefined) return;
-  delete gamepads[gamepad.index];
-  updateTouchControlsVisibility();
-}
-
-function getGamepads() {
-  return navigator.getGamepads ? navigator.getGamepads() : (navigator.webkitGetGamepads ? navigator.webkitGetGamepads() : []);
-}
-
-function scanGamePads() {
-  var pads = getGamepads();
-  for (var i = 0; i < pads.length; i++) {
-    if (pads[i]) {
-      if (pads[i].index in gamepads) {
-        gamepads[pads[i].index] = pads[i];
-      } else {
-        addGamepad(pads[i]);
-      }
-    }
-  }
-}
-
-if (!haveEvents) {
-  setInterval(scanGamePads, 500);
-}
-
-window.addEventListener('gamepadconnected', function(e) { addGamepad(e.gamepad); });
-window.addEventListener('gamepaddisconnected', function(e) { removeGamepad(e.gamepad); });
-
-// タッチコントロールの表示・非表示切り替え
-function updateTouchControlsVisibility() {
-  if (hasTouchscreen && Object.keys(gamepads).length === 0) {
-    for (const elem of document.querySelectorAll('#dpad, #apad')) elem.style.display = '';
-  } else {
-    for (const elem of document.querySelectorAll('#dpad, #apad')) elem.style.display = 'none';
-  }
-}
-
-if (hasTouchscreen) {
-  for (const button of document.querySelectorAll('[data-key]')) {
-    bindKey(button, button.dataset.key);
-  }
-} else {
-  // ネイティブのスクロール防止など
-  window.addEventListener('keydown', event => {
-    if (preventNativeKeys.includes(event.key)) {
-      event.preventDefault();
-    }
-  });
-  canvas.addEventListener('contextmenu', event => event.preventDefault());
-}
-
-updateTouchControlsVisibility();
 </script>
+
+<script async type="text/javascript" src="index.js"></script>
 
 </body>
 </html>
