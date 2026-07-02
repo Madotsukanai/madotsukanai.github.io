@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EasyRPG Player</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
   <style>
     :root {
       --color-gray: hsl(0, 0%, 55%);
@@ -27,6 +30,45 @@
       background: black;
     }
 
+    /* 起動時のダイアログ用CSS */
+    #startup-dialog {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .dialog-box {
+      background: #222;
+      padding: 2rem;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid var(--color-gray);
+      max-width: 80%;
+    }
+
+    .dialog-box h2 {
+      margin-top: 0;
+    }
+
+    .dialog-box p {
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+
+    #game-file-input {
+      margin: 1.5rem 0;
+      font-size: 1rem;
+      color: white;
+    }
+
     .unselectable {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -34,9 +76,13 @@
     }
 
     #status {
-      font-size: 1.5rem;
+      font-size: 1.2rem;
       color: var(--color-gray);
       text-align: center;
+      margin-top: 20px;
+      position: absolute;
+      width: 100%;
+      z-index: 5;
     }
 
     #controls {
@@ -78,29 +124,19 @@
       object-fit: contain;
     }
 
-    #dpad,
-    #apad {
+    #dpad, #apad {
       position: fixed;
       bottom: 1rem;
     }
-
-    #dpad {
-      left: 1rem;
-    }
-
-    #apad {
-      right: 1rem;
-    }
+    #dpad { left: 1rem; }
+    #apad { right: 1rem; }
 
     #dpad svg {
       width: calc(2 * var(--controls-size));
       height: calc(2 * var(--controls-size));
       fill: var(--color-gray);
     }
-
-    #dpad svg rect {
-      opacity: 0.4;
-    }
+    #dpad svg rect { opacity: 0.4; }
 
     #apad > * {
       width: var(--controls-size);
@@ -108,19 +144,25 @@
       background-color: var(--color-gray);
       border-radius: 50%;
     }
-
     #apad > :last-child {
       position: relative;
       right: var(--controls-size);
     }
-
-    #dpad path:not(.active),
-    #apad > *:not(.active) {
+    #dpad path:not(.active), #apad > *:not(.active) {
       opacity: 0.4;
     }
   </style>
 </head>
 <body>
+
+  <div id="startup-dialog">
+    <div class="dialog-box">
+      <h2>ゲームを選択</h2>
+      <p>遊ぶゲームのデータ（.zipファイル）を選択してください。<br>※ブラウザ内でキャッシュを自動生成してから起動します。</p>
+      <input type="file" id="game-file-input" accept=".zip">
+    </div>
+  </div>
+
   <div id="controls">
     <button id="controls-fullscreen" class="unselectable">
       <svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="25" height="25"><path d="M13.5 13.5H10m3.5 0V10m0 3.5l-4-4m.5-8h3.5m0 0V5m0-3.5l-4 4M5 1.5H1.5m0 0V5m0-3.5l4 4m-4 4.5v3.5m0 0H5m-3.5 0l4-4" stroke="currentColor"></path></svg>
@@ -159,20 +201,113 @@ const canvas = document.getElementById('canvas');
 let easyrpgPlayer;
 let lastTouchedId;
 
-// Launch the Player and configure it
-window.addEventListener('load', (event) => {
+// ▼▼▼ 追加: ブラウザ内での gencache 処理 ▼▼▼
+function buildCacheTreeFromZip(zipFiles) {
+  const cache = {};
+  const paths = Object.keys(zipFiles);
+  
+  // ZIPが「1つの親フォルダ」にすべて格納されているか判定 (例: GameFolder/RPG_RT.ldb)
+  const rootKeys = paths.map(p => p.split('/')[0]);
+  const uniqueRoots = [...new Set(rootKeys)];
+  const isSingleRootFolder = uniqueRoots.length === 1 && zipFiles[uniqueRoots[0] + '/'];
+  const rootDepthIndex = isSingleRootFolder ? 1 : 0; // ルート階層とみなす深さ
+
+  for (const relativePath of paths) {
+    if (relativePath.endsWith('/')) continue; // フォルダ自体はスキップ
+    if (relativePath.toLowerCase() === 'index.json') continue; // 既存のindexは無視
+
+    const parts = relativePath.split('/');
+    let current = cache;
+
+    for (let i = 0; i < parts.length; i++) {
+      const originalName = parts[i];
+      if (!originalName) continue;
+
+      const isRootFile = (i === rootDepthIndex);
+      const isFile = (i === parts.length - 1);
+      
+      // NFKC正規化と小文字化
+      let lowerName = originalName.toLowerCase().normalize("NFKC");
+
+      if (isFile) {
+        let key = lowerName;
+        // ルートディレクトリのファイル、または .ini / .po は拡張子を残す
+        const keepExt = isRootFile || lowerName.endsWith('.ini') || lowerName.endsWith('.po');
+        
+        const dotPos = lowerName.lastIndexOf('.');
+        const stripped = dotPos === -1 ? lowerName : lowerName.substring(0, dotPos);
+
+        if (keepExt) {
+          if (stripped === 'exfont') key = 'exfont';
+        } else {
+          key = stripped;
+        }
+
+        current[key] = originalName;
+      } else {
+        // ディレクトリの場合
+        if (!current[lowerName]) {
+          current[lowerName] = { "_dirname": originalName };
+        }
+        current = current[lowerName];
+      }
+    }
+  }
+  return cache;
+}
+
+const fileInput = document.getElementById('game-file-input');
+const startupDialog = document.getElementById('startup-dialog');
+const statusDiv = document.getElementById('status');
+
+fileInput.addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  startupDialog.style.display = 'none';
+  
+  try {
+    statusDiv.innerText = "ZIPを解析し、インデックスを生成しています...";
+    
+    // 1. JSZipでファイルを読み込む
+    const zip = await JSZip.loadAsync(file);
+    
+    // 2. ブラウザ版の gencache 処理を実行
+    const cacheTree = buildCacheTreeFromZip(zip.files);
+    const indexJsonStr = JSON.stringify({
+      metadata: { version: 2, date: new Date().toISOString().split('T')[0] },
+      cache: cacheTree
+    });
+
+    // 3. 生成した index.json をメモリ上のZIPアーカイブに追加
+    zip.file("index.json", indexJsonStr);
+
+    statusDiv.innerText = "ゲームデータを準備しています...";
+
+    // 4. 変更を加えたZIPを新しいBlob（仮想ファイル）として出力
+    // 圧縮なし(STORE)で出力することでブラウザの負荷を最小限にする
+    const modifiedZipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+    const localZipUrl = URL.createObjectURL(modifiedZipBlob);
+
+    statusDiv.innerText = "EasyRPG Player を起動しています...";
+
+    // 5. プレイヤーを起動
     createEasyRpgPlayer({
-      game: undefined,
+      game: localZipUrl,
       saveFs: undefined
     }).then(function(Module) {
-      // Module is ready
       easyrpgPlayer = Module;
       easyrpgPlayer.initApi();
       canvas.focus();
-
-      // Custom code here
+      statusDiv.innerText = "";
     });
+
+  } catch (err) {
+    console.error(err);
+    statusDiv.innerText = "エラー: ZIPファイルの解析に失敗しました。";
+  }
 });
+// ▲▲▲ ここまで ▲▲▲
 
 // Make EasyRPG player embeddable
 canvas.addEventListener('mouseenter', () => canvas.focus());
@@ -186,24 +321,12 @@ document.querySelector('#controls-fullscreen').addEventListener('click', () => {
   }
 });
 
-/**
- * Simulate a keyboard event on the emscripten canvas
- *
- * @param {string} eventType Type of the keyboard event
- * @param {string} key Key to simulate
- */
 function simulateKeyboardEvent(eventType, key) {
   const event = new Event(eventType, { bubbles: true });
   event.code = key;
-
   canvas.dispatchEvent(event);
 }
 
-/**
- * Simulate a keyboard input from `keydown` to `keyup`
- *
- * @param {string} key Key to simulate
- */
 function simulateKeyboardInput(key) {
   simulateKeyboardEvent('keydown', key);
   window.setTimeout(() => {
@@ -211,15 +334,8 @@ function simulateKeyboardInput(key) {
   }, 100);
 }
 
-/**
- * Bind a node by a specific key to simulate on touch
- *
- * @param {*} node The node to bind a key to
- * @param {string} key Key to simulate
- */
 function bindKey(node, key) {
   keys.set(node.id, key);
-
   node.addEventListener('touchstart', event => {
     event.preventDefault();
     simulateKeyboardEvent('keydown', key);
@@ -229,22 +345,18 @@ function bindKey(node, key) {
 
   node.addEventListener('touchend', event => {
     event.preventDefault();
-
     const pressedKey = keysDown.get(event.target.id);
     if (pressedKey && keys.has(pressedKey)) {
       const key = keys.get(pressedKey);
       simulateKeyboardEvent('keyup', key);
     }
-
     keysDown.delete(event.target.id);
     node.classList.remove('active');
-
     if (lastTouchedId) {
       document.getElementById(lastTouchedId).classList.remove('active');
     }
   });
 
-  // Inspired by https://github.com/pulsejet/mkxp-web/blob/262a2254b684567311c9f0e135ee29f6e8c3613e/extra/js/dpad.js
   node.addEventListener('touchmove', event => {
     const { target, clientX, clientY } = event.changedTouches[0];
     const origTargetId = keysDown.get(target.id);
@@ -257,7 +369,6 @@ function bindKey(node, key) {
       keysDown.delete(target.id);
       document.getElementById(origTargetId).classList.remove('active');
     }
-
     if (keys.has(nextTargetId)) {
       const key = keys.get(nextTargetId);
       simulateKeyboardEvent('keydown', key);
@@ -268,30 +379,23 @@ function bindKey(node, key) {
   })
 }
 
-/** @type {{[key: number]: Gamepad}} */
 let gamepads = {};
 const haveEvents = 'ongamepadconnected' in window;
 
 function addGamepad(gamepad) {
-  if (gamepad == undefined) {
-    return;
-  }
+  if (gamepad == undefined) return;
   gamepads[gamepad.index] = gamepad;
   updateTouchControlsVisibility();
 }
 
 function removeGamepad(gamepad) {
-  if (gamepad == undefined) {
-    return;
-  }
+  if (gamepad == undefined) return;
   delete gamepads[gamepad.index];
   updateTouchControlsVisibility();
 }
 
-/** @returns {Gamepad[]} */
 function getGamepads() {
-  var pads = navigator.getGamepads ? navigator.getGamepads() : (navigator.webkitGetGamepads ? navigator.webkitGetGamepads() : []);
-  return pads;
+  return navigator.getGamepads ? navigator.getGamepads() : (navigator.webkitGetGamepads ? navigator.webkitGetGamepads() : []);
 }
 
 function scanGamePads() {
@@ -311,50 +415,24 @@ if (!haveEvents) {
   setInterval(scanGamePads, 500);
 }
 
-window.addEventListener('gamepadconnected', function(e) {
-  addGamepad(e.gamepad);
-});
-
-window.addEventListener('gamepaddisconnected', function(e) {
-  removeGamepad(e.gamepad);
-})
+window.addEventListener('gamepadconnected', function(e) { addGamepad(e.gamepad); });
+window.addEventListener('gamepaddisconnected', function(e) { removeGamepad(e.gamepad); });
 
 function updateTouchControlsVisibility() {
   if (hasTouchscreen && Object.keys(gamepads).length === 0) {
-    for (const elem of document.querySelectorAll('#dpad, #apad')) {
-      elem.style.display = '';
-    }
+    for (const elem of document.querySelectorAll('#dpad, #apad')) elem.style.display = '';
   } else {
-    // If we don't have a touch screen, OR any gamepads are connected...
-    for (const elem of document.querySelectorAll('#dpad, #apad')) {
-      // Hide the touch controls
-      elem.style.display = 'none';
-    }
+    for (const elem of document.querySelectorAll('#dpad, #apad')) elem.style.display = 'none';
   }
 }
 
-// Bind all elements providing a `data-key` attribute with the
-// given key on touch-based devices
 if (hasTouchscreen) {
-  for (const button of document.querySelectorAll('[data-key]')) {
-    bindKey(button, button.dataset.key);
-  }
+  for (const button of document.querySelectorAll('[data-key]')) bindKey(button, button.dataset.key);
 } else {
-  // Prevent scrolling when pressing specific keys
   window.addEventListener('keydown', event => {
-    if (preventNativeKeys.includes(event.key)) {
-      event.preventDefault();
-    }
+    if (preventNativeKeys.includes(event.key)) event.preventDefault();
   });
-
-  canvas.addEventListener('contextmenu', event => {
-    event.preventDefault();
-    // simulateKeyboardInput('Escape', 27);
-  });
-
-  // canvas.addEventListener('click', () => {
-  //   simulateKeyboardInput('Enter', 13);
-  // });
+  canvas.addEventListener('contextmenu', event => event.preventDefault());
 }
 
 updateTouchControlsVisibility();
