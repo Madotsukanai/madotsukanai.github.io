@@ -313,13 +313,16 @@ fileInput.addEventListener('change', async (event) => {
 
     // 階層と文字化けを直した新しいZIPを仮想Blobとして出力（圧縮なしで高速化）
     const modifiedZipBlob = await newZip.generateAsync({ type: "blob", compression: "STORE" });
-    const localZipUrl = URL.createObjectURL(modifiedZipBlob);
+    
+    // ★重要★: URLではなく、「game.zip」というファイル名を持ったFileオブジェクトを作成する
+    // これにより、EasyRPGエンジンがこのデータをZIPファイルとして正しく認識できるようになる
+    const modifiedZipFile = new File([modifiedZipBlob], "game.zip", { type: "application/zip" });
 
     statusDiv.innerText = "EasyRPG Player を起動しています...";
 
     // プレイヤーの起動
     createEasyRpgPlayer({
-      game: localZipUrl,
+      game: modifiedZipFile,
       saveFs: undefined
     }).then(function(Module) {
       easyrpgPlayer = Module;
