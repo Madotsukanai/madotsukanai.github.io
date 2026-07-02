@@ -314,15 +314,14 @@ fileInput.addEventListener('change', async (event) => {
     // 階層と文字化けを直した新しいZIPを仮想Blobとして出力（圧縮なしで高速化）
     const modifiedZipBlob = await newZip.generateAsync({ type: "blob", compression: "STORE" });
     
-    // ★重要★: URLではなく、「game.zip」というファイル名を持ったFileオブジェクトを作成する
-    // これにより、EasyRPGエンジンがこのデータをZIPファイルとして正しく認識できるようになる
-    const modifiedZipFile = new File([modifiedZipBlob], "game.zip", { type: "application/zip" });
+    // ★修正ポイント★: 文字列としてURLを渡しつつ、末尾に "#.zip" を付与してエンジンを騙す
+    const localZipUrl = URL.createObjectURL(modifiedZipBlob) + "#.zip";
 
     statusDiv.innerText = "EasyRPG Player を起動しています...";
 
     // プレイヤーの起動
     createEasyRpgPlayer({
-      game: modifiedZipFile,
+      game: localZipUrl,
       saveFs: undefined
     }).then(function(Module) {
       easyrpgPlayer = Module;
