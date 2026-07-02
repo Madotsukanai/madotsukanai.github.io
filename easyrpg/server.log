@@ -1,0 +1,58 @@
+
+> easyrpg-web@1.0.0 start
+> http-server -p 8080 -c-1 --cors
+
+[33mStarting up http-server, serving [39m[36m./[39m
+[33m[39m
+[33mhttp-server version: [39m[36m14.1.1[39m
+[33m[39m
+[33mhttp-server settings: [39m
+[33mCORS: [39m[36mtrue[39m
+[33mCache: [39m[36m-1 seconds[39m
+[33mConnection Timeout: [39m[36m120 seconds[39m
+[33mDirectory Listings: [39m[36mvisible[39m
+[33mAutoIndex: [39m[36mvisible[39m
+[33mServe GZIP Files: [39m[31mfalse[39m
+[33mServe Brotli Files: [39m[31mfalse[39m
+[33mDefault File Extension: [39m[31mnone[39m
+[33m[39m
+[33mAvailable on:[39m
+  http://127.0.0.1:[32m8080[39m
+  http://192.168.0.135:[32m8080[39m
+Hit CTRL-C to stop the server
+
+[2026-07-02T13:47:18.489Z]  "[36mGET[39m [36m/[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:18.534Z]  "[36mGET[39m [36m/index.js[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:22.679Z]  "[36mGET[39m [36m/index.wasm[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:22.799Z]  "[36mGET[39m [36m/[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:22.849Z]  "[36mGET[39m [36m/index.js[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:22.903Z]  "[36mGET[39m [36m/index.wasm[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:23.114Z]  "[36mGET[39m [36m/games/default/index.json[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:23.128Z]  "[36mGET[39m [36m/games/default/RPG_RT.ldb[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:23.129Z]  "[36mGET[39m [36m/games/default/RPG_RT.lmt[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:23.129Z]  "[36mGET[39m [36m/games/default/RPG_RT.ini[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:23.181Z]  "[36mGET[39m [36m/games/default/System/System.png[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:24.285Z]  "[36mGET[39m [36m/games/default/Title/Title2.png[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:47:24.286Z]  "[36mGET[39m [36m/games/default/Music/Opening2.mid[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:00.554Z]  "[36mGET[39m [36m/[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:00.640Z]  "[36mGET[39m [36m/index.js[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:04.567Z]  "[36mGET[39m [36m/index.wasm[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:04.713Z]  "[36mGET[39m [36m/[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:04.747Z]  "[36mGET[39m [36m/index.js[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:04.795Z]  "[36mGET[39m [36m/index.wasm[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:04.999Z]  "[36mGET[39m [36m/games/default/index.json[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:05.013Z]  "[36mGET[39m [36m/games/default/RPG_RT.ldb[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:05.014Z]  "[36mGET[39m [36m/games/default/RPG_RT.lmt[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:05.015Z]  "[36mGET[39m [36m/games/default/RPG_RT.ini[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:05.045Z]  "[36mGET[39m [36m/games/default/System/System.png[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:06.183Z]  "[36mGET[39m [36m/games/default/Title/Title2.png[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:06.184Z]  "[36mGET[39m [36m/games/default/Music/Opening2.mid[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:53.313Z]  "[36mGET[39m [36m/[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:53.350Z]  "[36mGET[39m [36m/index.js[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:58.047Z]  "[36mGET[39m [36m/index.wasm[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:58.146Z]  "[36mGET[39m [36m/[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:58.178Z]  "[36mGET[39m [36m/index.js[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:58.215Z]  "[36mGET[39m [36m/index.wasm[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:58.315Z]  "[36mGET[39m [36m/[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[2026-07-02T13:48:58.348Z]  "[36mGET[39m [36m/index.js[39m" "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+[31mhttp-server stopped.[39m

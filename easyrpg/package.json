@@ -1,0 +1,12 @@
+{
+  "name": "easyrpg-web",
+  "version": "1.0.0",
+  "description": "EasyRPG Player Web版",
+  "scripts": {
+    "start": "http-server -p 8080 -c-1 --cors",
+    "dev": "http-server -p 8080 -c-1 --cors"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
