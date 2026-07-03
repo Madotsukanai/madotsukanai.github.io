@@ -1,11 +1,13 @@
-<!doctype html>
+IO<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EasyRPG Player - ZIP Game Loader</title>
+  <title>EasyRPG Player - ZIP/RAR Game Loader</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- RAR解凍用ライブラリ -->
+  <script src="https://cdn.jsdelivr.net/npm/unrar.js@0.0.1/dist/unrar.js"></script>
 
   <style>
     :root {
@@ -52,6 +54,7 @@
       text-align: center;
       border: 1px solid var(--color-gray);
       max-width: 80%;
+      min-width: min(500px, 90vw);
     }
 
     .dialog-box h2 {
@@ -63,6 +66,544 @@
       color: #ccc;
       font-size: 0.95rem;
       line-height: 1.5;
+    }
+
+    /* タブUI */
+    .tab-bar {
+      display: flex;
+      border-bottom: 2px solid #444;
+      margin-bottom: 1.5rem;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: color 0.2s, border-bottom 0.2s;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      font-family: inherit;
+    }
+
+    .tab-btn:hover {
+      color: #ccc;
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      border-bottom-color: #4CAF50;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* RTP管理セクション */
+    .rtp-section {
+      text-align: left;
+    }
+
+    .rtp-status-list {
+      margin: 1rem 0;
+    }
+
+    .rtp-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      margin: 0.5rem 0;
+      background: #333;
+      border-radius: 4px;
+    }
+
+    .rtp-item-info {
+      flex: 1;
+    }
+
+    .rtp-item-name {
+      font-weight: bold;
+      font-size: 1rem;
+    }
+
+    .rtp-item-detail {
+      font-size: 0.8rem;
+      color: #999;
+      margin-top: 0.25rem;
+    }
+
+    .rtp-badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+
+    .rtp-badge.installed {
+      background: #2e7d32;
+      color: #c8e6c9;
+    }
+
+    .rtp-badge.not-installed {
+      background: #555;
+      color: #aaa;
+    }
+
+    .rtp-delete-btn {
+      padding: 0.4rem 0.8rem;
+      background: #f44336;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      margin-left: 0.5rem;
+    }
+
+    .rtp-delete-btn:hover {
+      background: #d32f2f;
+    }
+
+    #rtp-file-input {
+      margin: 1rem 0;
+      font-size: 1rem;
+      color: white;
+    }
+
+    /* ストレージ管理タブ - Windows Explorer風UI */
+    .storage-section {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      height: 60vh;
+      min-height: 300px;
+    }
+
+    /* ツールバー */
+    .sexplorer-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.35rem 0.5rem;
+      background: #2d2d2d;
+      border: 1px solid #444;
+      border-radius: 4px 4px 0 0;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .sexplorer-toolbar-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.3rem 0.55rem;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #ccc;
+      font-size: 0.78rem;
+      cursor: pointer;
+      border-radius: 3px;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .sexplorer-toolbar-btn:hover {
+      background: #3a3a3a;
+      border-color: #555;
+    }
+
+    .sexplorer-toolbar-btn:active {
+      background: #444;
+    }
+
+    .sexplorer-toolbar-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .sexplorer-toolbar-sep {
+      width: 1px;
+      height: 1.4em;
+      background: #555;
+      margin: 0 0.2rem;
+      flex-shrink: 0;
+    }
+
+    .sexplorer-toolbar-spacer {
+      flex: 1;
+    }
+
+    /* 検索ボックス */
+    .sexplorer-search {
+      display: flex;
+      align-items: center;
+      background: #1e1e1e;
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 0.2rem 0.4rem;
+      flex-shrink: 0;
+    }
+
+    .sexplorer-search input {
+      background: transparent;
+      border: none;
+      color: #ddd;
+      font-size: 0.78rem;
+      width: 110px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .sexplorer-search input::placeholder {
+      color: #777;
+    }
+
+    .sexplorer-search-icon {
+      color: #888;
+      font-size: 0.8rem;
+      margin-right: 0.2rem;
+    }
+
+    /* パンくずリスト（アドレスバー） */
+    .sexplorer-breadcrumb {
+      display: flex;
+      align-items: center;
+      padding: 0.3rem 0.6rem;
+      background: #1e1e1e;
+      border-left: 1px solid #444;
+      border-right: 1px solid #444;
+      font-size: 0.82rem;
+      gap: 0.15rem;
+      flex-shrink: 0;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .sexplorer-breadcrumb-item {
+      color: #8ab4f8;
+      cursor: pointer;
+      padding: 0.1rem 0.25rem;
+      border-radius: 2px;
+      transition: background 0.1s;
+    }
+
+    .sexplorer-breadcrumb-item:hover {
+      background: #333;
+      text-decoration: underline;
+    }
+
+    .sexplorer-breadcrumb-item.current {
+      color: #ddd;
+      cursor: default;
+    }
+
+    .sexplorer-breadcrumb-item.current:hover {
+      background: transparent;
+      text-decoration: none;
+    }
+
+    .sexplorer-breadcrumb-sep {
+      color: #666;
+      margin: 0 0.1rem;
+      user-select: none;
+    }
+
+    /* カラムヘッダ */
+    .sexplorer-col-header {
+      display: grid;
+      grid-template-columns: 28px 1fr 80px 90px 130px;
+      align-items: center;
+      padding: 0.3rem 0.5rem;
+      background: #2a2a2a;
+      border-left: 1px solid #444;
+      border-right: 1px solid #444;
+      border-bottom: 1px solid #444;
+      font-size: 0.75rem;
+      color: #999;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .sexplorer-col-header span {
+      cursor: pointer;
+      padding: 0.15rem 0.3rem;
+      border-radius: 2px;
+    }
+
+    .sexplorer-col-header span:hover {
+      background: #333;
+      color: #ccc;
+    }
+
+    .sexplorer-col-header span.sorted {
+      color: #8ab4f8;
+    }
+
+    .sexplorer-col-header .col-checkbox {
+      display: flex;
+      justify-content: center;
+    }
+
+    .sexplorer-col-header .col-checkbox input[type="checkbox"] {
+      accent-color: #4CAF50;
+      cursor: pointer;
+    }
+
+    /* ファイルリスト本体 */
+    .sexplorer-file-list {
+      flex: 1;
+      overflow-y: auto;
+      background: #1e1e1e;
+      border-left: 1px solid #444;
+      border-right: 1px solid #444;
+      min-height: 0;
+      position: relative;
+    }
+
+    .sexplorer-file-list:focus {
+      outline: none;
+    }
+
+    .sexplorer-row {
+      display: grid;
+      grid-template-columns: 28px 1fr 80px 90px 130px;
+      align-items: center;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.82rem;
+      color: #ccc;
+      cursor: default;
+      border-bottom: 1px solid #2a2a2a;
+      transition: background 0.08s;
+      user-select: none;
+    }
+
+    .sexplorer-row:hover {
+      background: #2a2a2a;
+    }
+
+    .sexplorer-row.selected {
+      background: #264f78;
+    }
+
+    .sexplorer-row.selected:hover {
+      background: #2d5a8a;
+    }
+
+    .sexplorer-row.cut {
+      opacity: 0.5;
+    }
+
+    .sexplorer-row.drop-target {
+      background: #264f78;
+      outline: 1px dashed #8ab4f8;
+    }
+
+    .sexplorer-row .row-checkbox {
+      display: flex;
+      justify-content: center;
+    }
+
+    .sexplorer-row .row-checkbox input[type="checkbox"] {
+      accent-color: #4CAF50;
+      cursor: pointer;
+    }
+
+    .sexplorer-row .row-name {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      overflow: hidden;
+    }
+
+    .sexplorer-row .row-name-icon {
+      flex-shrink: 0;
+      font-size: 1rem;
+    }
+
+    .sexplorer-row .row-name-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sexplorer-row .row-name-input {
+      background: #1e1e1e;
+      border: 1px solid #4CAF50;
+      color: #fff;
+      font-size: 0.82rem;
+      padding: 0.1rem 0.3rem;
+      border-radius: 2px;
+      outline: none;
+      width: 100%;
+      font-family: inherit;
+    }
+
+    .sexplorer-row .row-size {
+      text-align: right;
+      color: #999;
+      font-size: 0.78rem;
+      padding-right: 0.5rem;
+    }
+
+    .sexplorer-row .row-type {
+      color: #888;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+    }
+
+    .sexplorer-row .row-date {
+      color: #888;
+      font-size: 0.75rem;
+    }
+
+    /* ステータスバー */
+    .sexplorer-statusbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.25rem 0.6rem;
+      background: #2d2d2d;
+      border: 1px solid #444;
+      border-radius: 0 0 4px 4px;
+      font-size: 0.75rem;
+      color: #999;
+      flex-shrink: 0;
+    }
+
+    /* 空のフォルダ表示 */
+    .sexplorer-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1rem;
+      color: #666;
+      font-size: 0.9rem;
+      gap: 0.5rem;
+    }
+
+    .sexplorer-empty-icon {
+      font-size: 2.5rem;
+      opacity: 0.5;
+    }
+
+    /* ドラッグ&ドロップオーバーレイ */
+    .sexplorer-drop-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(38, 79, 120, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      border: 2px dashed #8ab4f8;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    .sexplorer-drop-overlay.active {
+      display: flex;
+    }
+
+    .sexplorer-drop-overlay span {
+      font-size: 1.1rem;
+      color: #fff;
+      background: rgba(0,0,0,0.6);
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+    }
+
+    /* 右クリックコンテキストメニュー */
+    .sexplorer-ctx-menu {
+      position: fixed;
+      background: #2d2d2d;
+      border: 1px solid #555;
+      border-radius: 4px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      min-width: 180px;
+      z-index: 200;
+      padding: 0.25rem 0;
+      font-size: 0.82rem;
+      display: none;
+    }
+
+    .sexplorer-ctx-menu.open {
+      display: block;
+    }
+
+    .sexplorer-ctx-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.4rem 0.75rem;
+      color: #ddd;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .sexplorer-ctx-item:hover {
+      background: #3a3a3a;
+    }
+
+    .sexplorer-ctx-item.disabled {
+      color: #666;
+      cursor: default;
+    }
+
+    .sexplorer-ctx-item.disabled:hover {
+      background: transparent;
+    }
+
+    .sexplorer-ctx-item .ctx-icon {
+      margin-right: 0.5rem;
+      width: 1.2em;
+      text-align: center;
+    }
+
+    .sexplorer-ctx-item .ctx-shortcut {
+      color: #777;
+      font-size: 0.72rem;
+      margin-left: 1.5rem;
+    }
+
+    .sexplorer-ctx-sep {
+      height: 1px;
+      background: #444;
+      margin: 0.25rem 0.5rem;
+    }
+
+    /* ファイルアップロード用の非表示input */
+    #sexplorer-file-upload {
+      display: none;
+    }
+
+    /* レスポンシブ: 小さい画面でカラムを減らす */
+    @media (max-width: 600px) {
+      .sexplorer-col-header,
+      .sexplorer-row {
+        grid-template-columns: 28px 1fr 70px;
+      }
+      .sexplorer-row .row-type,
+      .sexplorer-row .row-date,
+      .sexplorer-col-header .col-type,
+      .sexplorer-col-header .col-date {
+        display: none;
+      }
     }
 
     #game-file-input {
@@ -174,9 +715,111 @@
   <div id="startup-dialog">
     <div class="dialog-box">
       <h2>RPGツクール2000/2003 ゲームローダー</h2>
-      <p>ゲームのZIPファイルを選択してください。</p>
-      <p style="font-size: 0.85rem; color: #999;">UTF-8とShift_JISエンコーディングに対応しています。</p>
-      <input type="file" id="game-file-input" accept=".zip" />
+
+      <!-- タブバー -->
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="game" onclick="switchTab('game')">🎮 ゲーム</button>
+        <button class="tab-btn" data-tab="rtp" onclick="switchTab('rtp')">📦 RTP管理</button>
+        <button class="tab-btn" data-tab="storage" onclick="switchTab('storage')">🗂 ストレージ</button>
+      </div>
+
+      <!-- ゲームタブ -->
+      <div id="tab-game" class="tab-content active">
+        <!-- 保存済みゲームのリスト -->
+        <div id="saved-games-list" style="display: none; margin-bottom: 2rem;">
+          <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">保存済みのゲーム</h3>
+          <div id="saved-games-container" style="max-height: 200px; overflow-y: auto; background: #333; padding: 0.5rem; border-radius: 4px;">
+            <!-- ここに保存済みゲームが表示されます -->
+          </div>
+        </div>
+        
+        <p>ゲームのZIPまたはRARファイルを選択してください。</p>
+        <p style="font-size: 0.85rem; color: #999;">UTF-8とShift_JISエンコーディングに対応しています。</p>
+        <input type="file" id="game-file-input" accept=".zip,.rar" />
+      </div>
+
+      <!-- RTP管理タブ -->
+      <div id="tab-rtp" class="tab-content">
+        <div class="rtp-section">
+          <p style="text-align: center; color: #ccc;">RTP（ランタイムパッケージ）の管理</p>
+          <div id="rtp-status-list" class="rtp-status-list">
+            <!-- RTPのステータスがここに表示されます -->
+          </div>
+          <hr style="border-color: #444; margin: 1.5rem 0;">
+          <div class="rtp-install-item">
+            <p style="font-size: 0.9rem; margin-bottom: 0.3rem;">📀 RPGツクール2000 RTP:</p>
+            <input type="file" id="rtp2000-file-input" accept=".zip" />
+          </div>
+          <div class="rtp-install-item" style="margin-top: 1.2rem;">
+            <p style="font-size: 0.9rem; margin-bottom: 0.3rem;">📀 RPGツクール2003 RTP:</p>
+            <input type="file" id="rtp2003-file-input" accept=".zip" />
+          </div>
+          <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
+            ※ RTPインストーラー(.exe)が入ったZIPはそのまま使えません。事前に unshield などで展開し、
+            展開後のフォルダをZIPにまとめてから選択してください。
+          </p>
+        </div>
+      </div>
+
+      <!-- ストレージ管理タブ (Explorer風) -->
+      <div id="tab-storage" class="tab-content">
+        <div class="storage-section" id="sexplorer-root" tabindex="-1">
+          <!-- ツールバー -->
+          <div class="sexplorer-toolbar">
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-back" title="戻る (Alt+←)" disabled>⬅</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-forward" title="進む (Alt+→)" disabled>➡</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-up" title="上へ (Alt+↑)" disabled>⬆</button>
+            <div class="sexplorer-toolbar-sep"></div>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-upload" title="ファイルをアップロード">アップロード</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-newfolder" title="新しいフォルダ">新規フォルダ</button>
+            <div class="sexplorer-toolbar-sep"></div>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-cut" title="切り取り (Ctrl+X)" disabled>切り取り</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-copy" title="コピー (Ctrl+C)" disabled>コピー</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-paste" title="貼り付け (Ctrl+V)" disabled>貼り付け</button>
+            <div class="sexplorer-toolbar-sep"></div>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-rename" title="名前の変更 (F2)" disabled>名前変更</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-delete" title="削除 (Delete)" disabled>削除</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-download" title="ダウンロード" disabled>DL</button>
+            <div class="sexplorer-toolbar-spacer"></div>
+            <div class="sexplorer-search">
+              <span class="sexplorer-search-icon">🔍</span>
+              <input type="text" id="sexplorer-search-input" placeholder="フィルター...">
+            </div>
+          </div>
+
+          <!-- パンくずリスト -->
+          <div class="sexplorer-breadcrumb" id="sexplorer-breadcrumb"></div>
+
+          <!-- カラムヘッダ -->
+          <div class="sexplorer-col-header" id="sexplorer-col-header">
+            <div class="col-checkbox"><input type="checkbox" id="sexplorer-select-all" title="すべて選択"></div>
+            <span class="col-name sorted" data-sort="name">名前 ▲</span>
+            <span class="col-size" data-sort="size">サイズ</span>
+            <span class="col-type" data-sort="type">種類</span>
+            <span class="col-date" data-sort="date">更新日時</span>
+          </div>
+
+          <!-- ファイル一覧 -->
+          <div class="sexplorer-file-list" id="sexplorer-file-list" tabindex="0">
+            <!-- ドラッグ&ドロップオーバーレイ -->
+            <div class="sexplorer-drop-overlay" id="sexplorer-drop-overlay">
+              <span>📥 ここにファイルをドロップしてアップロード</span>
+            </div>
+          </div>
+
+          <!-- ステータスバー -->
+          <div class="sexplorer-statusbar" id="sexplorer-statusbar">
+            <span id="sexplorer-status-items">読み込み中...</span>
+            <span id="sexplorer-status-usage"></span>
+          </div>
+
+          <!-- 隠しファイル入力 -->
+          <input type="file" id="sexplorer-file-upload" multiple>
+        </div>
+      </div>
+
+      <!-- 右クリックメニュー -->
+      <div class="sexplorer-ctx-menu" id="sexplorer-ctx-menu"></div>
     </div>
   </div>
 
@@ -208,6 +851,2104 @@
   </div>
 
 <script>
+
+// IndexedDBストレージマネージャー
+class GameStorageManager {
+  constructor() {
+    this.dbName = 'EasyRPG_GameLibrary';
+    this.dbVersion = 2;
+    this.db = null;
+  }
+  
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        
+        // ゲームデータストア
+        if (!db.objectStoreNames.contains('games')) {
+          const gamesStore = db.createObjectStore('games', { keyPath: 'id' });
+          gamesStore.createIndex('lastPlayed', 'lastPlayed', { unique: false });
+          gamesStore.createIndex('name', 'name', { unique: false });
+        }
+        
+        // ゲームファイルストア（大容量データ用）
+        if (!db.objectStoreNames.contains('gameFiles')) {
+          db.createObjectStore('gameFiles', { keyPath: 'gameId' });
+        }
+        
+        // RTPデータストア
+        if (!db.objectStoreNames.contains('rtp')) {
+          const rtpStore = db.createObjectStore('rtp', { keyPath: 'id' });
+          rtpStore.createIndex('name', 'name', { unique: false });
+        }
+        
+        // RTPファイルストア
+        if (!db.objectStoreNames.contains('rtpFiles')) {
+          db.createObjectStore('rtpFiles', { keyPath: 'rtpId' });
+        }
+      };
+    });
+  }
+  
+  async saveGame(gameId, gameName, files) {
+    const transaction = this.db.transaction(['games', 'gameFiles'], 'readwrite');
+    
+    // ゲームメタデータを保存
+    const gameData = {
+      id: gameId,
+      name: gameName,
+      lastPlayed: new Date().toISOString(),
+      fileCount: files.length,
+      totalSize: files.reduce((sum, f) => sum + f.data.length, 0)
+    };
+    
+    await transaction.objectStore('games').put(gameData);
+    
+    // ゲームファイルを保存（Uint8Arrayをそのまま保存）
+    const fileData = {
+      gameId: gameId,
+      files: files.map(f => ({
+        path: f.path,
+        data: f.data // Uint8Arrayをそのまま保存
+      }))
+    };
+    
+    await transaction.objectStore('gameFiles').put(fileData);
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+  
+  async getGame(gameId) {
+    const transaction = this.db.transaction(['games', 'gameFiles'], 'readonly');
+    
+    const gameData = await new Promise((resolve, reject) => {
+      const request = transaction.objectStore('games').get(gameId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    
+    if (!gameData) {
+      return null;
+    }
+    
+    const fileData = await new Promise((resolve, reject) => {
+      const request = transaction.objectStore('gameFiles').get(gameId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    
+    return {
+      ...gameData,
+      files: fileData ? fileData.files : []
+    };
+  }
+  
+  async getAllGames() {
+    const transaction = this.db.transaction(['games'], 'readonly');
+    const store = transaction.objectStore('games');
+    const index = store.index('lastPlayed');
+    
+    return new Promise((resolve, reject) => {
+      const request = index.openCursor(null, 'prev'); // 最新順
+      const games = [];
+      
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+          games.push(cursor.value);
+          cursor.continue();
+        } else {
+          resolve(games);
+        }
+      };
+      
+      request.onerror = () => reject(request.error);
+    });
+  }
+  
+  async deleteGame(gameId) {
+    const transaction = this.db.transaction(['games', 'gameFiles'], 'readwrite');
+    
+    await transaction.objectStore('games').delete(gameId);
+    await transaction.objectStore('gameFiles').delete(gameId);
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+  
+  async updateGameMetadata(gameId, updates) {
+    const transaction = this.db.transaction(['games'], 'readwrite');
+    const store = transaction.objectStore('games');
+    
+    const gameData = await new Promise((resolve, reject) => {
+      const request = store.get(gameId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    
+    if (!gameData) {
+      throw new Error('Game not found');
+    }
+    
+    Object.assign(gameData, updates);
+    
+    await store.put(gameData);
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+  
+  // RTP管理メソッド
+  async saveRTP(rtpId, rtpName, files) {
+    const transaction = this.db.transaction(['rtp', 'rtpFiles'], 'readwrite');
+    
+    // RTPメタデータを保存
+    const rtpData = {
+      id: rtpId,
+      name: rtpName,
+      savedAt: new Date().toISOString(),
+      fileCount: files.length,
+      totalSize: files.reduce((sum, f) => sum + f.data.length, 0)
+    };
+    
+    await transaction.objectStore('rtp').put(rtpData);
+    
+    // RTPファイルを保存
+    const fileData = {
+      rtpId: rtpId,
+      files: files.map(f => ({
+        path: f.path,
+        data: f.data // Uint8Arrayをそのまま保存
+      }))
+    };
+    
+    await transaction.objectStore('rtpFiles').put(fileData);
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+  
+  async getRTP(rtpId) {
+    const transaction = this.db.transaction(['rtp', 'rtpFiles'], 'readonly');
+    
+    const rtpData = await new Promise((resolve, reject) => {
+      const request = transaction.objectStore('rtp').get(rtpId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    
+    if (!rtpData) {
+      return null;
+    }
+    
+    const fileData = await new Promise((resolve, reject) => {
+      const request = transaction.objectStore('rtpFiles').get(rtpId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    
+    return {
+      ...rtpData,
+      files: fileData ? fileData.files : []
+    };
+  }
+  
+  async getAllRTPs() {
+    const transaction = this.db.transaction(['rtp'], 'readonly');
+    const store = transaction.objectStore('rtp');
+    
+    return new Promise((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  
+  async deleteRTP(rtpId) {
+    const transaction = this.db.transaction(['rtp', 'rtpFiles'], 'readwrite');
+    
+    await transaction.objectStore('rtp').delete(rtpId);
+    await transaction.objectStore('rtpFiles').delete(rtpId);
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+}
+
+// グローバルストレージマネージャーインスタンス
+let storageManager = null;
+
+// ============================================================
+// ネットワークフェッチの横取り（RTP/ゲームファイルをIndexedDBから
+// 直接FSに書き込んだ場合の"file not available"対策）
+//
+// EasyRPGのEmscriptenビルドは、ファイルへアクセスする度に必ず
+// games/<ゲーム名>/<パス> へ非同期のネットワークリクエスト
+// （emscripten_async_wget2）を試みる実装になっている
+// （easyrpg-player/src/async_handler.cpp 参照）。
+// このプロジェクトはゲーム/RTPデータをIndexedDBからFSへ直接
+// 書き込んでいるため、実データは既にローカルに存在するにも
+// 関わらず、このネットワーク層は「まだダウンロードしていない」
+// と判断して毎回404を踏む。結果としてコンソールに
+// "DL Failure: file not available" 等のログや404が出続けるが、
+// 最終的には別経路でローカルFSの実体が読まれるためゲーム自体は
+// 動作する（実態と乖離した無害な警告）。
+//
+// ここでは games/*/* へのXHRを検知し、window.EASYRPG_FILE_MAP
+// （パス小文字 -> Uint8Array）から該当データを見つけられた場合、
+// 実際のネットワーク往復を行わずにその場で「成功」として応答する。
+// 見つからない場合は通常通り本来のXHR処理にフォールバックする。
+// ============================================================
+(function installGameAssetXhrInterceptor() {
+  if (window.__easyrpgXhrPatched) return;
+  window.__easyrpgXhrPatched = true;
+
+  const RealXHR = window.XMLHttpRequest;
+  // async_handler.cpp: request_path = "games/" + (gameName || "default") + "/" + path
+  const GAME_URL_RE = /^games\/[^/]+\/(.+)$/;
+
+  function decodeRequestPath(raw) {
+    try {
+      // async_handler.cpp は %, #, + のみをエンコードしている
+      return decodeURIComponent(raw);
+    } catch (e) {
+      return raw;
+    }
+  }
+
+  function PatchedXHR() {
+    const real = new RealXHR();
+    let interceptData = null;
+    const realOpen = real.open.bind(real);
+    const realSend = real.send.bind(real);
+
+    real.open = function(method, url, ...rest) {
+      interceptData = null;
+      if (window.EASYRPG_FILE_MAP && typeof url === 'string') {
+        let path = null;
+        const m = GAME_URL_RE.exec(url);
+        if (m) {
+          path = decodeRequestPath(m[1]);
+        } else {
+          // games/xxxx/ から始まらないリクエスト（例: ./index.json, index.json）
+          try {
+            const parsedUrl = new URL(url, window.location.href);
+            let tempPath = parsedUrl.pathname;
+            const locPath = window.location.pathname;
+            const locDir = locPath.substring(0, locPath.lastIndexOf('/') + 1);
+            if (tempPath.startsWith(locDir)) {
+              tempPath = tempPath.substring(locDir.length);
+            } else if (tempPath.startsWith('/')) {
+              tempPath = tempPath.substring(1);
+            }
+            path = decodeRequestPath(tempPath);
+          } catch (e) {
+            path = decodeRequestPath(url.replace(/^\.\//, ''));
+          }
+        }
+        
+        if (path) {
+          const data = window.EASYRPG_FILE_MAP.get(path.toLowerCase());
+          if (data) {
+            interceptData = data;
+          }
+        }
+      }
+      if (interceptData) {
+        // 実ネットワークへは投げない（openの呼び出し自体をスキップ）
+        return;
+      }
+      return realOpen(method, url, ...rest);
+    };
+
+    real.send = function(...args) {
+      if (interceptData) {
+        const data = interceptData;
+        const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+        try {
+          Object.defineProperty(real, 'status', { value: 200, configurable: true });
+          Object.defineProperty(real, 'readyState', { value: 4, configurable: true });
+          Object.defineProperty(real, 'response', { value: buffer, configurable: true });
+        } catch (e) {
+          console.warn('Failed to shim XHR response for intercepted asset:', e);
+        }
+        // emscripten側のコールバック登録が完了してから発火させるため非同期にする
+        setTimeout(() => {
+          if (typeof real.onload === 'function') {
+            try { real.onload(new ProgressEvent('load')); } catch (e) { console.error(e); }
+          }
+        }, 0);
+        return;
+      }
+      return realSend(...args);
+    };
+
+    return real;
+  }
+  PatchedXHR.prototype = RealXHR.prototype;
+
+  window.XMLHttpRequest = PatchedXHR;
+})();
+
+
+// タブ切り替え
+function switchTab(tabName) {
+  // タブボタンの状態更新
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  
+  document.getElementById('tab-' + tabName).classList.add('active');
+  // ボタンのアクティブ状態（data-tab属性で確実に一致させる）
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    if (btn.dataset.tab === tabName) {
+      btn.classList.add('active');
+    }
+  });
+  
+  // RTPタブ表示時にステータスを更新
+  if (tabName === 'rtp') {
+    loadRTPStatusList();
+  }
+  
+  // ストレージタブ表示時に内容を読み込み
+  if (tabName === 'storage') {
+    loadStorageBrowser();
+  }
+}
+
+// RTPステータスリスト表示
+async function loadRTPStatusList() {
+  const container = document.getElementById('rtp-status-list');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  // 既知のRTP定義リスト
+  const knownRTPs = [
+    { id: 'rtp2000', name: 'RPGツクール2000 RTP', type: '2000' },
+    { id: 'rtp2003', name: 'RPGツクール2003 RTP', type: '2003' },
+    // 必要に応じて追加
+  ];
+  
+  // インストール済みRTPを取得
+  let installedRTPs = [];
+  try {
+    if (storageManager) {
+      installedRTPs = await storageManager.getAllRTPs();
+    }
+  } catch (e) {
+    console.error('Failed to load RTP list:', e);
+  }
+  
+  const installedIds = new Set(installedRTPs.map(r => r.id));
+  
+  // 既知のRTPのステータスを表示
+  knownRTPs.forEach(rtp => {
+    const installed = installedIds.has(rtp.id);
+    const installedData = installedRTPs.find(r => r.id === rtp.id);
+    
+    const item = document.createElement('div');
+    item.className = 'rtp-item';
+    
+    let detailText = '';
+    if (installed && installedData) {
+      const sizeInMB = (installedData.totalSize / 1024 / 1024).toFixed(2);
+      detailText = `${installedData.fileCount} ファイル / ${sizeInMB} MB`;
+    }
+    
+    item.innerHTML = `
+      <div class="rtp-item-info">
+        <div class="rtp-item-name">${escapeHtml(rtp.name)}</div>
+        <div class="rtp-item-detail">
+          <span class="rtp-badge ${installed ? 'installed' : 'not-installed'}">
+            ${installed ? '✅ インストール済み' : '❌ 未インストール'}
+          </span>
+          ${detailText ? ' — ' + detailText : ''}
+        </div>
+      </div>
+      ${installed ? `<button class="rtp-delete-btn" onclick="deleteRTP('${rtp.id}')">削除</button>` : ''}
+    `;
+    
+    container.appendChild(item);
+    installedIds.delete(rtp.id);
+  });
+  
+  // 既知リストにない追加のインストール済みRTP
+  installedRTPs.filter(r => installedIds.has(r.id)).forEach(rtp => {
+    const item = document.createElement('div');
+    item.className = 'rtp-item';
+    
+    const sizeInMB = (rtp.totalSize / 1024 / 1024).toFixed(2);
+    
+    item.innerHTML = `
+      <div class="rtp-item-info">
+        <div class="rtp-item-name">${escapeHtml(rtp.name)}</div>
+        <div class="rtp-item-detail">
+          <span class="rtp-badge installed">✅ インストール済み</span>
+          — ${rtp.fileCount} ファイル / ${sizeInMB} MB
+        </div>
+      </div>
+      <button class="rtp-delete-btn" onclick="deleteRTP('${rtp.id}')">削除</button>
+    `;
+    
+    container.appendChild(item);
+  });
+  
+  if (container.children.length === 0) {
+    container.innerHTML = '<p style="color: #888; text-align: center;">RTPはまだインストールされていません。</p>';
+  }
+}
+
+// RTP削除
+async function deleteRTP(rtpId) {
+  if (!confirm('このRTPを削除しますか？')) {
+    return;
+  }
+  
+  try {
+    await storageManager.deleteRTP(rtpId);
+    console.log(`Deleted RTP: ${rtpId}`);
+    await loadRTPStatusList();
+  } catch (e) {
+    console.error('Failed to delete RTP:', e);
+    alert('RTPの削除に失敗しました: ' + e.message);
+  }
+}
+
+// ==================== ストレージ管理（Explorer風ファイルブラウザ） ====================
+
+// バイト数を人間が読みやすい形式に変換
+function formatBytes(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let val = bytes;
+  while (val >= 1024 && i < units.length - 1) {
+    val /= 1024;
+    i++;
+  }
+  return `${val.toFixed(val >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+// 拡張子からおおまかなMIMEタイプを推測（ダウンロード用）
+function guessMimeType(filename) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  const map = {
+    png: 'image/png', bmp: 'image/bmp', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    wav: 'audio/wav', ogg: 'audio/ogg', mid: 'audio/midi', midi: 'audio/midi', mp3: 'audio/mpeg',
+    json: 'application/json', txt: 'text/plain', ini: 'text/plain', xml: 'application/xml'
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
+// 単一ファイルをBlobとしてダウンロード
+function downloadStorageFile(filename, data) {
+  const blob = new Blob([data], { type: guessMimeType(filename) });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ============================================================
+// StorageExplorer: Windows Explorer風ファイルマネージャ
+// ============================================================
+class StorageExplorer {
+  constructor() {
+    // 全データ: [{groupType, groupId, groupName, path, name, size, data, date}]
+    this.allEntries = [];
+    // 現在のディレクトリパス（例: '', 'game/MyGame', 'game/MyGame/Sound'）
+    this.currentPath = '';
+    // 履歴
+    this.history = [''];
+    this.historyIndex = 0;
+    // 選択
+    this.selectedPaths = new Set();
+    this.lastClickedPath = null;
+    // クリップボード
+    this.clipboard = { items: [], mode: null }; // mode: 'cut' | 'copy'
+    // ソート
+    this.sortKey = 'name';
+    this.sortAsc = true;
+    // 検索フィルタ
+    this.filterText = '';
+    // 仮想フォルダ構造のキャッシュ
+    this._treeCache = null;
+    // リネーム中フラグ
+    this._renaming = false;
+  }
+
+  // --- データのロード ---
+  async loadAll() {
+    if (!storageManager) return;
+    this.allEntries = [];
+    this._treeCache = null;
+
+    try {
+      const [games, rtps] = await Promise.all([
+        storageManager.getAllGames(),
+        storageManager.getAllRTPs()
+      ]);
+
+      // ゲームファイルを読み込み
+      for (const game of games) {
+        try {
+          const data = await storageManager.getGame(game.id);
+          if (data && data.files) {
+            const gameGroupPath = `games/${game.name || game.id}`;
+            for (const f of data.files) {
+              this.allEntries.push({
+                groupType: 'game',
+                groupId: game.id,
+                groupName: game.name || game.id,
+                groupPath: gameGroupPath,
+                path: `${gameGroupPath}/${f.path}`,
+                name: this._basename(f.path),
+                size: f.data ? f.data.byteLength || f.data.length : 0,
+                data: f.data,
+                date: game.lastPlayed || null
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to load game files: ${game.id}`, e);
+        }
+      }
+
+      // RTPファイルを読み込み
+      // RTP IDからディレクトリ名へのマッピング
+      const rtpDirMap = { 'rtp2000': '2000', 'rtp2003': '2003' };
+      for (const rtp of rtps) {
+        try {
+          const data = await storageManager.getRTP(rtp.id);
+          if (data && data.files) {
+            const rtpDir = rtpDirMap[rtp.id] || rtp.id;
+            const rtpGroupPath = `RTP/${rtpDir}`;
+            for (const f of data.files) {
+              // 既にRTP/XXXX/プレフィックスが付いていれば除去して正規化
+              const cleanPath = f.path.replace(/^RTP\/\d{4}\//, '');
+              this.allEntries.push({
+                groupType: 'rtp',
+                groupId: rtp.id,
+                groupName: rtp.name || rtp.id,
+                groupPath: rtpGroupPath,
+                path: `${rtpGroupPath}/${cleanPath}`,
+                name: this._basename(cleanPath),
+                size: f.data ? f.data.byteLength || f.data.length : 0,
+                data: f.data,
+                date: rtp.savedAt || null
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to load RTP files: ${rtp.id}`, e);
+        }
+      }
+
+      // セーブファイルを読み込み (存在するすべての IDBFS セーブデータベースから)
+      try {
+        const dbInfos = await indexedDB.databases();
+        // "/Save" で終わる、または "Save" と完全一致するデータベース名をフィルタリング
+        const saveDbNames = dbInfos
+          .map(db => db.name)
+          .filter(name => name && (name.endsWith('/Save') || name === 'Save'));
+
+        for (const dbName of saveDbNames) {
+          const saves = await new Promise((resolve) => {
+            const req = indexedDB.open(dbName, 21); // IDBFS の DB_VERSION=21
+            req.onsuccess = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains('FILE_DATA')) {
+                db.close();
+                resolve([]);
+                return;
+              }
+              const tx = db.transaction(['FILE_DATA'], 'readonly');
+              const store = tx.objectStore('FILE_DATA');
+              const files = [];
+              store.openCursor().onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                  files.push({
+                    path: cursor.key, // 例: "/customgame/Save/勇者と異常者/Save01.lsd"
+                    value: cursor.value
+                  });
+                  cursor.continue();
+                } else {
+                  db.close();
+                  resolve(files);
+                }
+              };
+              tx.onerror = () => {
+                db.close();
+                resolve([]);
+              };
+            };
+            req.onerror = () => resolve([]);
+          });
+
+          const saveGroupPath = 'Save';
+          for (const s of saves) {
+            let cleanPath = s.path;
+            
+            // 先頭の "/customgame/Save/" や "/easyrpg/XXX/Save/" などを除去して
+            // エクスプローラー上で "Save/勇者と異常者/Save01.lsd" に統一する
+            const saveIndex = cleanPath.indexOf('/Save/');
+            if (saveIndex !== -1) {
+              cleanPath = 'Save/' + cleanPath.substring(saveIndex + 6);
+            } else {
+              cleanPath = cleanPath.replace(/^\//, ''); // 万が一 "/Save/..." の場合
+            }
+            
+            this.allEntries.push({
+              groupType: 'save',
+              groupId: dbName, // 保存や削除の際に正しいデータベース名を特定するためにgroupIdにdbNameを保持
+              groupName: 'セーブデータ',
+              groupPath: saveGroupPath,
+              path: cleanPath, // "Save/勇者と異常者/Save01.lsd"
+              name: this._basename(cleanPath),
+              size: s.value.contents ? s.value.contents.byteLength || s.value.contents.length : 0,
+              data: s.value.contents,
+              date: s.value.timestamp ? new Date(s.value.timestamp).toISOString() : null
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load save files from IndexedDB databases:', e);
+      }
+    } catch (e) {
+      console.error('StorageExplorer.loadAll failed:', e);
+    }
+  }
+
+  _basename(p) {
+    const parts = p.split('/').filter(s => s);
+    return parts.length > 0 ? parts[parts.length - 1] : p;
+  }
+
+  _dirname(p) {
+    const idx = p.lastIndexOf('/');
+    return idx > 0 ? p.substring(0, idx) : '';
+  }
+
+  _getExtension(name) {
+    const i = name.lastIndexOf('.');
+    if (i <= 0) return '';
+    return name.substring(i + 1).toLowerCase();
+  }
+
+  _getFileTypeLabel(name) {
+    const ext = this._getExtension(name);
+    const map = {
+      png: 'PNG画像', bmp: 'BMP画像', jpg: 'JPEG画像', jpeg: 'JPEG画像', gif: 'GIF画像',
+      wav: 'WAVオーディオ', ogg: 'OGGオーディオ', mid: 'MIDIファイル', midi: 'MIDIファイル', mp3: 'MP3オーディオ',
+      json: 'JSONファイル', txt: 'テキスト', ini: 'INI設定', xml: 'XMLファイル',
+      ldb: 'RPGデータ', lmt: 'マップツリー', lmu: 'マップファイル', exe: '実行ファイル',
+      xyz: 'XYZ画像'
+    };
+    return map[ext] || (ext ? ext.toUpperCase() + ' ファイル' : 'ファイル');
+  }
+
+  _getFileIcon(name, isDir) {
+    if (isDir) return '📁';
+    const ext = this._getExtension(name);
+    const iconMap = {
+      png: '🖼️', bmp: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', xyz: '🖼️',
+      wav: '🔊', ogg: '🔊', mid: '🎵', midi: '🎵', mp3: '🎵',
+      json: '📋', txt: '📝', ini: '⚙️', xml: '📋',
+      ldb: '💾', lmt: '🗺️', lmu: '🗺️', exe: '⚡'
+    };
+    return iconMap[ext] || '📄';
+  }
+
+  // --- 仮想ファイルシステムツリーの構築 ---
+  _buildTree() {
+    if (this._treeCache) return this._treeCache;
+    // root: { dirs: {name: subtree}, files: [{entry}] }
+    const root = { dirs: {}, files: [] };
+
+    for (const entry of this.allEntries) {
+      const parts = entry.path.split('/').filter(s => s);
+      let node = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!node.dirs[parts[i]]) {
+          node.dirs[parts[i]] = { dirs: {}, files: [] };
+        }
+        node = node.dirs[parts[i]];
+      }
+      node.files.push(entry);
+    }
+
+    this._treeCache = root;
+    return root;
+  }
+
+  // 指定パスのノードを取得
+  _getNode(path) {
+    const tree = this._buildTree();
+    if (!path) return tree;
+    const parts = path.split('/').filter(s => s);
+    let node = tree;
+    for (const p of parts) {
+      if (!node.dirs[p]) return null;
+      node = node.dirs[p];
+    }
+    return node;
+  }
+
+  // 現在のディレクトリの内容を取得
+  getCurrentItems() {
+    const node = this._getNode(this.currentPath);
+    if (!node) return [];
+
+    const items = [];
+
+    // ディレクトリ
+    for (const dirName of Object.keys(node.dirs)) {
+      const dirPath = this.currentPath ? `${this.currentPath}/${dirName}` : dirName;
+      // ディレクトリ内のサイズ合計を計算
+      const dirSize = this._calcDirSize(node.dirs[dirName]);
+      const dirFileCount = this._calcDirFileCount(node.dirs[dirName]);
+      items.push({
+        name: dirName,
+        fullPath: dirPath,
+        isDir: true,
+        size: dirSize,
+        fileCount: dirFileCount,
+        type: 'フォルダ',
+        date: null,
+        data: null
+      });
+    }
+
+    // ファイル
+    for (const f of node.files) {
+      items.push({
+        name: f.name,
+        fullPath: f.path,
+        isDir: false,
+        size: f.size,
+        type: this._getFileTypeLabel(f.name),
+        date: f.date,
+        data: f.data,
+        groupType: f.groupType,
+        groupId: f.groupId
+      });
+    }
+
+    // フィルター
+    let filtered = items;
+    if (this.filterText) {
+      const lower = this.filterText.toLowerCase();
+      filtered = items.filter(item => item.name.toLowerCase().includes(lower));
+    }
+
+    // ソート: ディレクトリを先に、その後ソートキーでソート
+    filtered.sort((a, b) => {
+      // ディレクトリ優先
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      
+      let cmp = 0;
+      switch (this.sortKey) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name, 'ja');
+          break;
+        case 'size':
+          cmp = (a.size || 0) - (b.size || 0);
+          break;
+        case 'type':
+          cmp = (a.type || '').localeCompare(b.type || '', 'ja');
+          break;
+        case 'date':
+          cmp = (a.date || '').localeCompare(b.date || '');
+          break;
+        default:
+          cmp = a.name.localeCompare(b.name, 'ja');
+      }
+      return this.sortAsc ? cmp : -cmp;
+    });
+
+    return filtered;
+  }
+
+  _calcDirSize(node) {
+    let total = 0;
+    for (const f of node.files) total += f.size || 0;
+    for (const d of Object.values(node.dirs)) total += this._calcDirSize(d);
+    return total;
+  }
+
+  _calcDirFileCount(node) {
+    let count = node.files.length;
+    for (const d of Object.values(node.dirs)) count += this._calcDirFileCount(d);
+    return count;
+  }
+
+  // --- ナビゲーション ---
+  navigateTo(path) {
+    if (this.currentPath === path) return;
+    // 履歴に現在位置以降を切り捨てて追加
+    this.history = this.history.slice(0, this.historyIndex + 1);
+    this.history.push(path);
+    this.historyIndex = this.history.length - 1;
+    this.currentPath = path;
+    this.selectedPaths.clear();
+    this.lastClickedPath = null;
+    this.render();
+  }
+
+  goBack() {
+    if (this.historyIndex <= 0) return;
+    this.historyIndex--;
+    this.currentPath = this.history[this.historyIndex];
+    this.selectedPaths.clear();
+    this.render();
+  }
+
+  goForward() {
+    if (this.historyIndex >= this.history.length - 1) return;
+    this.historyIndex++;
+    this.currentPath = this.history[this.historyIndex];
+    this.selectedPaths.clear();
+    this.render();
+  }
+
+  goUp() {
+    if (!this.currentPath) return;
+    const parent = this._dirname(this.currentPath);
+    this.navigateTo(parent);
+  }
+
+  // --- 選択 ---
+  toggleSelect(fullPath, event) {
+    if (event && event.ctrlKey) {
+      // Ctrl+クリック: トグル
+      if (this.selectedPaths.has(fullPath)) {
+        this.selectedPaths.delete(fullPath);
+      } else {
+        this.selectedPaths.add(fullPath);
+      }
+    } else if (event && event.shiftKey && this.lastClickedPath) {
+      // Shift+クリック: 範囲選択
+      const items = this.getCurrentItems();
+      const idxA = items.findIndex(i => i.fullPath === this.lastClickedPath);
+      const idxB = items.findIndex(i => i.fullPath === fullPath);
+      if (idxA >= 0 && idxB >= 0) {
+        const start = Math.min(idxA, idxB);
+        const end = Math.max(idxA, idxB);
+        for (let i = start; i <= end; i++) {
+          this.selectedPaths.add(items[i].fullPath);
+        }
+      }
+    } else {
+      // 通常クリック: 単一選択
+      this.selectedPaths.clear();
+      this.selectedPaths.add(fullPath);
+    }
+    this.lastClickedPath = fullPath;
+    this._updateSelectionUI();
+    this._updateToolbarState();
+  }
+
+  selectAll() {
+    const items = this.getCurrentItems();
+    this.selectedPaths.clear();
+    for (const item of items) {
+      this.selectedPaths.add(item.fullPath);
+    }
+    this._updateSelectionUI();
+    this._updateToolbarState();
+  }
+
+  deselectAll() {
+    this.selectedPaths.clear();
+    this._updateSelectionUI();
+    this._updateToolbarState();
+  }
+
+  // --- クリップボード操作 ---
+  cutSelected() {
+    if (this.selectedPaths.size === 0) return;
+    this.clipboard = {
+      items: this._getSelectedItems(),
+      mode: 'cut'
+    };
+    this._updateToolbarState();
+    this._updateCutVisual();
+  }
+
+  copySelected() {
+    if (this.selectedPaths.size === 0) return;
+    this.clipboard = {
+      items: this._getSelectedItems(),
+      mode: 'copy'
+    };
+    this._updateToolbarState();
+  }
+
+  async pasteItems() {
+    if (!this.clipboard.items || this.clipboard.items.length === 0) return;
+
+    const mode = this.clipboard.mode;
+    const items = this.clipboard.items;
+
+    for (const item of items) {
+      if (item.isDir) {
+        // ディレクトリの場合: 中のファイルを全部コピー/移動
+        await this._pasteDir(item, mode);
+      } else {
+        await this._pasteFile(item, mode);
+      }
+    }
+
+    if (mode === 'cut') {
+      this.clipboard = { items: [], mode: null };
+    }
+
+    // データを再読み込み
+    this._treeCache = null;
+    await this.loadAll();
+    this.render();
+  }
+
+  async _pasteFile(item, mode) {
+    if (!item.data) return;
+    // コピー先のパスを決定
+    const destPath = this.currentPath
+      ? `${this.currentPath}/${item.name}`
+      : item.name;
+
+    // 名前衝突チェック
+    let finalName = item.name;
+    const node = this._getNode(this.currentPath);
+    if (node) {
+      const existingNames = new Set([
+        ...Object.keys(node.dirs),
+        ...node.files.map(f => f.name)
+      ]);
+      let counter = 1;
+      while (existingNames.has(finalName)) {
+        const ext = this._getExtension(item.name);
+        const base = ext ? item.name.slice(0, -(ext.length + 1)) : item.name;
+        finalName = ext ? `${base} (${counter}).${ext}` : `${base} (${counter})`;
+        counter++;
+      }
+    }
+
+    // 実際のIndexedDBへの書き込みは、対象グループに対して行う
+    // パスからグループを特定
+    const destFull = this.currentPath
+      ? `${this.currentPath}/${finalName}`
+      : finalName;
+
+    // 対象グループを特定
+    const groupInfo = this._resolveGroup(destFull);
+    if (!groupInfo) {
+      console.warn('Cannot paste: destination group not resolved', destFull);
+      return;
+    }
+
+    // グループ内のファイルリストを更新
+    await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, item.data);
+
+    // 切り取りの場合、元ファイルを削除
+    if (mode === 'cut' && item.groupType && item.groupId) {
+      const srcGroupInfo = this._resolveGroup(item.fullPath);
+      if (srcGroupInfo) {
+        await this._removeFileFromGroup(srcGroupInfo.groupType, srcGroupInfo.groupId, srcGroupInfo.relativePath);
+      }
+    }
+  }
+
+  async _pasteDir(item, mode) {
+    // ディレクトリ配下の全ファイルを取得してコピー/移動
+    const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
+    for (const entry of dirEntries) {
+      const relativeToDirRoot = entry.path.substring(item.fullPath.length + 1);
+      const newPath = this.currentPath
+        ? `${this.currentPath}/${item.name}/${relativeToDirRoot}`
+        : `${item.name}/${relativeToDirRoot}`;
+
+      const groupInfo = this._resolveGroup(newPath);
+      if (groupInfo && entry.data) {
+        await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, entry.data);
+      }
+
+      if (mode === 'cut') {
+        const srcGroupInfo = this._resolveGroup(entry.path);
+        if (srcGroupInfo) {
+          await this._removeFileFromGroup(srcGroupInfo.groupType, srcGroupInfo.groupId, srcGroupInfo.relativePath);
+        }
+      }
+    }
+  }
+
+  // パスの先頭部分（例: ['games', 'MyGame']）に一致するグループを探す。
+  // グループのパス（groupPath、例: 'games/MyGame' や 'RTP/2000'）が複数階層に
+  // またがる場合にも対応するため、最も長く一致するグループを採用する。
+  _resolveGroupAtParts(parts) {
+    let best = null;
+    let bestLen = 0;
+    for (const entry of this.allEntries) {
+      const groupParts = (entry.groupPath || '').split('/').filter(s => s);
+      if (groupParts.length === 0 || groupParts.length > parts.length) continue;
+      if (groupParts.length <= bestLen) continue;
+      let match = true;
+      for (let i = 0; i < groupParts.length; i++) {
+        if (groupParts[i] !== parts[i]) { match = false; break; }
+      }
+      if (match) {
+        best = entry;
+        bestLen = groupParts.length;
+      }
+    }
+    if (!best) return null;
+    return { groupType: best.groupType, groupId: best.groupId, groupPathLen: bestLen };
+  }
+
+  // パス → {groupType, groupId, relativePath} のマッピング
+  _resolveGroup(fullPath) {
+    const parts = fullPath.split('/').filter(s => s);
+    if (parts.length < 2) return null;
+    const groupInfo = this._resolveGroupAtParts(parts);
+    if (!groupInfo) return null;
+    return {
+      groupType: groupInfo.groupType,
+      groupId: groupInfo.groupId,
+      relativePath: parts.slice(groupInfo.groupPathLen).join('/')
+    };
+  }
+
+  async _addFileToGroup(groupType, groupId, relativePath, data) {
+    try {
+      if (groupType === 'game') {
+        const gameData = await storageManager.getGame(groupId);
+        if (gameData) {
+          const files = gameData.files || [];
+          files.push({ path: relativePath, data: data });
+          await storageManager.saveGame(groupId, gameData.name, files);
+        }
+      } else if (groupType === 'rtp') {
+        const rtpData = await storageManager.getRTP(groupId);
+        if (rtpData) {
+          const files = rtpData.files || [];
+          files.push({ path: relativePath, data: data });
+          await storageManager.saveRTP(groupId, rtpData.name, files);
+        }
+      } else if (groupType === 'save') {
+        // IDBFS データベース (groupIdに格納された dbName) の "FILE_DATA" に追加
+        await new Promise((resolve, reject) => {
+          const req = indexedDB.open(groupId, 21);
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction(['FILE_DATA'], 'readwrite');
+            const store = tx.objectStore('FILE_DATA');
+            const key = groupId + '/' + relativePath;
+            const entry = {
+              timestamp: new Date(),
+              mode: 33206, // Regular file with 0666 permissions
+              contents: data
+            };
+            const putReq = store.put(entry, key);
+            putReq.onsuccess = () => {
+              db.close();
+              resolve();
+            };
+            putReq.onerror = () => {
+              db.close();
+              reject(putReq.error);
+            };
+            tx.onerror = () => {
+              db.close();
+              reject(tx.error);
+            };
+          };
+          req.onerror = () => reject(req.error);
+        });
+      }
+    } catch (e) {
+      console.error('Failed to add file to group:', e);
+    }
+  }
+
+  async _removeFileFromGroup(groupType, groupId, relativePath) {
+    try {
+      if (groupType === 'game') {
+        const gameData = await storageManager.getGame(groupId);
+        if (gameData) {
+          const files = (gameData.files || []).filter(f => f.path !== relativePath);
+          await storageManager.saveGame(groupId, gameData.name, files);
+        }
+      } else if (groupType === 'rtp') {
+        const rtpData = await storageManager.getRTP(groupId);
+        if (rtpData) {
+          const files = (rtpData.files || []).filter(f => f.path !== relativePath);
+          await storageManager.saveRTP(groupId, rtpData.name, files);
+        }
+      } else if (groupType === 'save') {
+        // IDBFS データベース (groupIdに格納された dbName) の "FILE_DATA" から削除
+        await new Promise((resolve, reject) => {
+          const req = indexedDB.open(groupId, 21);
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction(['FILE_DATA'], 'readwrite');
+            const store = tx.objectStore('FILE_DATA');
+            const key = groupId + '/' + relativePath;
+            const delReq = store.delete(key);
+            delReq.onsuccess = () => {
+              db.close();
+              resolve();
+            };
+            delReq.onerror = () => {
+              db.close();
+              reject(delReq.error);
+            };
+            tx.onerror = () => {
+              db.close();
+              reject(tx.error);
+            };
+          };
+          req.onerror = () => reject(req.error);
+        });
+      }
+    } catch (e) {
+      console.error('Failed to remove file from group:', e);
+    }
+  }
+
+  // --- 削除 ---
+  async deleteSelected() {
+    const selected = this._getSelectedItems();
+    if (selected.length === 0) return;
+
+    const msg = selected.length === 1
+      ? `「${selected[0].name}」を削除しますか？`
+      : `${selected.length} 個の項目を削除しますか？`;
+    if (!confirm(msg)) return;
+
+    for (const item of selected) {
+      if (item.isDir) {
+        // ディレクトリ配下の全ファイルを削除
+        const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
+        for (const entry of dirEntries) {
+          const groupInfo = this._resolveGroup(entry.path);
+          if (groupInfo) {
+            await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+          }
+        }
+      } else {
+        const groupInfo = this._resolveGroup(item.fullPath);
+        if (groupInfo) {
+          await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+        }
+      }
+    }
+
+    this.selectedPaths.clear();
+    this._treeCache = null;
+    await this.loadAll();
+    this.render();
+  }
+
+  // --- リネーム ---
+  startRename() {
+    if (this.selectedPaths.size !== 1) return;
+    const path = [...this.selectedPaths][0];
+    const row = document.querySelector(`.sexplorer-row[data-path="${CSS.escape(path)}"]`);
+    if (!row) return;
+
+    const nameText = row.querySelector('.row-name-text');
+    if (!nameText) return;
+
+    this._renaming = true;
+    const currentName = nameText.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'row-name-input';
+    input.value = currentName;
+
+    // 拡張子を除いた部分を選択
+    const dotIdx = currentName.lastIndexOf('.');
+    
+    nameText.style.display = 'none';
+    nameText.parentNode.insertBefore(input, nameText.nextSibling);
+    input.focus();
+    if (dotIdx > 0) {
+      input.setSelectionRange(0, dotIdx);
+    } else {
+      input.select();
+    }
+
+    const finishRename = async (accept) => {
+      this._renaming = false;
+      if (accept && input.value && input.value !== currentName) {
+        await this._doRename(path, currentName, input.value);
+      }
+      input.remove();
+      nameText.style.display = '';
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finishRename(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        finishRename(false);
+      }
+      e.stopPropagation();
+    });
+
+    input.addEventListener('blur', () => finishRename(true));
+  }
+
+  async _doRename(fullPath, oldName, newName) {
+    // フルパスの最後の部分を新しい名前に変更
+    const parentPath = this._dirname(fullPath);
+    const isDir = this.getCurrentItems().find(i => i.fullPath === fullPath)?.isDir;
+
+    if (isDir) {
+      // ディレクトリのリネーム: 配下の全ファイルのパスを更新
+      const oldPrefix = fullPath + '/';
+      const newFullPath = parentPath ? `${parentPath}/${newName}` : newName;
+      const newPrefix = newFullPath + '/';
+
+      const affectedEntries = this.allEntries.filter(e => e.path.startsWith(oldPrefix));
+      for (const entry of affectedEntries) {
+        const groupInfo = this._resolveGroup(entry.path);
+        const newEntryPath = newPrefix + entry.path.substring(oldPrefix.length);
+        const newGroupInfo = this._resolveGroup(newEntryPath);
+        if (groupInfo && newGroupInfo) {
+          await this._addFileToGroup(newGroupInfo.groupType, newGroupInfo.groupId, newGroupInfo.relativePath, entry.data);
+          await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+        }
+      }
+    } else {
+      // ファイルのリネーム
+      const groupInfo = this._resolveGroup(fullPath);
+      if (groupInfo) {
+        const newRelativePath = groupInfo.relativePath.replace(
+          new RegExp(escapeRegExp(oldName) + '$'),
+          newName
+        );
+        const entry = this.allEntries.find(e => e.path === fullPath);
+        if (entry && entry.data) {
+          await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, newRelativePath, entry.data);
+          await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+        }
+      }
+    }
+
+    // リロード
+    this._treeCache = null;
+    await this.loadAll();
+    this.render();
+  }
+
+  // --- ダウンロード ---
+  downloadSelected() {
+    const items = this._getSelectedItems();
+    for (const item of items) {
+      if (!item.isDir && item.data) {
+        downloadStorageFile(item.name, item.data);
+      }
+    }
+  }
+
+  // --- ファイルアップロード ---
+  async uploadFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+
+    // 現在のパスからグループを判定
+    const parts = this.currentPath.split('/').filter(s => s);
+    if (parts.length === 0) {
+      alert('ゲーム、RTP、またはセーブデータフォルダ内に移動してからアップロードしてください。');
+      return;
+    }
+
+    const groupInfo = this._resolveGroupAtParts(parts);
+    if (!groupInfo) {
+      alert('アップロード先のグループが特定できません。');
+      return;
+    }
+
+    for (const file of fileList) {
+      const arrayBuffer = await file.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const relativePath = parts.slice(groupInfo.groupPathLen).concat(file.name).join('/');
+      await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, data);
+    }
+
+    this._treeCache = null;
+    await this.loadAll();
+    this.render();
+  }
+
+  // --- 新規フォルダ ---
+  async createNewFolder() {
+    const parts = this.currentPath.split('/').filter(s => s);
+    if (parts.length === 0) {
+      alert('ゲーム、RTP、またはセーブデータフォルダ内に移動してからフォルダを作成してください。');
+      return;
+    }
+
+    const name = prompt('新しいフォルダの名前を入力してください:', '新しいフォルダ');
+    if (!name || !name.trim()) return;
+
+    // フォルダは空にできないので、.keepファイルを作成
+    const groupInfo = this._resolveGroupAtParts(parts);
+    if (!groupInfo) {
+      alert('フォルダの作成先が特定できません。');
+      return;
+    }
+
+    const relativePath = parts.slice(groupInfo.groupPathLen).concat(name.trim(), '.keep').join('/');
+    await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, new Uint8Array(0));
+
+    this._treeCache = null;
+    await this.loadAll();
+    this.render();
+  }
+
+  // --- ヘルパー ---
+  _getSelectedItems() {
+    const items = this.getCurrentItems();
+    return items.filter(i => this.selectedPaths.has(i.fullPath));
+  }
+
+  // --- ソート ---
+  toggleSort(key) {
+    if (this.sortKey === key) {
+      this.sortAsc = !this.sortAsc;
+    } else {
+      this.sortKey = key;
+      this.sortAsc = true;
+    }
+    this.render();
+  }
+
+  // --- コンテキストメニュー ---
+  showContextMenu(x, y, targetPath) {
+    // targetPathがnullなら背景右クリック
+    if (targetPath && !this.selectedPaths.has(targetPath)) {
+      this.selectedPaths.clear();
+      this.selectedPaths.add(targetPath);
+      this._updateSelectionUI();
+      this._updateToolbarState();
+    }
+
+    const hasSelection = this.selectedPaths.size > 0;
+    const singleSelection = this.selectedPaths.size === 1;
+    const hasClipboard = this.clipboard.items.length > 0;
+    const inGroup = this.currentPath.split('/').filter(s => s).length > 0;
+    const selectedItem = singleSelection ? this._getSelectedItems()[0] : null;
+    const isDir = selectedItem?.isDir;
+
+    const menu = document.getElementById('sexplorer-ctx-menu');
+    menu.innerHTML = '';
+
+    const addItem = (icon, label, shortcut, action, disabled = false) => {
+      const div = document.createElement('div');
+      div.className = 'sexplorer-ctx-item' + (disabled ? ' disabled' : '');
+      div.innerHTML = `<span><span class="ctx-icon">${icon}</span>${escapeHtml(label)}</span>`
+        + (shortcut ? `<span class="ctx-shortcut">${shortcut}</span>` : '');
+      if (!disabled) {
+        div.addEventListener('click', () => {
+          this.hideContextMenu();
+          action();
+        });
+      }
+      menu.appendChild(div);
+    };
+
+    const addSep = () => {
+      const div = document.createElement('div');
+      div.className = 'sexplorer-ctx-sep';
+      menu.appendChild(div);
+    };
+
+    if (singleSelection && isDir) {
+      addItem('📂', '開く', 'Enter', () => this.navigateTo(selectedItem.fullPath));
+      addSep();
+    }
+
+    if (singleSelection && !isDir && selectedItem?.data) {
+      addItem('💾', 'ダウンロード', '', () => this.downloadSelected());
+      addSep();
+    }
+
+    addItem('✂', '切り取り', 'Ctrl+X', () => this.cutSelected(), !hasSelection);
+    addItem('📋', 'コピー', 'Ctrl+C', () => this.copySelected(), !hasSelection);
+    addItem('📌', '貼り付け', 'Ctrl+V', () => this.pasteItems(), !hasClipboard || !inGroup);
+    addSep();
+    addItem('✏', '名前の変更', 'F2', () => this.startRename(), !singleSelection);
+    addItem('🗑', '削除', 'Del', () => this.deleteSelected(), !hasSelection);
+    addSep();
+    addItem('📁+', '新しいフォルダ', '', () => this.createNewFolder(), !inGroup);
+    addItem('📤', 'アップロード', '', () => document.getElementById('sexplorer-file-upload').click(), !inGroup);
+    addSep();
+    addItem('🔄', '更新', 'F5', () => this.refresh());
+    addItem('✅', 'すべて選択', 'Ctrl+A', () => this.selectAll());
+
+    // メニュー位置調整
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.classList.add('open');
+
+    // 画面外に出ないよう調整
+    requestAnimationFrame(() => {
+      const rect = menu.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+      }
+      if (rect.bottom > window.innerHeight) {
+        menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+      }
+    });
+  }
+
+  hideContextMenu() {
+    const menu = document.getElementById('sexplorer-ctx-menu');
+    if (menu) menu.classList.remove('open');
+  }
+
+  // --- リフレッシュ ---
+  async refresh() {
+    this._treeCache = null;
+    await this.loadAll();
+    this.render();
+  }
+
+  // --- レンダリング ---
+  render() {
+    this._renderBreadcrumb();
+    this._renderFileList();
+    this._renderStatusBar();
+    this._updateToolbarState();
+    this._updateColumnHeaders();
+  }
+
+  _renderBreadcrumb() {
+    const bc = document.getElementById('sexplorer-breadcrumb');
+    if (!bc) return;
+    bc.innerHTML = '';
+
+    // ルート
+    const rootItem = document.createElement('span');
+    rootItem.className = 'sexplorer-breadcrumb-item' + (!this.currentPath ? ' current' : '');
+    rootItem.textContent = '🏠 ストレージ';
+    if (this.currentPath) {
+      rootItem.addEventListener('click', () => this.navigateTo(''));
+    }
+    bc.appendChild(rootItem);
+
+    if (this.currentPath) {
+      const parts = this.currentPath.split('/').filter(s => s);
+      let accumulated = '';
+      for (let i = 0; i < parts.length; i++) {
+        accumulated += (accumulated ? '/' : '') + parts[i];
+        const sep = document.createElement('span');
+        sep.className = 'sexplorer-breadcrumb-sep';
+        sep.textContent = '›';
+        bc.appendChild(sep);
+
+        const item = document.createElement('span');
+        const isCurrent = i === parts.length - 1;
+        item.className = 'sexplorer-breadcrumb-item' + (isCurrent ? ' current' : '');
+        item.textContent = parts[i];
+        if (!isCurrent) {
+          const target = accumulated;
+          item.addEventListener('click', () => this.navigateTo(target));
+        }
+        bc.appendChild(item);
+      }
+    }
+  }
+
+  _renderFileList() {
+    const container = document.getElementById('sexplorer-file-list');
+    if (!container) return;
+
+    // ドロップオーバーレイ以外をクリア
+    const overlay = document.getElementById('sexplorer-drop-overlay');
+    container.innerHTML = '';
+    if (overlay) container.appendChild(overlay);
+
+    const items = this.getCurrentItems();
+
+    if (items.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'sexplorer-empty';
+      empty.innerHTML = `<div class="sexplorer-empty-icon">📂</div>`
+        + `<div>${this.filterText ? 'フィルター条件に一致する項目がありません' : 'このフォルダは空です'}</div>`;
+      container.appendChild(empty);
+      return;
+    }
+
+    for (const item of items) {
+      const row = document.createElement('div');
+      row.className = 'sexplorer-row';
+      row.dataset.path = item.fullPath;
+      row.dataset.isdir = item.isDir ? '1' : '0';
+
+      if (this.selectedPaths.has(item.fullPath)) {
+        row.classList.add('selected');
+      }
+
+      // クリップボードでcutされたアイテム
+      if (this.clipboard.mode === 'cut' &&
+          this.clipboard.items.some(ci => ci.fullPath === item.fullPath)) {
+        row.classList.add('cut');
+      }
+
+      const icon = this._getFileIcon(item.name, item.isDir);
+      const sizeText = item.isDir
+        ? (item.fileCount !== undefined ? `${item.fileCount} 項目` : '')
+        : formatBytes(item.size);
+      const dateText = item.date
+        ? new Date(item.date).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '';
+
+      row.innerHTML = `
+        <div class="row-checkbox"><input type="checkbox" ${this.selectedPaths.has(item.fullPath) ? 'checked' : ''}></div>
+        <div class="row-name">
+          <span class="row-name-icon">${icon}</span>
+          <span class="row-name-text">${escapeHtml(item.name)}</span>
+        </div>
+        <div class="row-size">${sizeText}</div>
+        <div class="row-type">${escapeHtml(item.type || '')}</div>
+        <div class="row-date">${dateText}</div>
+      `;
+
+      // イベント
+      row.addEventListener('click', (e) => {
+        if (e.target.type === 'checkbox') {
+          // チェックボックスクリック
+          if (e.target.checked) {
+            this.selectedPaths.add(item.fullPath);
+          } else {
+            this.selectedPaths.delete(item.fullPath);
+          }
+          this.lastClickedPath = item.fullPath;
+          this._updateToolbarState();
+          return;
+        }
+        this.toggleSelect(item.fullPath, e);
+      });
+
+      row.addEventListener('dblclick', (e) => {
+        if (item.isDir) {
+          this.navigateTo(item.fullPath);
+        } else if (item.data) {
+          downloadStorageFile(item.name, item.data);
+        }
+      });
+
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showContextMenu(e.clientX, e.clientY, item.fullPath);
+      });
+
+      container.appendChild(row);
+    }
+  }
+
+  _renderStatusBar() {
+    const itemsEl = document.getElementById('sexplorer-status-items');
+    const usageEl = document.getElementById('sexplorer-status-usage');
+    if (!itemsEl) return;
+
+    const items = this.getCurrentItems();
+    const dirs = items.filter(i => i.isDir).length;
+    const files = items.filter(i => !i.isDir).length;
+    const totalSize = items.reduce((sum, i) => sum + (i.size || 0), 0);
+
+    let text = '';
+    if (dirs > 0) text += `${dirs} フォルダ`;
+    if (dirs > 0 && files > 0) text += ', ';
+    if (files > 0) text += `${files} ファイル`;
+    if (this.selectedPaths.size > 0) {
+      const selCount = this.selectedPaths.size;
+      const selSize = this._getSelectedItems().reduce((sum, i) => sum + (i.size || 0), 0);
+      text += ` (${selCount} 個選択中 / ${formatBytes(selSize)})`;
+    } else if (items.length > 0) {
+      text += ` (合計 ${formatBytes(totalSize)})`;
+    }
+    if (!text) text = '項目なし';
+    itemsEl.textContent = text;
+
+    // ストレージ使用量
+    if (usageEl) {
+      (async () => {
+        try {
+          if (navigator.storage && navigator.storage.estimate) {
+            const estimate = await navigator.storage.estimate();
+            if (estimate && estimate.usage !== undefined) {
+              let usageText = `使用中: ${formatBytes(estimate.usage)}`;
+              if (estimate.quota) {
+                usageText += ` / ${formatBytes(estimate.quota)}`;
+              }
+              usageEl.textContent = usageText;
+            }
+          }
+        } catch (e) { /* ignore */ }
+      })();
+    }
+  }
+
+  _updateSelectionUI() {
+    const rows = document.querySelectorAll('.sexplorer-row');
+    rows.forEach(row => {
+      const path = row.dataset.path;
+      const isSelected = this.selectedPaths.has(path);
+      row.classList.toggle('selected', isSelected);
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      if (checkbox) checkbox.checked = isSelected;
+    });
+
+    // 「すべて選択」チェックボックスの状態更新
+    const selectAllCb = document.getElementById('sexplorer-select-all');
+    if (selectAllCb) {
+      const items = this.getCurrentItems();
+      selectAllCb.checked = items.length > 0 && this.selectedPaths.size === items.length;
+      selectAllCb.indeterminate = this.selectedPaths.size > 0 && this.selectedPaths.size < items.length;
+    }
+  }
+
+  _updateToolbarState() {
+    const hasSelection = this.selectedPaths.size > 0;
+    const singleSelection = this.selectedPaths.size === 1;
+    const hasClipboard = this.clipboard.items.length > 0;
+    const inGroup = this.currentPath.split('/').filter(s => s).length > 0;
+
+    const btn = (id, enabled) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !enabled;
+    };
+
+    btn('sexplorer-btn-back', this.historyIndex > 0);
+    btn('sexplorer-btn-forward', this.historyIndex < this.history.length - 1);
+    btn('sexplorer-btn-up', !!this.currentPath);
+    btn('sexplorer-btn-cut', hasSelection);
+    btn('sexplorer-btn-copy', hasSelection);
+    btn('sexplorer-btn-paste', hasClipboard && inGroup);
+    btn('sexplorer-btn-rename', singleSelection);
+    btn('sexplorer-btn-delete', hasSelection);
+    btn('sexplorer-btn-download', hasSelection);
+    btn('sexplorer-btn-upload', inGroup);
+    btn('sexplorer-btn-newfolder', inGroup);
+  }
+
+  _updateCutVisual() {
+    document.querySelectorAll('.sexplorer-row.cut').forEach(r => r.classList.remove('cut'));
+    if (this.clipboard.mode === 'cut') {
+      for (const item of this.clipboard.items) {
+        const row = document.querySelector(`.sexplorer-row[data-path="${CSS.escape(item.fullPath)}"]`);
+        if (row) row.classList.add('cut');
+      }
+    }
+  }
+
+  _updateColumnHeaders() {
+    const header = document.getElementById('sexplorer-col-header');
+    if (!header) return;
+    const arrows = { name: '', size: '', type: '', date: '' };
+    arrows[this.sortKey] = this.sortAsc ? ' ▲' : ' ▼';
+
+    header.querySelectorAll('span[data-sort]').forEach(span => {
+      const key = span.dataset.sort;
+      const labels = { name: '名前', size: 'サイズ', type: '種類', date: '更新日時' };
+      span.textContent = (labels[key] || key) + (arrows[key] || '');
+      span.classList.toggle('sorted', key === this.sortKey);
+    });
+  }
+}
+
+// 正規表現エスケープ
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// グローバルExplorerインスタンス
+let storageExplorer = null;
+
+// ストレージブラウザの初期化と表示
+async function loadStorageBrowser() {
+  if (!storageExplorer) {
+    storageExplorer = new StorageExplorer();
+    _initExplorerEvents();
+  }
+  await storageExplorer.loadAll();
+  storageExplorer.render();
+}
+
+// Explorerのイベントリスナーを初期化
+function _initExplorerEvents() {
+  const se = storageExplorer;
+
+  // ツールバーボタン
+  document.getElementById('sexplorer-btn-back')?.addEventListener('click', () => se.goBack());
+  document.getElementById('sexplorer-btn-forward')?.addEventListener('click', () => se.goForward());
+  document.getElementById('sexplorer-btn-up')?.addEventListener('click', () => se.goUp());
+  document.getElementById('sexplorer-btn-cut')?.addEventListener('click', () => se.cutSelected());
+  document.getElementById('sexplorer-btn-copy')?.addEventListener('click', () => se.copySelected());
+  document.getElementById('sexplorer-btn-paste')?.addEventListener('click', () => se.pasteItems());
+  document.getElementById('sexplorer-btn-rename')?.addEventListener('click', () => se.startRename());
+  document.getElementById('sexplorer-btn-delete')?.addEventListener('click', () => se.deleteSelected());
+  document.getElementById('sexplorer-btn-download')?.addEventListener('click', () => se.downloadSelected());
+  document.getElementById('sexplorer-btn-upload')?.addEventListener('click', () => {
+    document.getElementById('sexplorer-file-upload').click();
+  });
+  document.getElementById('sexplorer-btn-newfolder')?.addEventListener('click', () => se.createNewFolder());
+
+  // ファイルアップロード
+  document.getElementById('sexplorer-file-upload')?.addEventListener('change', async (e) => {
+    await se.uploadFiles(e.target.files);
+    e.target.value = '';
+  });
+
+  // 検索フィルター
+  document.getElementById('sexplorer-search-input')?.addEventListener('input', (e) => {
+    se.filterText = e.target.value;
+    se.render();
+  });
+
+  // 「すべて選択」チェックボックス
+  document.getElementById('sexplorer-select-all')?.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      se.selectAll();
+    } else {
+      se.deselectAll();
+    }
+  });
+
+  // カラムヘッダのソート
+  document.querySelectorAll('#sexplorer-col-header span[data-sort]').forEach(span => {
+    span.addEventListener('click', () => {
+      se.toggleSort(span.dataset.sort);
+    });
+  });
+
+  // キーボードショートカット
+  const fileList = document.getElementById('sexplorer-file-list');
+  const explorerRoot = document.getElementById('sexplorer-root');
+
+  explorerRoot?.addEventListener('keydown', (e) => {
+    if (se._renaming) return; // リネーム中はスキップ
+    // 検索ボックスにフォーカスがある場合はショートカットを無効化
+    if (document.activeElement?.id === 'sexplorer-search-input') return;
+
+    const ctrlOrMeta = e.ctrlKey || e.metaKey;
+
+    if (ctrlOrMeta && e.key === 'a') {
+      e.preventDefault();
+      se.selectAll();
+    } else if (ctrlOrMeta && e.key === 'x') {
+      e.preventDefault();
+      se.cutSelected();
+    } else if (ctrlOrMeta && e.key === 'c') {
+      e.preventDefault();
+      se.copySelected();
+    } else if (ctrlOrMeta && e.key === 'v') {
+      e.preventDefault();
+      se.pasteItems();
+    } else if (e.key === 'Delete') {
+      e.preventDefault();
+      se.deleteSelected();
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      se.startRename();
+    } else if (e.key === 'F5') {
+      e.preventDefault();
+      se.refresh();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const items = se._getSelectedItems();
+      if (items.length === 1 && items[0].isDir) {
+        se.navigateTo(items[0].fullPath);
+      } else if (items.length === 1 && items[0].data) {
+        downloadStorageFile(items[0].name, items[0].data);
+      }
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      se.goUp();
+    } else if (e.altKey && e.key === 'ArrowLeft') {
+      e.preventDefault();
+      se.goBack();
+    } else if (e.altKey && e.key === 'ArrowRight') {
+      e.preventDefault();
+      se.goForward();
+    } else if (e.altKey && e.key === 'ArrowUp') {
+      e.preventDefault();
+      se.goUp();
+    } else if (e.key === 'Escape') {
+      se.deselectAll();
+      se.hideContextMenu();
+    }
+  });
+
+  // ファイルリスト背景の右クリック
+  fileList?.addEventListener('contextmenu', (e) => {
+    // 行上で右クリックされた場合は行のイベントで処理される
+    if (e.target.closest('.sexplorer-row')) return;
+    e.preventDefault();
+    se.showContextMenu(e.clientX, e.clientY, null);
+  });
+
+  // ファイルリスト背景のクリックで選択解除
+  fileList?.addEventListener('click', (e) => {
+    if (!e.target.closest('.sexplorer-row')) {
+      se.deselectAll();
+      se.hideContextMenu();
+    }
+  });
+
+  // コンテキストメニュー外クリックで閉じる
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.sexplorer-ctx-menu')) {
+      se.hideContextMenu();
+    }
+  });
+
+  // ドラッグ&ドロップ
+  let dragCounter = 0;
+  fileList?.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragCounter++;
+    document.getElementById('sexplorer-drop-overlay')?.classList.add('active');
+  });
+
+  fileList?.addEventListener('dragleave', (e) => {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      document.getElementById('sexplorer-drop-overlay')?.classList.remove('active');
+    }
+  });
+
+  fileList?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+
+  fileList?.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dragCounter = 0;
+    document.getElementById('sexplorer-drop-overlay')?.classList.remove('active');
+    if (e.dataTransfer.files.length > 0) {
+      await se.uploadFiles(e.dataTransfer.files);
+    }
+  });
+}
+
+// RTPタブからのZIPファイル処理
+async function processRTPZipFile(file, rtpInfo) {
+  const statusDiv = document.getElementById('status');
+  
+  statusDiv.textContent = `${rtpInfo.name}を読み込み中...`;
+  
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    
+    await processRTPFile(file, arrayBuffer, rtpInfo);
+    
+    // RTPステータスリストを更新
+    await loadRTPStatusList();
+    
+  } catch (error) {
+    console.error('Error processing RTP ZIP:', error);
+    statusDiv.textContent = 'エラー: ' + error.message;
+    alert('RTPファイルの処理中にエラーが発生しました: ' + error.message);
+  }
+}
+
+// ページ読み込み時に初期化
+window.addEventListener('DOMContentLoaded', async function() {
+  try {
+    storageManager = new GameStorageManager();
+    await storageManager.init();
+    console.log('IndexedDB initialized');
+    await loadSavedGamesList();
+    await loadRTPStatusList();
+  } catch (error) {
+    console.error('Failed to initialize storage:', error);
+    alert('ストレージの初期化に失敗しました。ブラウザがIndexedDBをサポートしているか確認してください。');
+  }
+});
+
+async function loadSavedGamesList() {
+  try {
+    if (!storageManager) {
+      console.warn('Storage manager not initialized yet');
+      return;
+    }
+    
+    const games = await storageManager.getAllGames();
+    
+    if (games.length === 0) {
+      return;
+    }
+    
+    const listDiv = document.getElementById('saved-games-list');
+    const containerDiv = document.getElementById('saved-games-container');
+    
+    listDiv.style.display = 'block';
+    containerDiv.innerHTML = '';
+    
+    games.forEach(game => {
+      const gameDiv = document.createElement('div');
+      gameDiv.style.cssText = 'padding: 0.75rem; margin: 0.5rem 0; background: #444; border-radius: 4px; cursor: pointer; transition: background 0.2s;';
+      gameDiv.onmouseover = () => gameDiv.style.background = '#555';
+      gameDiv.onmouseout = () => gameDiv.style.background = '#444';
+      
+      const sizeInMB = (game.totalSize / 1024 / 1024).toFixed(2);
+      const lastPlayed = new Date(game.lastPlayed).toLocaleString('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      gameDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="flex: 1;" onclick="loadSavedGame('${game.id}')">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+              <span id="game-title-${game.id}" style="font-weight: bold; font-size: 1.1rem;">${escapeHtml(game.name)}</span>
+              <button onclick="event.stopPropagation(); editGameTitle('${game.id}', '${escapeHtml(game.name).replace(/'/g, "\\'")}');" 
+                      style="padding: 0.2rem 0.4rem; background: #666; border: none; color: white; border-radius: 3px; cursor: pointer; font-size: 0.8rem;"
+                      title="タイトルを編集">
+                ✏️
+              </button>
+            </div>
+            <div style="font-size: 0.85rem; color: #aaa;">
+              最終プレイ: ${lastPlayed}
+            </div>
+            <div style="font-size: 0.8rem; color: #888;">
+              ${game.fileCount} ファイル / ${sizeInMB} MB
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button onclick="event.stopPropagation(); loadSavedGame('${game.id}');" 
+                    style="padding: 0.5rem 1rem; background: #4CAF50; border: none; color: white; border-radius: 4px; cursor: pointer; font-weight: bold;">
+              起動
+            </button>
+            <button onclick="event.stopPropagation(); deleteSavedGame('${game.id}');" 
+                    style="padding: 0.5rem 1rem; background: #f44336; border: none; color: white; border-radius: 4px; cursor: pointer;">
+              削除
+            </button>
+          </div>
+        </div>
+      `;
+      
+      containerDiv.appendChild(gameDiv);
+    });
+  } catch (e) {
+    console.error('Failed to load saved games list:', e);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function loadSavedGame(gameId) {
+  try {
+    document.getElementById('status').textContent = 'ゲームを読み込み中...';
+    
+    const gameData = await storageManager.getGame(gameId);
+    
+    if (!gameData || !gameData.files || gameData.files.length === 0) {
+      alert('ゲームデータが見つかりません。');
+      return;
+    }
+    
+    // 最終プレイ日時を更新
+    await storageManager.updateGameMetadata(gameId, {
+      lastPlayed: new Date().toISOString()
+    });
+    
+    console.log(`Loading saved game: ${gameData.name} (${gameData.files.length} files)`);
+    document.getElementById('startup-dialog').style.display = 'none';
+    
+    await loadGameFiles(gameData.files, gameData.name, gameId);
+  } catch (e) {
+    console.error('Failed to load saved game:', e);
+    alert('ゲームの読み込みに失敗しました: ' + e.message);
+    document.getElementById('status').textContent = 'エラーが発生しました';
+  }
+}
+
+async function deleteSavedGame(gameId) {
+  if (!confirm('このゲームを削除しますか？\n\n注意: ゲームファイルは削除されますが、セーブデータは保持されます。')) {
+    return;
+  }
+  
+  try {
+    await storageManager.deleteGame(gameId);
+    console.log(`Deleted game: ${gameId}`);
+    await loadSavedGamesList();
+  } catch (e) {
+    console.error('Failed to delete saved game:', e);
+    alert('削除に失敗しました: ' + e.message);
+  }
+}
+
+async function editGameTitle(gameId, currentTitle) {
+  const newTitle = prompt('新しいゲームタイトルを入力してください:', currentTitle);
+  
+  if (newTitle === null || newTitle.trim() === '') {
+    return; // キャンセルまたは空文字列
+  }
+  
+  try {
+    await storageManager.updateGameMetadata(gameId, {
+      name: newTitle.trim()
+    });
+    
+    console.log(`Updated game title: ${gameId} -> ${newTitle.trim()}`);
+    
+    // タイトルをその場で更新（リストを再読み込みせずに）
+    const titleElement = document.getElementById(`game-title-${gameId}`);
+    if (titleElement) {
+      titleElement.textContent = newTitle.trim();
+    }
+    
+    // リストも更新して他の情報も最新にする
+    await loadSavedGamesList();
+  } catch (e) {
+    console.error('Failed to update game title:', e);
+    alert('タイトルの更新に失敗しました: ' + e.message);
+  }
+}
 
 // ZIP処理用のユーティリティ関数
 function detectEncoding(uint8Array) {
@@ -257,29 +2998,96 @@ function decodeFilename(uint8Array, encoding) {
   return decoder.decode(uint8Array);
 }
 
-// index.json生成関数（gencache.jsと同等）
+// index.json生成関数
+// EasyRPG/Tools の gencache (gencache/src/main.cpp, parse_dir_recursive) を
+// 忠実にJS移植したもの。実際のディレクトリを走査する代わりに、ZIPから得た
+// フラットなファイルパス一覧からツリー構造を組み立てる。
 function generateIndexJson(files) {
-  const index = {};
-  
+  // strip_ext: 最後の "." より前を返す（拡張子が無ければ元の文字列全体を返す
+  // C++版の find_last_of(".") が npos の場合 substr(0, npos) は元の文字列全体になる）
+  function stripExt(name) {
+    const pos = name.lastIndexOf('.');
+    return pos === -1 ? name : name.substring(0, pos);
+  }
+
+  // keep_extension: .ini / .po はそのまま拡張子を残す
+  function keepExtension(nameLower) {
+    return nameLower.endsWith('.ini') || nameLower.endsWith('.po');
+  }
+
+  // Unicode対応の小文字化 + NFKC正規化（ICU の toLower(Locale::getRoot()) +
+  // Normalizer2::getNFKCInstance() に相当）
+  function lowerNormalize(name) {
+    return name.toLowerCase().normalize('NFKC');
+  }
+
+  // path.split('/') でディレクトリ階層に分解し、gencache と同じ規則で
+  // ネストした {_dirname, ...} ツリーを構築する
+  const root = {};
+
   files.forEach(file => {
-    let path = file.path;
-    
-    // Normalize: 小文字化
-    path = path.toLowerCase();
-    
-    // Normalize: NFKC正規化（簡易版）
-    path = path.normalize('NFKC');
-    
-    // 拡張子を除去（.ini, .po は除く）
-    const extMatch = path.match(/\.(ini|po)$/i);
-    if (!extMatch) {
-      path = path.replace(/\.[^.]*$/, '');
+    const parts = file.path.split('/').filter(p => p.length > 0);
+    if (parts.length === 0) return;
+
+    let node = root;
+
+    // 中間ディレクトリを辿る（無ければ作る）
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dirName = parts[i];
+      const lowerDir = lowerNormalize(dirName);
+
+      if (lowerDir === '_dirname') {
+        // gencacheと同じく予約語との衝突を回避
+        console.warn(`Skipping "_dirname" directory: name conflicts with reserved keyword!`);
+        continue;
+      }
+
+      if (!node[lowerDir] || typeof node[lowerDir] !== 'object') {
+        node[lowerDir] = {};
+      }
+      // 各ディレクトリのルート("isFirst")以外は _dirname に元の大文字小文字を保持
+      if (node[lowerDir]._dirname === undefined) {
+        node[lowerDir]._dirname = dirName;
+      }
+      node = node[lowerDir];
     }
-    
-    index[path] = null; // gencacheと同じくnull
+
+    // 末端のファイル
+    const fileName = parts[parts.length - 1];
+    const lowerName = lowerNormalize(fileName);
+
+    if (lowerName === '_dirname') {
+      console.warn(`Skipping "_dirname" file: name conflicts with reserved keyword!`);
+      return;
+    }
+
+    const isRootLevel = parts.length === 1; // gencache の "first" 相当
+
+    if (isRootLevel || keepExtension(lowerName)) {
+      // ExFont はメインディレクトリの特別ファイルなのでリネームする
+      let key = lowerName;
+      if (stripExt(lowerName) === 'exfont') {
+        key = 'exfont';
+      }
+      node[key] = fileName;
+    } else {
+      node[stripExt(lowerName)] = fileName;
+    }
   });
-  
-  return JSON.stringify(index, null, 2);
+
+  const now = new Date();
+  const date = now.toISOString().split('T')[0]; // YYYY-MM-DD ("%F" 相当)
+
+  const out = {
+    metadata: {
+      version: 2,
+      date: date
+    },
+    cache: root
+  };
+
+  // gencacheはデフォルトでコンパクト出力（-p/--pretty指定時のみ整形）なので合わせる
+  return JSON.stringify(out);
 }
 
 // Uint8ArrayをBase64に変換（チャンク処理で大きいファイルに対応）
@@ -295,6 +3103,105 @@ function uint8ArrayToBase64(bytes) {
   return btoa(binary);
 }
 
+// LZH処理 (LhaReaderを使用)
+// RAR処理
+async function processRarFile(file) {
+  const startupDialog = document.getElementById('startup-dialog');
+  const statusDiv = document.getElementById('status');
+  
+  statusDiv.textContent = 'RARファイルを処理中...';
+  
+  alert(
+    'RAR形式は現在サポートされていません。\n\n' +
+    '以下の方法をお試しください：\n' +
+    '1. RARファイルをZIP形式に変換してください\n' +
+    '2. 7-ZipやWinRARなどでZIPに変換できます'
+  );
+  
+  statusDiv.textContent = '';
+}
+
+async function processRTPFile(file, arrayBuffer, rtpInfo) {
+  const startupDialog = document.getElementById('startup-dialog');
+  const statusDiv = document.getElementById('status');
+  
+  // RTP IDからインストール先ディレクトリを決定
+  // rtpInfo.dir が指定されていればそれを使い、なければIDから推定
+  const rtpDir = rtpInfo.dir || rtpInfo.id.replace('rtp', '');
+  
+  try {
+    statusDiv.textContent = `${rtpInfo.name}を展開中...`;
+    
+    // RTPのZIPファイルには、事前に展開済みのRTPアセット（Charset/Chipset/Monster等の
+    // フォルダ）がそのまま入っている前提で処理する
+    // （自己解凍EXEやInstallShield形式のインストーラーが入っている場合は、
+    // unshield等の外部ツールで展開してから通常のZIPとしてまとめ直してください）
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const entries = Object.keys(zip.files);
+    
+    console.log(`RTP ZIP loaded with ${entries.length} entries`);
+    
+    let rtpFiles = [];
+    for (const fileName of entries) {
+      if (zip.files[fileName].dir) continue;
+      const content = await zip.files[fileName].async('uint8array');
+      rtpFiles.push({ path: fileName.replace(/\\/g, '/'), data: content });
+    }
+    
+    if (rtpFiles.length === 0) {
+      throw new Error('ZIPファイル内にファイルが見つかりませんでした。');
+    }
+    
+    // 共通のルートフォルダを検出して除去
+    const filePaths = rtpFiles.map(f => f.path);
+    if (filePaths.length > 0) {
+      const firstPath = filePaths[0];
+      const slashIndex = firstPath.indexOf('/');
+      if (slashIndex > 0) {
+        const potentialRoot = firstPath.substring(0, slashIndex + 1);
+        if (filePaths.every(p => p.startsWith(potentialRoot))) {
+          console.log(`Stripping RTP root folder: ${potentialRoot}`);
+          rtpFiles = rtpFiles.map(f => ({
+            path: f.path.substring(potentialRoot.length),
+            data: f.data
+          })).filter(f => f.path.length > 0);
+        }
+      }
+    }
+    
+    // インストール先ディレクトリ (RTP/2000/ または RTP/2003/) をパスに付与
+    rtpFiles = rtpFiles.map(f => ({
+      path: `RTP/${rtpDir}/${f.path}`,
+      data: f.data
+    }));
+    
+    console.log(`RTP files ready: ${rtpFiles.length} (installed to RTP/${rtpDir}/)`);
+    
+    // IndexedDBに保存
+    statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
+    await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
+    
+    console.log(`RTP saved to IndexedDB: ${rtpInfo.id} -> RTP/${rtpDir}/`);
+    
+    // 完了メッセージ（ダイアログは閉じずにRTPステータスを更新）
+    alert(
+      `${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
+      `ファイル数: ${rtpFiles.length}\n` +
+      `RTPを必要とするゲームで自動的に使用されます。`
+    );
+    
+    statusDiv.textContent = '';
+    
+    // RTPステータスリストを更新
+    await loadRTPStatusList();
+    
+  } catch (error) {
+    console.error('Error processing RTP:', error);
+    statusDiv.textContent = 'エラー: ' + error.message;
+    alert(`RTPの処理中にエラーが発生しました:\n${error.message}`);
+  }
+}
+
 // ZIP処理
 async function processZipFile(file) {
   const startupDialog = document.getElementById('startup-dialog');
@@ -304,6 +3211,8 @@ async function processZipFile(file) {
   
   try {
     const arrayBuffer = await file.arrayBuffer();
+    
+    statusDiv.textContent = 'ZIPファイルを処理中...';
     
     // JSZipにdecodeFileNameオプションを追加してShift-JISに対応
     const zip = await JSZip.loadAsync(arrayBuffer, {
@@ -389,30 +3298,41 @@ async function processZipFile(file) {
       }
     }
     
-    // index.json生成
+    // index.json生成（本家 gencache 互換のフォーマットで生成する。
+    // フラットな{path: null}形式だと EasyRPG Player 側のパースに失敗し、
+    // 大文字小文字違いのファイルを解決できずゲームが起動できない）
     const indexJsonContent = generateIndexJson(gameFiles);
     const indexJsonBase64 = uint8ArrayToBase64(new TextEncoder().encode(indexJsonContent));
     gameFiles.push({
       path: 'index.json',
       data: indexJsonBase64
     });
-    
+
     console.log(`Total files extracted: ${gameFiles.length}`);
-    
-    // sessionStorageに保存
-    const gameData = {
-      files: gameFiles
-    };
-    
-    sessionStorage.setItem('easyrpg_game_data', JSON.stringify(gameData));
-    
-    statusDiv.textContent = 'ゲームをロード中...';
     
     // ダイアログを非表示
     startupDialog.style.display = 'none';
     
+    statusDiv.textContent = 'ゲームをロード中...';
+    
+    // Base64からUint8Arrayに変換
+    function base64ToUint8Array(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+    
+    // ファイルをUint8Array形式に変換
+    const files = gameFiles.map(entry => ({
+      path: entry.path,
+      data: base64ToUint8Array(entry.data)
+    }));
+    
     // EasyRPGを起動
-    await loadEasyRPG();
+    await loadGameFiles(files, rootFolder || 'Unknown Game');
     
   } catch (error) {
     console.error('Error processing ZIP:', error);
@@ -421,121 +3341,181 @@ async function processZipFile(file) {
   }
 }
 
-// EasyRPG起動関数
-async function loadEasyRPG() {
-  const gameDataJson = sessionStorage.getItem('easyrpg_game_data');
-  
-  if (!gameDataJson) {
-    console.error("No game data found in sessionStorage");
-    return;
-  }
-  
-  const gameData = JSON.parse(gameDataJson);
-  
-  // Base64からUint8Arrayに変換
-  function base64ToUint8Array(base64) {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  }
-  
-  // ファイルを変換
-  const files = gameData.files.map(entry => ({
-    path: entry.path,
-    data: base64ToUint8Array(entry.data)
-  }));
-  
+// ゲームタイトルをセーブ領域分離用のディレクトリ名として使える形に正規化する。
+// IDBFSはマウントポイントの絶対パスをそのままIndexedDBのDB名として使うため、
+// タイトルに"/"などパス区切りとして解釈される文字が入らないようにする。
+function sanitizeGameTitleForStorageKey(title) {
+  const normalized = String(title)
+    .trim()
+    .replace(/[\/\\]/g, '_'); // パス区切りとして解釈される文字を置換
+  return normalized || 'default';
+}
+
+// EasyRPG起動関数（ファイルを受け取って起動）
+async function loadGameFiles(files, gameName, existingGameId = null) {
+  const statusDiv = document.getElementById('status');
   console.log(`Preparing ${files.length} files for EasyRPG...`);
   
-  // カスタムpreRun関数
-  const customPreRun = function() {
-    console.log("=== Custom preRun executing ===");
+  // ゲームを識別するためのハッシュを生成（RPG_RT.ldbの内容を使用）
+  let gameId = existingGameId;
+  
+  if (!gameId) {
+    const ldbFile = files.find(f => f.path.toLowerCase().endsWith('rpg_rt.ldb'));
+    gameId = 'default';
     
-    const files = window.EASYRPG_CUSTOM_FILES;
-    if (!files || files.length === 0) {
-      console.error("No files in window.EASYRPG_CUSTOM_FILES");
-      return;
+    if (ldbFile && ldbFile.data) {
+      // RPG_RT.ldbの最初の1KBからハッシュを生成
+      const hashData = ldbFile.data.slice(0, Math.min(1024, ldbFile.data.length));
+      let hash = 0;
+      for (let i = 0; i < hashData.length; i++) {
+        hash = ((hash << 5) - hash) + hashData[i];
+        hash = hash & hash; // 32bit整数に変換
+      }
+      gameId = 'game_' + Math.abs(hash).toString(16);
+      console.log('Generated Game ID:', gameId);
     }
+  }
+  
+  // IndexedDBにゲームデータを保存
+  try {
+    await storageManager.saveGame(gameId, gameName || 'Unknown Game', files);
+    console.log('Game saved to IndexedDB');
     
-    console.log(`Loading ${files.length} custom game files`);
+    // ゲームリストを更新
+    await loadSavedGamesList();
+  } catch (e) {
+    console.warn('Failed to save game to IndexedDB:', e);
+    if (e.name === 'QuotaExceededError') {
+      alert('ストレージの容量が不足しています。他のゲームを削除してください。');
+    }
+  }
+  
+  // RTPファイルをIndexedDBから読み込んでゲームファイルにマージ
+  // EasyRPGのEmscriptenビルドではRTPが無効化されているため、
+  // ゲームファイルに直接統合する
+  // ゲームが2000/2003のどちらのRTPを必要とするかは自動判別していないため、
+  // インストール済みのRTPを順番（2000→2003）にマージする。
+  // 既にある同名パスは上書きしないので、2000/2003を両方インストールしている場合は
+  // 2000側の同名アセットが優先される。
+  let mergedFiles = [...files];
+  
+  try {
+    statusDiv.textContent = 'RTPを確認中...';
     
-    // /gamesディレクトリを完全に削除
-    try {
-      if (this.FS.analyzePath('/games').exists) {
-        // /games内のすべてのファイルとサブディレクトリを削除
-        function rmrf(path) {
-          try {
-            const stat = this.FS.stat(path);
-            if (this.FS.isDir(stat.mode)) {
-              const entries = this.FS.readdir(path);
-              for (const entry of entries) {
-                if (entry !== '.' && entry !== '..') {
-                  rmrf(path + '/' + entry);
-                }
-              }
-              this.FS.rmdir(path);
-            } else {
-              this.FS.unlink(path);
-            }
-          } catch (e) {
-            console.warn(`Could not remove ${path}:`, e);
+    const rtpMergeOrder = [
+      { id: 'rtp2000', label: 'RTP 2000' },
+      { id: 'rtp2003', label: 'RTP 2003' }
+    ];
+    
+    const gamePathsLower = new Set(
+      mergedFiles.map(f => f.path.toLowerCase())
+    );
+    
+    let totalRtpMergeCount = 0;
+    
+    for (const rtpEntry of rtpMergeOrder) {
+      const rtpData = await storageManager.getRTP(rtpEntry.id);
+      
+      if (rtpData && rtpData.files && rtpData.files.length > 0) {
+        console.log(`${rtpEntry.label} found: ${rtpData.files.length} files`);
+        statusDiv.textContent = `${rtpEntry.label}をマージ中... (${rtpData.files.length} ファイル)`;
+        
+        let rtpMergeCount = 0;
+        
+        for (const rtpFile of rtpData.files) {
+          // RTP/XXXX/ プレフィックスを除去してゲームのルートレベルにマージ
+          // （EasyRPGのEmscriptenビルドではRTPパス検索が無効化されているため、
+          // ゲームディレクトリ直下に配置する必要がある）
+          const gamePath = rtpFile.path.replace(/^RTP\/\d{4}\//, '');
+          const pathLower = gamePath.toLowerCase();
+          // ゲーム側・既にマージ済みのRTPに同名ファイルがなければ追加
+          if (!gamePathsLower.has(pathLower)) {
+            mergedFiles.push({
+              path: gamePath,
+              data: rtpFile.data
+            });
+            gamePathsLower.add(pathLower);
+            rtpMergeCount++;
           }
         }
         
-        rmrf.call(this, '/games');
-        console.log("Removed /games directory");
+        console.log(`Merged ${rtpMergeCount} files from ${rtpEntry.label} (${rtpData.files.length - rtpMergeCount} already existed)`);
+        totalRtpMergeCount += rtpMergeCount;
+      } else {
+        console.log(`${rtpEntry.label} not installed, skipping`);
       }
-    } catch (e) {
-      console.warn("Could not remove /games:", e);
     }
     
-    // ファイルをルートに書き込み
-    files.forEach((file, index) => {
-      try {
-        const fullPath = '/' + file.path;
-        const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
-        
-        if (dir && dir !== '/') {
-          try {
-            this.FS.mkdirTree(dir);
-          } catch (e) {
-            // すでに存在
-          }
-        }
-        
-        this.FS.writeFile(fullPath, file.data);
-        
-        if (index < 3 || index >= files.length - 2) {
-          console.log(`Wrote: ${fullPath}`);
-        } else if (index === 3) {
-          console.log(`... ${files.length - 5} more files ...`);
-        }
-      } catch (e) {
-        console.error(`Failed to write ${file.path}:`, e);
-      }
-    });
-    
-    console.log("=== Custom game files loaded ===");
-  };
+    // index.jsonが存在しない、またはRTPがマージされた場合は再生成する
+    const hasIndexJson = mergedFiles.some(f => f.path.toLowerCase() === 'index.json');
+    if (!hasIndexJson || totalRtpMergeCount > 0) {
+      statusDiv.textContent = 'index.jsonを生成中...';
+      
+      // 既存のindex.jsonを除去
+      mergedFiles = mergedFiles.filter(f => f.path.toLowerCase() !== 'index.json');
+      
+      // 新しいindex.jsonを生成
+      const indexJsonContent = generateIndexJson(mergedFiles);
+      mergedFiles.push({
+        path: 'index.json',
+        data: new TextEncoder().encode(indexJsonContent)
+      });
+      
+      console.log('Regenerated index.json with RTP files included');
+    }
+  } catch (e) {
+    console.warn('Failed to load RTP:', e);
+    // RTPの読み込みに失敗しても、ゲーム自体は起動を試みる
+  }
   
-  // createEasyRpgPlayerを呼び出す前に既存のpreRunを上書き
-  window.Module = window.Module || {};
-  const originalPreRun = window.Module.preRun || [];
+  // window.EASYRPG_GAME_TITLEにファイルを設定
+  // ビルド済みのindex.jsのonPreRun関数がこれをチェックします
+  window.EASYRPG_CUSTOM_FILES = mergedFiles;
+  window.EASYRPG_GAME_ID = gameId; // ゲームIDも渡す（互換性のため保持。セーブ領域の分離には使用しない）
+  // セーブデータの分離キーには、内部生成のハッシュIDではなく、
+  // サイト側で管理している（ユーザーが編集できる）ゲームタイトルを使う。
+  window.EASYRPG_GAME_TITLE = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
+
+  console.log('[loadGameFiles] window.EASYRPG_GAME_TITLE set to:', window.EASYRPG_GAME_TITLE);
+
+  // XHRインターセプター用のルックアップマップ（パス小文字 -> データ）を構築
+  // これにより games/<name>/<path> への無駄なネットワークリクエストを防ぎ、
+  // IndexedDBから読み込んだデータをその場で返せるようにする
+  const fileMap = new Map();
+  for (const f of mergedFiles) {
+    fileMap.set(f.path.toLowerCase(), f.data);
+  }
+  window.EASYRPG_FILE_MAP = fileMap;
   
-  window.Module.preRun = [
-    customPreRun,
-    ...(Array.isArray(originalPreRun) ? originalPreRun : [originalPreRun])
-  ];
+  console.log('Custom files set, count:', mergedFiles.length);
+  statusDiv.textContent = 'ゲームを起動中...';
   
   // createEasyRpgPlayerを呼び出し
   createEasyRpgPlayer({
-    game: '', // ルートディレクトリを使用
+    game: '', // 空文字列を明示的に設定
     saveFs: undefined
   }).then(function(Module) {
     console.log("EasyRPG Player initialized!");
+    console.log("Module.arguments (before):", Module.arguments);
+    
+    // ゲームタイトルを使用してセーブパスを修正
+    if (window.EASYRPG_GAME_TITLE) {
+      const gameTitle = window.EASYRPG_GAME_TITLE;
+      const savePath = `Save/${gameTitle}`;
+      
+      // --save-path 引数のインデックスを探す
+      const argIndex = Module.arguments.indexOf('--save-path');
+      if (argIndex !== -1 && argIndex + 1 < Module.arguments.length) {
+        const oldPath = Module.arguments[argIndex + 1];
+        Module.arguments[argIndex + 1] = savePath;
+        console.log(`[POST-INIT] Updated save path from "${oldPath}" to "${savePath}"`);
+      }
+    } else {
+      console.warn('[POST-INIT] EASYRPG_GAME_TITLE not set');
+    }
+    
+    console.log("Module.arguments (after):", Module.arguments);
+    console.log("Module.game:", Module.game);
     Module.initApi();
     canvas.focus();
   }).catch(function(error) {
@@ -547,15 +3527,44 @@ async function loadEasyRPG() {
 // ページロード時の処理
 window.addEventListener('load', () => {
   const fileInput = document.getElementById('game-file-input');
+  const rtp2000FileInput = document.getElementById('rtp2000-file-input');
+  const rtp2003FileInput = document.getElementById('rtp2003-file-input');
   const canvas = document.getElementById('canvas');
   
-  // ファイル選択イベント
+  // ゲームファイル選択イベント
   fileInput.addEventListener('change', async (event) => {
     const file = event.target.files[0];
     if (file) {
-      await processZipFile(file);
+      const fileName = file.name.toLowerCase();
+      if (fileName.endsWith('.rar')) {
+        await processRarFile(file);
+      } else if (fileName.endsWith('.zip')) {
+        await processZipFile(file);
+      } else {
+        alert('対応していないファイル形式です。ZIPまたはRAR形式を選択してください。');
+      }
     }
   });
+  
+  // RTPファイル選択イベント（RTPの種類ごとに個別の入力欄を用意）
+  function wireRTPFileInput(inputEl, rtpInfo) {
+    inputEl.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const fileName = file.name.toLowerCase();
+        if (fileName.endsWith('.zip')) {
+          await processRTPZipFile(file, rtpInfo);
+        } else {
+          alert('RTPはZIP形式のみ対応しています。');
+        }
+        // 入力をリセット
+        inputEl.value = '';
+      }
+    });
+  }
+  
+  wireRTPFileInput(rtp2000FileInput, { id: 'rtp2000', name: 'RPGツクール2000 RTP', dir: '2000' });
+  wireRTPFileInput(rtp2003FileInput, { id: 'rtp2003', name: 'RPGツクール2003 RTP', dir: '2003' });
   
   // Fullscreen button
   document.querySelector('#controls-fullscreen').addEventListener('click', () => {
@@ -564,16 +3573,28 @@ window.addEventListener('load', () => {
       viewport.requestFullscreen();
     }
   });
-  
-  // sessionStorageにデータがある場合は自動ロード
-  const gameDataJson = sessionStorage.getItem('easyrpg_game_data');
-  if (gameDataJson) {
-    document.getElementById('startup-dialog').style.display = 'none';
-    document.getElementById('status').textContent = 'ゲームをロード中...';
-    loadEasyRPG();
-  }
 });
 
+</script>
+
+<!-- Module initialization hook to set proper save path before index.js loads -->
+<script>
+// This will intercept Module creation to set the proper save path
+var Module = Module || {};
+Module.preRun = Module.preRun || [];
+
+// Hook to modify arguments before the game runs
+Module.preRun.push(function() {
+  // Use window.EASYRPG_GAME_TITLE if available to set the correct save path
+  if (window.EASYRPG_GAME_TITLE && Module.arguments) {
+    const gameTitle = window.EASYRPG_GAME_TITLE;
+    const argIndex = Module.arguments.indexOf('--save-path');
+    if (argIndex !== -1 && argIndex + 1 < Module.arguments.length) {
+      Module.arguments[argIndex + 1] = `Save/${gameTitle}`;
+      console.log(`[Module.preRun] Updated save path to: Save/${gameTitle}`);
+    }
+  }
+});
 </script>
 
 <script async type="text/javascript" src="index.js"></script>
