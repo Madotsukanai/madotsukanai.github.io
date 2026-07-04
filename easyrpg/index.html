@@ -296,7 +296,8 @@
 
     .rtp-delete-btn {
       padding: 0.4rem 0.8rem;
-      background: #f44336;
+      background: #
+      4336;
       border: none;
       color: white;
       border-radius: 4px;
@@ -6532,6 +6533,16 @@ window.addEventListener('load', () => {
     if (e.key === 'F8' || e.key === 'PrintScreen') {
       e.preventDefault();
       takeScreenshot();
+    } else if (e.key === 'F4') {
+      e.preventDefault();
+      const viewport = document.getElementById('viewport');
+      if (!document.fullscreenElement) {
+        if (viewport.requestFullscreen) viewport.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    } else if (e.key === 'F5') {
+      e.preventDefault(); // ブラウザの更新を防ぎ、EasyRPG側で処理させるか無効化する
     }
   });
 
@@ -6922,7 +6933,7 @@ async function syncConfigIniToSettings(targetFS) {
       </tr>
       <tr><td style="padding: 10px; border-bottom: 1px solid #333;">方向キー</td><td style="padding: 10px; border-bottom: 1px solid #333;">移動・選択</td></tr>
       <tr><td style="padding: 10px; border-bottom: 1px solid #333;">Enter / Z / Space</td><td style="padding: 10px; border-bottom: 1px solid #333;">決定・調べる</td></tr>
-      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">Esc / X / Num0 / Insert</td><td style="padding: 10px; border-bottom: 1px solid #333;">キャンセル・メニュー</td></tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">Esc / X / Num0 </td><td style="padding: 10px; border-bottom: 1px solid #333;">キャンセル・メニュー</td></tr>
       <tr><td style="padding: 10px; border-bottom: 1px solid #333;">Shift</td><td style="padding: 10px; border-bottom: 1px solid #333;">ダッシュ (対応ゲームのみ)</td></tr>
       <tr><td style="padding: 10px; border-bottom: 1px solid #333;">F4</td><td style="padding: 10px; border-bottom: 1px solid #333;">フルスクリーン切り替え</td></tr>
       <tr><td style="padding: 10px; border-bottom: 1px solid #333;">F5</td><td style="padding: 10px; border-bottom: 1px solid #333;">解像度切り替え</td></tr>
