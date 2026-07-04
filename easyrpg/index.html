@@ -53,8 +53,8 @@ IO<!doctype html>
       border-radius: 8px;
       text-align: center;
       border: 1px solid var(--color-gray);
-      max-width: 80%;
-      min-width: min(500px, 90vw);
+      width: min(680px, 92vw);
+      box-sizing: border-box;
     }
 
     .dialog-box h2 {
@@ -109,6 +109,92 @@ IO<!doctype html>
     /* RTP管理セクション */
     .rtp-section {
       text-align: left;
+    }
+
+    .settings-section {
+      text-align: left;
+      max-height: 62vh;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+
+    .game-section {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      height: 60vh;
+      min-height: 300px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+
+    .settings-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .settings-group h3 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+      color: #fff;
+    }
+
+    .asset-status-list {
+      margin: 0.75rem 0;
+    }
+
+    .asset-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      margin: 0.5rem 0;
+      background: #333;
+      border-radius: 4px;
+    }
+
+    .asset-item-info {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .asset-item-name {
+      font-weight: bold;
+      overflow-wrap: anywhere;
+    }
+
+    .asset-item-detail {
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-top: 0.25rem;
+    }
+
+    .settings-inline {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .settings-inline label {
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.86rem;
+      color: #ccc;
+    }
+
+    .settings-inline select,
+    .settings-inline input[type="file"] {
+      width: 100%;
+      color: white;
+      background-color: #222;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 0.35rem 0.5rem;
+      box-sizing: border-box;
+    }
+
+    .settings-inline select option {
+      background-color: #222;
+      color: white;
     }
 
     .rtp-status-list {
@@ -719,45 +805,104 @@ IO<!doctype html>
       <!-- タブバー -->
       <div class="tab-bar">
         <button class="tab-btn active" data-tab="game" onclick="switchTab('game')">🎮 ゲーム</button>
-        <button class="tab-btn" data-tab="rtp" onclick="switchTab('rtp')">📦 RTP管理</button>
+        <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">⚙️ 設定</button>
         <button class="tab-btn" data-tab="storage" onclick="switchTab('storage')">🗂 ストレージ</button>
       </div>
 
       <!-- ゲームタブ -->
       <div id="tab-game" class="tab-content active">
-        <!-- 保存済みゲームのリスト -->
-        <div id="saved-games-list" style="display: none; margin-bottom: 2rem;">
-          <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">保存済みのゲーム</h3>
-          <div id="saved-games-container" style="max-height: 200px; overflow-y: auto; background: #333; padding: 0.5rem; border-radius: 4px;">
-            <!-- ここに保存済みゲームが表示されます -->
+        <div class="game-section">
+          <!-- 保存済みゲームのリスト -->
+          <div id="saved-games-list" style="display: none; margin-bottom: 2rem;">
+            <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">保存済みのゲーム</h3>
+            <div id="saved-games-container" style="max-height: 200px; overflow-y: auto; background: #333; padding: 0.5rem; border-radius: 4px;">
+              <!-- ここに保存済みゲームが表示されます -->
+            </div>
           </div>
+          
+          <p>ゲームのZIPファイルを選択してください。</p>
+          <p style="font-size: 0.85rem; color: #999;">UTF-8とShift_JISエンコーディングに対応しています。</p>
+          <input type="file" id="game-file-input" accept=".zip" />
         </div>
-        
-        <p>ゲームのZIPまたはRARファイルを選択してください。</p>
-        <p style="font-size: 0.85rem; color: #999;">UTF-8とShift_JISエンコーディングに対応しています。</p>
-        <input type="file" id="game-file-input" accept=".zip,.rar" />
       </div>
 
-      <!-- RTP管理タブ -->
-      <div id="tab-rtp" class="tab-content">
-        <div class="rtp-section">
-          <p style="text-align: center; color: #ccc;">RTP（ランタイムパッケージ）の管理</p>
-          <div id="rtp-status-list" class="rtp-status-list">
-            <!-- RTPのステータスがここに表示されます -->
+      <!-- 設定タブ -->
+      <div id="tab-settings" class="tab-content">
+        <div class="settings-section">
+          <div class="settings-group rtp-section">
+            <h3>RTP</h3>
+            <div id="rtp-status-list" class="rtp-status-list">
+              <!-- RTPのステータスがここに表示されます -->
+            </div>
+            <div class="settings-inline">
+              <label>
+                RPGツクール2000 RTP
+                <input type="file" id="rtp2000-file-input" accept=".zip" />
+              </label>
+              <label>
+                RPGツクール2003 RTP
+                <input type="file" id="rtp2003-file-input" accept=".zip" />
+              </label>
+            </div>
+            <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
+              ※ RTPインストーラー(.exe)が入ったZIPはそのまま使えません。事前に unshield などで展開し、
+              展開後のフォルダをZIPにまとめてから選択してください。
+            </p>
           </div>
+
           <hr style="border-color: #444; margin: 1.5rem 0;">
-          <div class="rtp-install-item">
-            <p style="font-size: 0.9rem; margin-bottom: 0.3rem;">📀 RPGツクール2000 RTP:</p>
-            <input type="file" id="rtp2000-file-input" accept=".zip" />
+
+          <div class="settings-group">
+            <h3>サウンドフォント (.sf2)</h3>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.75rem;">
+              サウンドフォントを追加すると、MIDI（BGM）の演奏音色を変更できます。
+              ゲームプレイ中にEasyRPG本体の設定メニューから追加したファイルもここに反映されます。
+            </p>
+            <div id="soundfont-status-list" class="asset-status-list">
+              <!-- サウンドフォントの状態がここに表示されます -->
+            </div>
+            <div class="settings-inline">
+              <label>
+                サウンドフォントの追加 (.sf2)
+                <input type="file" id="soundfont-file-input" accept=".sf2,.soundfont" />
+              </label>
+              <label>
+                使用するサウンドフォント
+                <select id="soundfont-select"></select>
+              </label>
+            </div>
           </div>
-          <div class="rtp-install-item" style="margin-top: 1.2rem;">
-            <p style="font-size: 0.9rem; margin-bottom: 0.3rem;">📀 RPGツクール2003 RTP:</p>
-            <input type="file" id="rtp2003-file-input" accept=".zip" />
+
+          <hr style="border-color: #444; margin: 1.5rem 0;">
+
+          <div class="settings-group">
+            <h3>カスタムフォント (.ttf / .otf / .ttc / .woff / .woff2 / .fon)</h3>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.75rem;">
+              カスタムフォントを追加すると、ゲーム内のテキスト表示を変更できます（TrueType推奨）。
+              ゲームプレイ中にEasyRPG本体の設定メニューから追加したファイルもここに反映されます。
+            </p>
+            <div id="font-status-list" class="asset-status-list">
+              <!-- フォントの状態がここに表示されます -->
+            </div>
+            <div class="settings-inline" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+              <label>
+                ゴシックフォントの追加 (Font1)
+                <input type="file" id="font1-file-input" accept=".ttf,.otf,.ttc,.woff,.woff2,.fon" />
+              </label>
+              <label>
+                使用するゴシックフォント
+                <select id="font1-select"></select>
+              </label>
+              <label>
+                明朝フォントの追加 (Font2)
+                <input type="file" id="font2-file-input" accept=".ttf,.otf,.ttc,.woff,.woff2,.fon" />
+              </label>
+              <label>
+                使用する明朝フォント
+                <select id="font2-select"></select>
+              </label>
+            </div>
           </div>
-          <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
-            ※ RTPインストーラー(.exe)が入ったZIPはそのまま使えません。事前に unshield などで展開し、
-            展開後のフォルダをZIPにまとめてから選択してください。
-          </p>
         </div>
       </div>
 
@@ -818,12 +963,706 @@ IO<!doctype html>
         </div>
       </div>
 
+
+      <!-- ライセンス表示 -->
+      <div class="license-footer" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #333; text-align: left; font-size: 0.78rem; color: #888; line-height: 1.4;">
+        <p style="margin: 0;">
+          EasyRPG Player is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+        </p>
+        <details style="margin-top: 0.5rem; cursor: pointer;">
+          <summary style="color: #bbb; user-select: none;">GNU General Public License (GPL) v3 条文を表示</summary>
+          <pre style="margin-top: 0.5rem; padding: 0.5rem; background: #1a1a1a; color: #ccc; border: 1px solid #444; border-radius: 4px; max-height: 150px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; font-size: 0.72rem; cursor: default;" onclick="event.stopPropagation();">                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. &lt;http://fsf.org/&gt;
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+the GNU General Public License is intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.  We, the Free Software Foundation, use the
+GNU General Public License for most of our software; it applies also to
+any other work released this way by its authors.  You can apply it to
+your programs, too.
+
+  When we speak of free software, we are referring to freedom, not
+price.  Our General Public Licenses are designed to make sure that you
+have the freedom to distribute copies of free software (and charge for
+them if you wish), that you receive source code or can get it if you
+want it, that you can change the software or use pieces of it in new
+free programs, and that you know you can do these things.
+
+  To protect your rights, we need to prevent others from denying you
+these rights or asking you to surrender the rights.  Therefore, you have
+certain responsibilities if you distribute copies of the software, or if
+you modify it: responsibilities to respect the freedom of others.
+
+  For example, if you distribute copies of such a program, whether
+gratis or for a fee, you must pass on to the recipients the same
+freedoms that you received.  You must make sure that they, too, receive
+or can get the source code.  And you must show them these terms so they
+know their rights.
+
+  Developers that use the GNU GPL protect your rights with two steps:
+(1) assert copyright on the software, and (2) offer you this License
+giving you legal permission to copy, distribute and/or modify it.
+
+  For the developers&#039; and authors&#039; protection, the GPL clearly explains
+that there is no warranty for this free software.  For both users&#039; and
+authors&#039; sake, the GPL requires that modified versions be marked as
+changed, so that their problems will not be attributed erroneously to
+authors of previous versions.
+
+  Some devices are designed to deny users access to install or run
+modified versions of the software inside them, although the manufacturer
+can do so.  This is fundamentally incompatible with the aim of
+protecting users&#039; freedom to change the software.  The systematic
+pattern of such abuse occurs in the area of products for individuals to
+use, which is precisely where it is most unacceptable.  Therefore, we
+have designed this version of the GPL to prohibit the practice for those
+products.  If such problems arise substantially in other domains, we
+stand ready to extend this provision to those domains in future versions
+of the GPL, as needed to protect the freedom of users.
+
+  Finally, every program is threatened constantly by software patents.
+States should not allow patents to restrict development and use of
+software on general-purpose computers, but in those that do, we wish to
+avoid the special danger that patents applied to a free program could
+make it effectively proprietary.  To prevent this, the GPL assures that
+patents cannot be used to render the program non-free.
+
+  The precise terms and conditions for copying, distribution and
+modification follow.
+
+                       TERMS AND CONDITIONS
+
+  0. Definitions.
+
+  &quot;This License&quot; refers to version 3 of the GNU General Public License.
+
+  &quot;Copyright&quot; also means copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+  &quot;The Program&quot; refers to any copyrightable work licensed under this
+License.  Each licensee is addressed as &quot;you&quot;.  &quot;Licensees&quot; and
+&quot;recipients&quot; may be individuals or organizations.
+
+  To &quot;modify&quot; a work means to copy from or adapt all or part of the work
+in a fashion requiring copyright permission, other than the making of an
+exact copy.  The resulting work is called a &quot;modified version&quot; of the
+earlier work or a work &quot;based on&quot; the earlier work.
+
+  A &quot;covered work&quot; means either the unmodified Program or a work based
+on the Program.
+
+  To &quot;propagate&quot; a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy.  Propagation includes copying,
+distribution (with or without modification), making available to the
+public, and in some countries other activities as well.
+
+  To &quot;convey&quot; a work means any kind of propagation that enables other
+parties to make or receive copies.  Mere interaction with a user through
+a computer network, with no transfer of a copy, is not conveying.
+
+  An interactive user interface displays &quot;Appropriate Legal Notices&quot;
+to the extent that it includes a convenient and prominently visible
+feature that (1) displays an appropriate copyright notice, and (2)
+tells the user that there is no warranty for the work (except to the
+extent that warranties are provided), that licensees may convey the
+work under this License, and how to view a copy of this License.  If
+the interface presents a list of user commands or options, such as a
+menu, a prominent item in the list meets this criterion.
+
+  1. Source Code.
+
+  The &quot;source code&quot; for a work means the preferred form of the work
+for making modifications to it.  &quot;Object code&quot; means any non-source
+form of a work.
+
+  A &quot;Standard Interface&quot; means an interface that either is an official
+standard defined by a recognized standards body, or, in the case of
+interfaces specified for a particular programming language, one that
+is widely used among developers working in that language.
+
+  The &quot;System Libraries&quot; of an executable work include anything, other
+than the work as a whole, that (a) is included in the normal form of
+packaging a Major Component, but which is not part of that Major
+Component, and (b) serves only to enable use of the work with that
+Major Component, or to implement a Standard Interface for which an
+implementation is available to the public in source code form.  A
+&quot;Major Component&quot;, in this context, means a major essential component
+(kernel, window system, and so on) of the specific operating system
+(if any) on which the executable work runs, or a compiler used to
+produce the work, or an object code interpreter used to run it.
+
+  The &quot;Corresponding Source&quot; for a work in object code form means all
+the source code needed to generate, install, and (for an executable
+work) run the object code and to modify the work, including scripts to
+control those activities.  However, it does not include the work&#039;s
+System Libraries, or general-purpose tools or generally available free
+programs which are used unmodified in performing those activities but
+which are not part of the work.  For example, Corresponding Source
+includes interface definition files associated with source files for
+the work, and the source code for shared libraries and dynamically
+linked subprograms that the work is specifically designed to require,
+such as by intimate data communication or control flow between those
+subprograms and other parts of the work.
+
+  The Corresponding Source need not include anything that users
+can regenerate automatically from other parts of the Corresponding
+Source.
+
+  The Corresponding Source for a work in source code form is that
+same work.
+
+  2. Basic Permissions.
+
+  All rights granted under this License are granted for the term of
+copyright on the Program, and are irrevocable provided the stated
+conditions are met.  This License explicitly affirms your unlimited
+permission to run the unmodified Program.  The output from running a
+covered work is covered by this License only if the output, given its
+content, constitutes a covered work.  This License acknowledges your
+rights of fair use or other equivalent, as provided by copyright law.
+
+  You may make, run and propagate covered works that you do not
+convey, without conditions so long as your license otherwise remains
+in force.  You may convey covered works to others for the sole purpose
+of having them make modifications exclusively for you, or provide you
+with facilities for running those works, provided that you comply with
+the terms of this License in conveying all material for which you do
+not control copyright.  Those thus making or running the covered works
+for you must do so exclusively on your behalf, under your direction
+and control, on terms that prohibit them from making any copies of
+your copyrighted material outside their relationship with you.
+
+  Conveying under any other circumstances is permitted solely under
+the conditions stated below.  Sublicensing is not allowed; section 10
+makes it unnecessary.
+
+  3. Protecting Users&#039; Legal Rights From Anti-Circumvention Law.
+
+  No covered work shall be deemed part of an effective technological
+measure under any applicable law fulfilling obligations under article
+11 of the WIPO copyright treaty adopted on 20 December 1996, or
+similar laws prohibiting or restricting circumvention of such
+measures.
+
+  When you convey a covered work, you waive any legal power to forbid
+circumvention of technological measures to the extent such circumvention
+is effected by exercising rights under this License with respect to
+the covered work, and you disclaim any intention to limit operation or
+modification of the work as a means of enforcing, against the work&#039;s
+users, your or third parties&#039; legal rights to forbid circumvention of
+technological measures.
+
+  4. Conveying Verbatim Copies.
+
+  You may convey verbatim copies of the Program&#039;s source code as you
+receive it, in any medium, provided that you conspicuously and
+appropriately publish on each copy an appropriate copyright notice;
+keep intact all notices stating that this License and any
+non-permissive terms added in accord with section 7 apply to the code;
+keep intact all notices of the absence of any warranty; and give all
+recipients a copy of this License along with the Program.
+
+  You may charge any price or no price for each copy that you convey,
+and you may offer support or warranty protection for a fee.
+
+  5. Conveying Modified Source Versions.
+
+  You may convey a work based on the Program, or the modifications to
+produce it from the Program, in the form of source code under the
+terms of section 4, provided that you also meet all of these conditions:
+
+    a) The work must carry prominent notices stating that you modified
+    it, and giving a relevant date.
+
+    b) The work must carry prominent notices stating that it is
+    released under this License and any conditions added under section
+    7.  This requirement modifies the requirement in section 4 to
+    &quot;keep intact all notices&quot;.
+
+    c) You must license the entire work, as a whole, under this
+    License to anyone who comes into possession of a copy.  This
+    License will therefore apply, along with any applicable section 7
+    additional terms, to the whole of the work, and all its parts,
+    regardless of how they are packaged.  This License gives no
+    permission to license the work in any other way, but it does not
+    invalidate such permission if you have separately received it.
+
+    d) If the work has interactive user interfaces, each must display
+    Appropriate Legal Notices; however, if the Program has interactive
+    interfaces that do not display Appropriate Legal Notices, your
+    work need not make them do so.
+
+  A compilation of a covered work with other separate and independent
+works, which are not by their nature extensions of the covered work,
+and which are not combined with it such as to form a larger program,
+in or on a volume of a storage or distribution medium, is called an
+&quot;aggregate&quot; if the compilation and its resulting copyright are not
+used to limit the access or legal rights of the compilation&#039;s users
+beyond what the individual works permit.  Inclusion of a covered work
+in an aggregate does not cause this License to apply to the other
+parts of the aggregate.
+
+  6. Conveying Non-Source Forms.
+
+  You may convey a covered work in object code form under the terms
+of sections 4 and 5, provided that you also convey the
+machine-readable Corresponding Source under the terms of this License,
+in one of these ways:
+
+    a) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by the
+    Corresponding Source fixed on a durable physical medium
+    customarily used for software interchange.
+
+    b) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by a
+    written offer, valid for at least three years and valid for as
+    long as you offer spare parts or customer support for that product
+    model, to give anyone who possesses the object code either (1) a
+    copy of the Corresponding Source for all the software in the
+    product that is covered by this License, on a durable physical
+    medium customarily used for software interchange, for a price no
+    more than your reasonable cost of physically performing this
+    conveying of source, or (2) access to copy the
+    Corresponding Source from a network server at no charge.
+
+    c) Convey individual copies of the object code with a copy of the
+    written offer to provide the Corresponding Source.  This
+    alternative is allowed only occasionally and noncommercially, and
+    only if you received the object code with such an offer, in accord
+    with subsection 6b.
+
+    d) Convey the object code by offering access from a designated
+    place (gratis or for a charge), and offer equivalent access to the
+    Corresponding Source in the same way through the same place at no
+    further charge.  You need not require recipients to copy the
+    Corresponding Source along with the object code.  If the place to
+    copy the object code is a network server, the Corresponding Source
+    may be on a different server (operated by you or a third party)
+    that supports equivalent copying facilities, provided you maintain
+    clear directions next to the object code saying where to find the
+    Corresponding Source.  Regardless of what server hosts the
+    Corresponding Source, you remain obligated to ensure that it is
+    available for as long as needed to satisfy these requirements.
+
+    e) Convey the object code using peer-to-peer transmission, provided
+    you inform other peers where the object code and Corresponding
+    Source of the work are being offered to the general public at no
+    charge under subsection 6d.
+
+  A separable portion of the object code, whose source code is excluded
+from the Corresponding Source as a System Library, need not be
+included in conveying the object code work.
+
+  A &quot;User Product&quot; is either (1) a &quot;consumer product&quot;, which means any
+tangible personal property which is normally used for personal, family,
+or household purposes, or (2) anything designed or sold for incorporation
+into a dwelling.  In determining whether a product is a consumer product,
+doubtful cases shall be resolved in favor of coverage.  For a particular
+product received by a particular user, &quot;normally used&quot; refers to a
+typical or common use of that class of product, regardless of the status
+of the particular user or of the way in which the particular user
+actually uses, or expects or is expected to use, the product.  A product
+is a consumer product regardless of whether the product has substantial
+commercial, industrial or non-consumer uses, unless such uses represent
+the only significant mode of use of the product.
+
+  &quot;Installation Information&quot; for a User Product means any methods,
+procedures, authorization keys, or other information required to install
+and execute modified versions of a covered work in that User Product from
+a modified version of its Corresponding Source.  The information must
+suffice to ensure that the continued functioning of the modified object
+code is in no case prevented or interfered with solely because
+modification has been made.
+
+  If you convey an object code work under this section in, or with, or
+specifically for use in, a User Product, and the conveying occurs as
+part of a transaction in which the right of possession and use of the
+User Product is transferred to the recipient in perpetuity or for a
+fixed term (regardless of how the transaction is characterized), the
+Corresponding Source conveyed under this section must be accompanied
+by the Installation Information.  But this requirement does not apply
+if neither you nor any third party retains the ability to install
+modified object code on the User Product (for example, the work has
+been installed in ROM).
+
+  The requirement to provide Installation Information does not include a
+requirement to continue to provide support service, warranty, or updates
+for a work that has been modified or installed by the recipient, or for
+the User Product in which it has been modified or installed.  Access to a
+network may be denied when the modification itself materially and
+adversely affects the operation of the network or violates the rules and
+protocols for communication across the network.
+
+  Corresponding Source conveyed, and Installation Information provided,
+in accord with this section must be in a format that is publicly
+documented (and with an implementation available to the public in
+source code form), and must require no special password or key for
+unpacking, reading or copying.
+
+  7. Additional Terms.
+
+  &quot;Additional permissions&quot; are terms that supplement the terms of this
+License by making exceptions from one or more of its conditions.
+Additional permissions that are applicable to the entire Program shall
+be treated as though they were included in this License, to the extent
+that they are valid under applicable law.  If additional permissions
+apply only to part of the Program, that part may be used separately
+under those permissions, but the entire Program remains governed by
+this License without regard to the additional permissions.
+
+  When you convey a copy of a covered work, you may at your option
+remove any additional permissions from that copy, or from any part of
+it.  (Additional permissions may be written to require their own
+removal in certain cases when you modify the work.)  You may place
+additional permissions on material, added by you to a covered work,
+for which you have or can give appropriate copyright permission.
+
+  Notwithstanding any other provision of this License, for material you
+add to a covered work, you may (if authorized by the copyright holders of
+that material) supplement the terms of this License with terms:
+
+    a) Disclaiming warranty or limiting liability differently from the
+    terms of sections 15 and 16 of this License; or
+
+    b) Requiring preservation of specified reasonable legal notices or
+    author attributions in that material or in the Appropriate Legal
+    Notices displayed by works containing it; or
+
+    c) Prohibiting misrepresentation of the origin of that material, or
+    requiring that modified versions of such material be marked in
+    reasonable ways as different from the original version; or
+
+    d) Limiting the use for publicity purposes of names of licensors or
+    authors of the material; or
+
+    e) Declining to grant rights under trademark law for use of some
+    trade names, trademarks, or service marks; or
+
+    f) Requiring indemnification of licensors and authors of that
+    material by anyone who conveys the material (or modified versions of
+    it) with contractual assumptions of liability to the recipient, for
+    any liability that these contractual assumptions directly impose on
+    those licensors and authors.
+
+  All other non-permissive additional terms are considered &quot;further
+restrictions&quot; within the meaning of section 10.  If the Program as you
+received it, or any part of it, contains a notice stating that it is
+governed by this License along with a term that is a further
+restriction, you may remove that term.  If a license document contains
+a further restriction but permits relicensing or conveying under this
+License, you may add to a covered work material governed by the terms
+of that license document, provided that the further restriction does
+not survive such relicensing or conveying.
+
+  If you add terms to a covered work in accord with this section, you
+must place, in the relevant source files, a statement of the
+additional terms that apply to those files, or a notice indicating
+where to find the applicable terms.
+
+  Additional terms, permissive or non-permissive, may be stated in the
+form of a separately written license, or stated as exceptions;
+the above requirements apply either way.
+
+  8. Termination.
+
+  You may not propagate or modify a covered work except as expressly
+provided under this License.  Any attempt otherwise to propagate or
+modify it is void, and will automatically terminate your rights under
+this License (including any patent licenses granted under the third
+paragraph of section 11).
+
+  However, if you cease all violation of this License, then your
+license from a particular copyright holder is reinstated (a)
+provisionally, unless and until the copyright holder explicitly and
+finally terminates your license, and (b) permanently, if the copyright
+holder fails to notify you of the violation by some reasonable means
+prior to 60 days after the cessation.
+
+  Moreover, your license from a particular copyright holder is
+reinstated permanently if the copyright holder notifies you of the
+violation by some reasonable means, this is the first time you have
+received notice of violation of this License (for any work) from that
+copyright holder, and you cure the violation prior to 30 days after
+your receipt of the notice.
+
+  Termination of your rights under this section does not terminate the
+licenses of parties who have received copies or rights from you under
+this License.  If your rights have been terminated and not permanently
+reinstated, you do not qualify to receive new licenses for the same
+material under section 10.
+
+  9. Acceptance Not Required for Having Copies.
+
+  You are not required to accept this License in order to receive or
+run a copy of the Program.  Ancillary propagation of a covered work
+occurring solely as a consequence of using peer-to-peer transmission
+to receive a copy likewise does not require acceptance.  However,
+nothing other than this License grants you permission to propagate or
+modify any covered work.  These actions infringe copyright if you do
+not accept this License.  Therefore, by modifying or propagating a
+covered work, you indicate your acceptance of this License to do so.
+
+  10. Automatic Licensing of Downstream Recipients.
+
+  Each time you convey a covered work, the recipient automatically
+receives a license from the original licensors, to run, modify and
+propagate that work, subject to this License.  You are not responsible
+for enforcing compliance by third parties with this License.
+
+  An &quot;entity transaction&quot; is a transaction transferring control of an
+organization, or substantially all assets of one, or subdividing an
+organization, or merging organizations.  If propagation of a covered
+work results from an entity transaction, each party to that
+transaction who receives a copy of the work also receives whatever
+licenses to the work the party&#039;s predecessor in interest had or could
+give under the previous paragraph, plus a right to possession of the
+Corresponding Source of the work from the predecessor in interest, if
+the predecessor has it or can get it with reasonable efforts.
+
+  You may not impose any further restrictions on the exercise of the
+rights granted or affirmed under this License.  For example, you may
+not impose a license fee, royalty, or other charge for exercise of
+rights granted under this License, and you may not initiate litigation
+(including a cross-claim or counterclaim in a lawsuit) alleging that
+any patent claim is infringed by making, using, selling, offering for
+sale, or importing the Program or any portion of it.
+
+  11. Patents.
+
+  A &quot;contributor&quot; is a copyright holder who authorizes use under this
+License of the Program or a work on which the Program is based.  The
+work thus licensed is called the contributor&#039;s &quot;contributor version&quot;.
+
+  A contributor&#039;s &quot;essential patent claims&quot; are all patent claims
+owned or controlled by the contributor, whether already acquired or
+hereafter acquired, that would be infringed by some manner, permitted
+by this License, of making, using, or selling its contributor version,
+but do not include claims that would be infringed only as a
+consequence of further modification of the contributor version.  For
+purposes of this definition, &quot;control&quot; includes the right to grant
+patent sublicenses in a manner consistent with the requirements of
+this License.
+
+  Each contributor grants you a non-exclusive, worldwide, royalty-free
+patent license under the contributor&#039;s essential patent claims, to
+make, use, sell, offer for sale, import and otherwise run, modify and
+propagate the contents of its contributor version.
+
+  In the following three paragraphs, a &quot;patent license&quot; is any express
+agreement or commitment, however denominated, not to enforce a patent
+(such as an express permission to practice a patent or covenant not to
+sue for patent infringement).  To &quot;grant&quot; such a patent license to a
+party means to make such an agreement or commitment not to enforce a
+patent against the party.
+
+  If you convey a covered work, knowingly relying on a patent license,
+and the Corresponding Source of the work is not available for anyone
+to copy, free of charge and under the terms of this License, through a
+publicly available network server or other readily accessible means,
+then you must either (1) cause the Corresponding Source to be so
+available, or (2) arrange to deprive yourself of the benefit of the
+patent license for this particular work, or (3) arrange, in a manner
+consistent with the requirements of this License, to extend the patent
+license to downstream recipients.  &quot;Knowingly relying&quot; means you have
+actual knowledge that, but for the patent license, your conveying the
+covered work in a country, or your recipient&#039;s use of the covered work
+in a country, would infringe one or more identifiable patents in that
+country that you have reason to believe are valid.
+
+  If, pursuant to or in connection with a single transaction or
+arrangement, you convey, or propagate by procuring conveyance of, a
+covered work, and grant a patent license to some of the parties
+receiving the covered work authorizing them to use, propagate, modify
+or convey a specific copy of the covered work, then the patent license
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
+
+  A patent license is &quot;discriminatory&quot; if it does not include within
+the scope of its coverage, prohibits the exercise of, or is
+conditioned on the non-exercise of one or more of the rights that are
+specifically granted under this License.  You may not convey a covered
+work if you are a party to an arrangement with a third party that is
+in the business of distributing software, under which you make payment
+to the third party based on the extent of your activity of conveying
+the work, and under which the third party grants, to any of the
+parties who would receive the covered work from you, a discriminatory
+patent license (a) in connection with copies of the covered work
+conveyed by you (or copies made from those copies), or (b) primarily
+for and in connection with specific products or compilations that
+contain the covered work, unless you entered into that arrangement,
+or that patent license was granted, prior to 28 March 2007.
+
+  Nothing in this License shall be construed as excluding or limiting
+any implied license or other defenses to infringement that may
+otherwise be available to you under applicable patent law.
+
+  12. No Surrender of Others&#039; Freedom.
+
+  If conditions are imposed on you (whether by court order, agreement or
+otherwise) that contradict the conditions of this License, they do not
+excuse you from the conditions of this License.  If you cannot convey a
+covered work so as to satisfy simultaneously your obligations under this
+License and any other pertinent obligations, then as a consequence you may
+not convey it at all.  For example, if you agree to terms that obligate you
+to collect a royalty for further conveying from those to whom you convey
+the Program, the only way you could satisfy both those terms and this
+License would be to refrain entirely from conveying the Program.
+
+  13. Use with the GNU Affero General Public License.
+
+  Notwithstanding any other provision of this License, you have
+permission to link or combine any covered work with a work licensed
+under version 3 of the GNU Affero General Public License into a single
+combined work, and to convey the resulting work.  The terms of this
+License will continue to apply to the part which is the covered work,
+but the special requirements of the GNU Affero General Public License,
+section 13, concerning interaction through a network will apply to the
+combination as such.
+
+  14. Revised Versions of this License.
+
+  The Free Software Foundation may publish revised and/or new versions of
+the GNU General Public License from time to time.  Such new versions will
+be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
+
+  Each version is given a distinguishing version number.  If the
+Program specifies that a certain numbered version of the GNU General
+Public License &quot;or any later version&quot; applies to it, you have the
+option of following the terms and conditions either of that numbered
+version or of any later version published by the Free Software
+Foundation.  If the Program does not specify a version number of the
+GNU General Public License, you may choose any version ever published
+by the Free Software Foundation.
+
+  If the Program specifies that a proxy can decide which future
+versions of the GNU General Public License can be used, that proxy&#039;s
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
+
+  Later license versions may give you additional or different
+permissions.  However, no additional obligations are imposed on any
+author or copyright holder as a result of your choosing to follow a
+later version.
+
+  15. Disclaimer of Warranty.
+
+  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM &quot;AS IS&quot; WITHOUT WARRANTY
+OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+  16. Limitation of Liability.
+
+  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+  17. Interpretation of Sections 15 and 16.
+
+  If the disclaimer of warranty and limitation of liability provided
+above cannot be given local legal effect according to their terms,
+reviewing courts shall apply local law that most closely approximates
+an absolute waiver of all civil liability in connection with the
+Program, unless a warranty or assumption of liability accompanies a
+copy of the Program in return for a fee.
+
+                     END OF TERMS AND CONDITIONS
+
+            How to Apply These Terms to Your New Programs
+
+  If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these terms.
+
+  To do so, attach the following notices to the program.  It is safest
+to attach them to the start of each source file to most effectively
+state the exclusion of warranty; and each file should have at least
+the &quot;copyright&quot; line and a pointer to where the full notice is found.
+
+    &lt;one line to give the program&#039;s name and a brief idea of what it does.&gt;
+    Copyright (C) &lt;year&gt;  &lt;name of author&gt;
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If the program does terminal interaction, make it output a short
+notice like this when it starts in an interactive mode:
+
+    &lt;program&gt;  Copyright (C) &lt;year&gt;  &lt;name of author&gt;
+    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w&#039;.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; type `show c&#039; for details.
+
+The hypothetical commands `show w&#039; and `show c&#039; should show the appropriate
+parts of the General Public License.  Of course, your program&#039;s commands
+might be different; for a GUI interface, you would use an &quot;about box&quot;.
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a &quot;copyright disclaimer&quot; for the program, if necessary.
+For more information on this, and how to apply and follow the GNU GPL, see
+&lt;http://www.gnu.org/licenses/&gt;.
+
+  The GNU General Public License does not permit incorporating your program
+into proprietary programs.  If your program is a subroutine library, you
+may consider it more useful to permit linking proprietary applications with
+the library.  If this is what you want to do, use the GNU Lesser General
+Public License instead of this License.  But first, please read
+&lt;http://www.gnu.org/philosophy/why-not-lgpl.html&gt;.
+</pre>
+        </details>
+      </div>
+
       <!-- 右クリックメニュー -->
       <div class="sexplorer-ctx-menu" id="sexplorer-ctx-menu"></div>
     </div>
   </div>
 
   <div id="controls">
+    <button id="controls-keypad" class="unselectable" title="仮想コントローラーの表示／非表示">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="25" height="25">
+        <path d="M6 12h4M8 10v4" />
+        <circle cx="15" cy="11" r="1" fill="currentColor"/>
+        <circle cx="18" cy="13" r="1" fill="currentColor"/>
+        <rect x="2" y="6" width="20" height="12" rx="3" />
+      </svg>
+    </button>
     <button id="controls-fullscreen" class="unselectable">
       <svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="25" height="25"><path d="M13.5 13.5H10m3.5 0V10m0 3.5l-4-4m.5-8h3.5m0 0V5m0-3.5l-4 4M5 1.5H1.5m0 0V5m0-3.5l4 4m-4 4.5v3.5m0 0H5m-3.5 0l4-4" stroke="currentColor"></path></svg>
     </button>
@@ -856,7 +1695,7 @@ IO<!doctype html>
 class GameStorageManager {
   constructor() {
     this.dbName = 'EasyRPG_GameLibrary';
-    this.dbVersion = 2;
+    this.dbVersion = 3;
     this.db = null;
   }
   
@@ -895,6 +1734,15 @@ class GameStorageManager {
         if (!db.objectStoreNames.contains('rtpFiles')) {
           db.createObjectStore('rtpFiles', { keyPath: 'rtpId' });
         }
+
+        if (!db.objectStoreNames.contains('assets')) {
+          const assetsStore = db.createObjectStore('assets', { keyPath: 'id' });
+          assetsStore.createIndex('type', 'type', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('settings')) {
+          db.createObjectStore('settings', { keyPath: 'id' });
+        }
       };
     });
   }
@@ -913,19 +1761,93 @@ class GameStorageManager {
     
     await transaction.objectStore('games').put(gameData);
     
-    // ゲームファイルを保存（Uint8Arrayをそのまま保存）
+    // ゲームファイルを保存（games/gameId/ プレフィックスを自動付与して保存）
     const fileData = {
       gameId: gameId,
-      files: files.map(f => ({
-        path: f.path,
-        data: f.data // Uint8Arrayをそのまま保存
-      }))
+      files: files.map(f => {
+        const prefix = `games/${gameId}/`;
+        let path = f.path;
+        if (!path.startsWith('games/')) {
+          path = prefix + path.replace(/^\/+/, '');
+        }
+        return {
+          path: path,
+          data: f.data
+        };
+      })
     };
     
     await transaction.objectStore('gameFiles').put(fileData);
     
     return new Promise((resolve, reject) => {
       transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+  
+  async renameGameId(oldGameId, newGameId) {
+    if (oldGameId === newGameId) return;
+    
+    console.log(`[StorageManager] Renaming game database key from "${oldGameId}" to "${newGameId}"...`);
+    const transaction = this.db.transaction(['games', 'gameFiles'], 'readwrite');
+    const gamesStore = transaction.objectStore('games');
+    const filesStore = transaction.objectStore('gameFiles');
+    
+    // 1. Get old records
+    const oldGameData = await new Promise((resolve, reject) => {
+      const req = gamesStore.get(oldGameId);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    
+    const oldFilesData = await new Promise((resolve, reject) => {
+      const req = filesStore.get(oldGameId);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    
+    if (!oldGameData) {
+      throw new Error(`Game "${oldGameId}" metadata not found.`);
+    }
+    
+    // 2. Put new games record and delete old
+    const newGameData = {
+      ...oldGameData,
+      id: newGameId,
+      name: newGameId
+    };
+    await gamesStore.put(newGameData);
+    await gamesStore.delete(oldGameId);
+    
+    // 3. Update gameFiles paths and keys
+    if (oldFilesData && oldFilesData.files) {
+      const oldPrefix = `games/${oldGameId}/`;
+      const newPrefix = `games/${newGameId}/`;
+      
+      const newFiles = oldFilesData.files.map(f => {
+        let newPath = f.path;
+        if (f.path.startsWith(oldPrefix)) {
+          newPath = newPrefix + f.path.substring(oldPrefix.length);
+        }
+        return {
+          path: newPath,
+          data: f.data
+        };
+      });
+      
+      const newFilesData = {
+        gameId: newGameId,
+        files: newFiles
+      };
+      await filesStore.put(newFilesData);
+      await filesStore.delete(oldGameId);
+    }
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => {
+        console.log(`[StorageManager] Database rename completed successfully: "${oldGameId}" -> "${newGameId}"`);
+        resolve();
+      };
       transaction.onerror = () => reject(transaction.error);
     });
   }
@@ -1093,6 +2015,76 @@ class GameStorageManager {
       transaction.onerror = () => reject(transaction.error);
     });
   }
+
+  async saveAsset(type, name, data) {
+    const transaction = this.db.transaction(['assets'], 'readwrite');
+    const id = `${type}:${name}`;
+    const asset = {
+      id,
+      type,
+      name,
+      size: data.byteLength || data.length || 0,
+      data,
+      savedAt: new Date().toISOString()
+    };
+
+    await transaction.objectStore('assets').put(asset);
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve(asset);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  async getAllAssets() {
+    const transaction = this.db.transaction(['assets'], 'readonly');
+    const store = transaction.objectStore('assets');
+
+    return new Promise((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteAsset(assetId) {
+    const transaction = this.db.transaction(['assets'], 'readwrite');
+    await transaction.objectStore('assets').delete(assetId);
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  async getSettings() {
+    const transaction = this.db.transaction(['settings'], 'readonly');
+
+    return new Promise((resolve, reject) => {
+      const request = transaction.objectStore('settings').get('global');
+      request.onsuccess = () => resolve(request.result || { id: 'global' });
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async updateSettings(updates) {
+    const transaction = this.db.transaction(['settings'], 'readwrite');
+    const store = transaction.objectStore('settings');
+
+    const current = await new Promise((resolve, reject) => {
+      const request = store.get('global');
+      request.onsuccess = () => resolve(request.result || { id: 'global' });
+      request.onerror = () => reject(request.error);
+    });
+
+    Object.assign(current, updates);
+    await store.put(current);
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve(current);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
 }
 
 // グローバルストレージマネージャーインスタンス
@@ -1136,6 +2128,11 @@ let storageManager = null;
     }
   }
 
+  function stripEasyRpgGameUrlPrefix(path) {
+    const m = /^games\/[^/]+\/(.+)$/i.exec(path.replace(/^\/+/, ''));
+    return m ? m[1] : path;
+  }
+
   function PatchedXHR() {
     const real = new RealXHR();
     let interceptData = null;
@@ -1161,20 +2158,20 @@ let storageManager = null;
             } else if (tempPath.startsWith('/')) {
               tempPath = tempPath.substring(1);
             }
-            path = decodeRequestPath(tempPath);
+            path = stripEasyRpgGameUrlPrefix(decodeRequestPath(tempPath));
           } catch (e) {
-            path = decodeRequestPath(url.replace(/^\.\//, ''));
+            path = stripEasyRpgGameUrlPrefix(decodeRequestPath(url.replace(/^\.\//, '')));
           }
         }
         
         if (path) {
-          const data = window.EASYRPG_FILE_MAP.get(path.toLowerCase());
-          if (data) {
+          const data = window.EASYRPG_FILE_MAP.get(normalizeGameAssetPath(path));
+          if (data !== undefined) {
             interceptData = data;
           }
         }
       }
-      if (interceptData) {
+      if (interceptData !== null) {
         // 実ネットワークへは投げない（openの呼び出し自体をスキップ）
         return;
       }
@@ -1182,20 +2179,28 @@ let storageManager = null;
     };
 
     real.send = function(...args) {
-      if (interceptData) {
+      if (interceptData !== null) {
         const data = interceptData;
         const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
         try {
           Object.defineProperty(real, 'status', { value: 200, configurable: true });
+          Object.defineProperty(real, 'statusText', { value: 'OK', configurable: true });
           Object.defineProperty(real, 'readyState', { value: 4, configurable: true });
           Object.defineProperty(real, 'response', { value: buffer, configurable: true });
+          Object.defineProperty(real, 'responseText', { value: new TextDecoder().decode(data), configurable: true });
         } catch (e) {
           console.warn('Failed to shim XHR response for intercepted asset:', e);
         }
         // emscripten側のコールバック登録が完了してから発火させるため非同期にする
         setTimeout(() => {
+          if (typeof real.onreadystatechange === 'function') {
+            try { real.onreadystatechange(new Event('readystatechange')); } catch (e) { console.error(e); }
+          }
           if (typeof real.onload === 'function') {
             try { real.onload(new ProgressEvent('load')); } catch (e) { console.error(e); }
+          }
+          if (typeof real.onloadend === 'function') {
+            try { real.onloadend(new ProgressEvent('loadend')); } catch (e) { console.error(e); }
           }
         }, 0);
         return;
@@ -1225,9 +2230,10 @@ function switchTab(tabName) {
     }
   });
   
-  // RTPタブ表示時にステータスを更新
-  if (tabName === 'rtp') {
+  // 設定タブ表示時にステータスを更新
+  if (tabName === 'settings') {
     loadRTPStatusList();
+    loadAssetSettings();
   }
   
   // ストレージタブ表示時に内容を読み込み
@@ -1335,6 +2341,251 @@ async function deleteRTP(rtpId) {
   }
 }
 
+function getAssetTypeLabel(type) {
+  const labels = {
+    soundfont: 'サウンドフォント',
+    font1: 'ゴシックフォント',
+    font2: '明朝フォント'
+  };
+  return labels[type] || type;
+}
+
+function getAssetSettingKey(type) {
+  return {
+    soundfont: 'soundfont',
+    font1: 'font1',
+    font2: 'font2'
+  }[type];
+}
+
+function isValidAssetFile(type, filename) {
+  const lower = filename.toLowerCase();
+  if (type === 'soundfont') {
+    return lower.endsWith('.sf2') || lower.endsWith('.soundfont');
+  }
+  return lower.endsWith('.ttf') || lower.endsWith('.otf') || lower.endsWith('.ttc') ||
+    lower.endsWith('.woff') || lower.endsWith('.woff2') || lower.endsWith('.fon');
+}
+
+async function saveAssetFromFile(type, file) {
+  if (!file) return;
+  if (!isValidAssetFile(type, file.name)) {
+    alert(`${getAssetTypeLabel(type)}として対応していないファイル形式です。`);
+    return;
+  }
+
+  const data = new Uint8Array(await file.arrayBuffer());
+  await storageManager.saveAsset(type, file.name, data);
+  const settingKey = getAssetSettingKey(type);
+  if (settingKey) {
+    await storageManager.updateSettings({ [settingKey]: file.name });
+  }
+  await loadAssetSettings();
+}
+
+// ==================== ゲーム内Uploadとの同期 ====================
+// EasyRPG Player本体には設定画面(Settings > Audio/Engine)に
+// 「<Upload Soundfont>」「<Upload Font>」というプレイ中にファイルを
+// 追加できるオプションが標準で存在する（`window_settings.cpp` / `interface.cpp`）。
+// これらはIDBFS上の /home/web_user/.config/Soundfont/ または /Font/ に
+// 直接ファイルを書き込むだけで、外部の設定タブ（本アプリのIndexedDB管理）
+// とは連動していなかった。
+// ここでは、ゲーム内Uploadで追加されたファイルを外部タブの資産管理
+// （storageManagerのassetsストア）にも書き込み、次回以降どのゲームからでも
+// 選択できるようにする（＝双方向同期の「ネイティブ→外部」方向）。
+// 「外部→ネイティブ」方向は既存の appendManagedConfigFiles() が
+// ゲーム起動時に管理下の全アセットをIDBFSへ書き出すことで実現済み。
+async function syncNativeUploadedAsset(kind, name, data) {
+  if (!storageManager || !name) return;
+
+  try {
+    if (kind === 'soundfont') {
+      await storageManager.saveAsset('soundfont', name, data);
+    } else if (kind === 'font') {
+      // ネイティブ側はFont1/Font2を区別しない単一のFontディレクトリを共有するため、
+      // 外部タブの「ゴシックフォント」「明朝フォント」どちらの選択欄にも
+      // 現れるように両方のタイプで保存する（同名なら上書きのみで重複しない）
+      await storageManager.saveAsset('font1', name, data);
+      await storageManager.saveAsset('font2', name, data);
+    } else {
+      return;
+    }
+
+    // 設定タブが表示中であれば一覧・選択肢を即座に更新
+    await loadAssetSettings();
+    console.log(`[native-upload-sync] ゲーム内アップロードを外部管理タブに反映しました: ${kind} "${name}"`);
+  } catch (e) {
+    console.warn('Failed to sync in-game upload to the asset manager tab:', e);
+  }
+}
+
+async function deleteAsset(assetId) {
+  if (!confirm('このファイルを削除しますか？')) return;
+
+  try {
+    const assets = await storageManager.getAllAssets();
+    const asset = assets.find(a => a.id === assetId);
+    await storageManager.deleteAsset(assetId);
+
+    if (asset) {
+      const settings = await storageManager.getSettings();
+      const settingKey = getAssetSettingKey(asset.type);
+      if (settingKey && settings[settingKey] === asset.name) {
+        await storageManager.updateSettings({ [settingKey]: '' });
+      }
+    }
+
+    await loadAssetSettings();
+  } catch (e) {
+    console.error('Failed to delete asset:', e);
+    alert('削除に失敗しました: ' + e.message);
+  }
+}
+
+function fillAssetSelect(selectId, assets, type, selectedName) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+
+  select.innerHTML = '';
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = type === 'soundfont' ? '自動検出' : '内蔵フォント';
+  select.appendChild(empty);
+
+  assets
+    .filter(asset => asset.type === type)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+    .forEach(asset => {
+      const option = document.createElement('option');
+      option.value = asset.name;
+      option.textContent = asset.name;
+      select.appendChild(option);
+    });
+
+  select.value = selectedName || '';
+}
+
+async function loadAssetSettings() {
+  const sfContainer = document.getElementById('soundfont-status-list');
+  const fontContainer = document.getElementById('font-status-list');
+  if (!storageManager) return;
+
+  const [assets, settings] = await Promise.all([
+    storageManager.getAllAssets(),
+    storageManager.getSettings()
+  ]);
+
+  fillAssetSelect('soundfont-select', assets, 'soundfont', settings.soundfont);
+  fillAssetSelect('font1-select', assets, 'font1', settings.font1);
+  fillAssetSelect('font2-select', assets, 'font2', settings.font2);
+
+  // Render soundfonts list
+  if (sfContainer) {
+    sfContainer.innerHTML = '';
+    const soundfonts = assets.filter(a => a.type === 'soundfont');
+    if (soundfonts.length === 0) {
+      sfContainer.innerHTML = '<p style="color: #888; text-align: center; font-size: 0.85rem; padding: 1rem 0;">サウンドフォントは追加されていません。</p>';
+    } else {
+      soundfonts
+        .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+        .forEach(asset => {
+          const active = settings.soundfont === asset.name;
+          const item = document.createElement('div');
+          item.className = 'asset-item';
+          item.innerHTML = `
+            <div class="asset-item-info">
+              <div class="asset-item-name">${escapeHtml(asset.name)}</div>
+              <div class="asset-item-detail">${formatBytes(asset.size)}${active ? ' / 使用中' : ''}</div>
+            </div>
+            <button class="rtp-delete-btn" onclick="deleteAsset('${asset.id.replace(/'/g, "\\'")}')">削除</button>
+          `;
+          sfContainer.appendChild(item);
+        });
+    }
+  }
+
+  // Render fonts list
+  if (fontContainer) {
+    fontContainer.innerHTML = '';
+    const fonts = assets.filter(a => a.type === 'font1' || a.type === 'font2');
+    if (fonts.length === 0) {
+      fontContainer.innerHTML = '<p style="color: #888; text-align: center; font-size: 0.85rem; padding: 1rem 0;">カスタムフォントは追加されていません。</p>';
+    } else {
+      fonts
+        .sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name, 'ja'))
+        .forEach(asset => {
+          const active = settings.font1 === asset.name || settings.font2 === asset.name;
+          const label = asset.type === 'font1' ? 'ゴシック' : '明朝';
+          const item = document.createElement('div');
+          item.className = 'asset-item';
+          item.innerHTML = `
+            <div class="asset-item-info">
+              <div class="asset-item-name">${escapeHtml(asset.name)}</div>
+              <div class="asset-item-detail">${label}フォント / ${formatBytes(asset.size)}${active ? ' / 使用中' : ''}</div>
+            </div>
+            <button class="rtp-delete-btn" onclick="deleteAsset('${asset.id.replace(/'/g, "\\'")}')">削除</button>
+          `;
+          fontContainer.appendChild(item);
+        });
+    }
+  }
+}
+
+function escapeIniValue(value) {
+  return String(value || '').replace(/\r?\n/g, ' ');
+}
+
+async function appendManagedConfigFiles(files) {
+  if (!storageManager) return files;
+
+  const [assets, settings] = await Promise.all([
+    storageManager.getAllAssets(),
+    storageManager.getSettings()
+  ]);
+
+  console.log('[DEBUG-ASSETS] getAllAssets count:', assets.length);
+  assets.forEach(a => {
+    console.log(`[DEBUG-ASSETS] Asset - ID: ${a.id}, Type: ${a.type}, Name: ${a.name}, Size: ${a.size} bytes`);
+  });
+
+  const selectedSoundfont = settings.soundfont || '';
+  const selectedFont1 = settings.font1 || '';
+  const selectedFont2 = settings.font2 || '';
+  const configFiles = [];
+
+  for (const asset of assets) {
+    if (asset.type === 'soundfont') {
+      configFiles.push({
+        path: `/home/web_user/.config/EasyRPG/Player/Soundfont/${asset.name}`,
+        data: asset.data
+      });
+    } else if (asset.type === 'font1' || asset.type === 'font2') {
+      configFiles.push({
+        path: `/home/web_user/.config/EasyRPG/Player/Font/${asset.name}`,
+        data: asset.data
+      });
+    }
+  }
+
+  const configIni = [
+    '[Audio]',
+    selectedSoundfont ? `Soundfont=/home/web_user/.config/EasyRPG/Player/Soundfont/${escapeIniValue(selectedSoundfont)}` : 'Soundfont=',
+    '',
+    '[Player]',
+    'SettingsAutosave=true',
+    selectedFont1 ? `Font1=/home/web_user/.config/EasyRPG/Player/Font/${escapeIniValue(selectedFont1)}` : 'Font1=',
+    selectedFont2 ? `Font2=/home/web_user/.config/EasyRPG/Player/Font/${escapeIniValue(selectedFont2)}` : 'Font2=',
+    ''
+  ].join('\n');
+
+  configFiles.push({
+    path: '/home/web_user/.config/EasyRPG/Player/config.ini',
+    data: new TextEncoder().encode(configIni)
+  });
+
+  return [...files, ...configFiles];
+}
+
 // ==================== ストレージ管理（Explorer風ファイルブラウザ） ====================
 
 // バイト数を人間が読みやすい形式に変換
@@ -1360,6 +2611,19 @@ function guessMimeType(filename) {
     json: 'application/json', txt: 'text/plain', ini: 'text/plain', xml: 'application/xml'
   };
   return map[ext] || 'application/octet-stream';
+}
+
+function isIdbfsDirectoryEntry(entry) {
+  const mode = entry && typeof entry.mode === 'number' ? entry.mode : 0;
+  return (mode & 0xF000) === 0x4000;
+}
+
+function normalizeGameAssetPath(path) {
+  let normalized = String(path || '').split('?')[0].split('#')[0].replace(/\\/g, '/');
+  while (normalized.startsWith('./')) {
+    normalized = normalized.substring(2);
+  }
+  return normalized.replace(/^\/+/, '').toLowerCase();
 }
 
 // 単一ファイルをBlobとしてダウンロード
@@ -1420,15 +2684,17 @@ class StorageExplorer {
         try {
           const data = await storageManager.getGame(game.id);
           if (data && data.files) {
-            const gameGroupPath = `games/${game.name || game.id}`;
+            const gameGroupPath = `games/${game.id}`;
             for (const f of data.files) {
+              // 既にgames/XXXX/プレフィックスが付いていれば除去して正規化
+              const cleanPath = f.path.replace(/^games\/[^/]+\//i, '');
               this.allEntries.push({
                 groupType: 'game',
                 groupId: game.id,
                 groupName: game.name || game.id,
                 groupPath: gameGroupPath,
-                path: `${gameGroupPath}/${f.path}`,
-                name: this._basename(f.path),
+                path: `${gameGroupPath}/${cleanPath}`,
+                name: this._basename(cleanPath),
                 size: f.data ? f.data.byteLength || f.data.length : 0,
                 data: f.data,
                 date: game.lastPlayed || null
@@ -1514,6 +2780,10 @@ class StorageExplorer {
 
           const saveGroupPath = 'Save';
           for (const s of saves) {
+            if (isIdbfsDirectoryEntry(s.value)) {
+              continue;
+            }
+
             let cleanPath = s.path;
             
             // 先頭の "/customgame/Save/" や "/easyrpg/XXX/Save/" などを除去して
@@ -1521,8 +2791,11 @@ class StorageExplorer {
             const saveIndex = cleanPath.indexOf('/Save/');
             if (saveIndex !== -1) {
               cleanPath = 'Save/' + cleanPath.substring(saveIndex + 6);
+            } else if (cleanPath.startsWith('Save/') || cleanPath.startsWith('/Save/')) {
+              cleanPath = cleanPath.replace(/^\//, '');
             } else {
-              cleanPath = cleanPath.replace(/^\//, ''); // 万が一 "/Save/..." の場合
+              // home/web_user/.config/ などのシステムパスがセーブDBに入っていても除外する
+              continue;
             }
             
             this.allEntries.push({
@@ -1540,6 +2813,47 @@ class StorageExplorer {
         }
       } catch (e) {
         console.warn('Failed to load save files from IndexedDB databases:', e);
+      }
+
+      // サウンドフォント/フォントファイルを読み込み
+      try {
+        const assets = await storageManager.getAllAssets();
+        
+        // サウンドフォント
+        const soundfonts = assets.filter(a => a.type === 'soundfont');
+        const sfGroupPath = 'soundfonts';
+        for (const sf of soundfonts) {
+          this.allEntries.push({
+            groupType: 'asset',
+            groupId: sf.id,
+            groupName: 'サウンドフォント',
+            groupPath: sfGroupPath,
+            path: `${sfGroupPath}/${sf.name}`,
+            name: sf.name,
+            size: sf.data ? sf.data.byteLength || sf.data.length : 0,
+            data: sf.data,
+            date: sf.addedAt || null
+          });
+        }
+
+        // フォント
+        const fonts = assets.filter(a => a.type === 'font1' || a.type === 'font2');
+        const fontGroupPath = 'fonts';
+        for (const font of fonts) {
+          this.allEntries.push({
+            groupType: 'asset',
+            groupId: font.id,
+            groupName: 'フォント',
+            groupPath: fontGroupPath,
+            path: `${fontGroupPath}/${font.name}`,
+            name: font.name,
+            size: font.data ? font.data.byteLength || font.data.length : 0,
+            data: font.data,
+            date: font.addedAt || null
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to load assets for explorer:', e);
       }
     } catch (e) {
       console.error('StorageExplorer.loadAll failed:', e);
@@ -1637,6 +2951,7 @@ class StorageExplorer {
       items.push({
         name: dirName,
         fullPath: dirPath,
+        selectionKey: `dir:${dirPath}`,
         isDir: true,
         size: dirSize,
         fileCount: dirFileCount,
@@ -1651,6 +2966,7 @@ class StorageExplorer {
       items.push({
         name: f.name,
         fullPath: f.path,
+        selectionKey: `file:${f.groupType}:${f.groupId}:${f.path}`,
         isDir: false,
         size: f.size,
         type: this._getFileTypeLabel(f.name),
@@ -1745,50 +3061,49 @@ class StorageExplorer {
   }
 
   // --- 選択 ---
-  toggleSelect(fullPath, event) {
+  toggleSelect(item, event) {
+    const selectionKey = item.selectionKey;
     if (event && event.ctrlKey) {
       // Ctrl+クリック: トグル
-      if (this.selectedPaths.has(fullPath)) {
-        this.selectedPaths.delete(fullPath);
+      if (this.selectedPaths.has(selectionKey)) {
+        this.selectedPaths.delete(selectionKey);
       } else {
-        this.selectedPaths.add(fullPath);
+        this.selectedPaths.add(selectionKey);
       }
     } else if (event && event.shiftKey && this.lastClickedPath) {
       // Shift+クリック: 範囲選択
       const items = this.getCurrentItems();
-      const idxA = items.findIndex(i => i.fullPath === this.lastClickedPath);
-      const idxB = items.findIndex(i => i.fullPath === fullPath);
+      const idxA = items.findIndex(i => i.selectionKey === this.lastClickedPath);
+      const idxB = items.findIndex(i => i.selectionKey === selectionKey);
       if (idxA >= 0 && idxB >= 0) {
         const start = Math.min(idxA, idxB);
         const end = Math.max(idxA, idxB);
         for (let i = start; i <= end; i++) {
-          this.selectedPaths.add(items[i].fullPath);
+          this.selectedPaths.add(items[i].selectionKey);
         }
       }
     } else {
       // 通常クリック: 単一選択
       this.selectedPaths.clear();
-      this.selectedPaths.add(fullPath);
+      this.selectedPaths.add(selectionKey);
     }
-    this.lastClickedPath = fullPath;
-    this._updateSelectionUI();
-    this._updateToolbarState();
+    this.lastClickedPath = selectionKey;
+    this._syncSelectionState();
   }
 
   selectAll() {
     const items = this.getCurrentItems();
     this.selectedPaths.clear();
     for (const item of items) {
-      this.selectedPaths.add(item.fullPath);
+      this.selectedPaths.add(item.selectionKey);
     }
-    this._updateSelectionUI();
-    this._updateToolbarState();
+    this._syncSelectionState();
   }
 
   deselectAll() {
     this.selectedPaths.clear();
-    this._updateSelectionUI();
-    this._updateToolbarState();
+    this.lastClickedPath = null;
+    this._syncSelectionState();
   }
 
   // --- クリップボード操作 ---
@@ -1990,6 +3305,12 @@ class StorageExplorer {
           };
           req.onerror = () => reject(req.error);
         });
+      } else if (groupType === 'asset') {
+        // エクスプローラー上でのアップロードや貼り付けに対応
+        const isFont = groupId && groupId.startsWith('font');
+        const assetType = isFont ? 'font1' : 'soundfont';
+        await storageManager.saveAsset(assetType, relativePath, data);
+        await loadAssetSettings();
       }
     } catch (e) {
       console.error('Failed to add file to group:', e);
@@ -2035,6 +3356,10 @@ class StorageExplorer {
           };
           req.onerror = () => reject(req.error);
         });
+      } else if (groupType === 'asset') {
+        // エクスプローラー上での削除に対応
+        await storageManager.deleteAsset(groupId);
+        await loadAssetSettings();
       }
     } catch (e) {
       console.error('Failed to remove file from group:', e);
@@ -2073,13 +3398,18 @@ class StorageExplorer {
     this._treeCache = null;
     await this.loadAll();
     this.render();
+    if (typeof loadSavedGamesList === 'function') {
+      await loadSavedGamesList();
+    }
   }
 
   // --- リネーム ---
   startRename() {
     if (this.selectedPaths.size !== 1) return;
-    const path = [...this.selectedPaths][0];
-    const row = document.querySelector(`.sexplorer-row[data-path="${CSS.escape(path)}"]`);
+    const selectedItem = this._getSelectedItems()[0];
+    if (!selectedItem) return;
+    const path = selectedItem.fullPath;
+    const row = document.querySelector(`.sexplorer-row[data-key="${CSS.escape(selectedItem.selectionKey)}"]`);
     if (!row) return;
 
     const nameText = row.querySelector('.row-name-text');
@@ -2105,13 +3435,16 @@ class StorageExplorer {
     }
 
     const finishRename = async (accept) => {
+      if (finishRename.done) return;
+      finishRename.done = true;
       this._renaming = false;
       if (accept && input.value && input.value !== currentName) {
         await this._doRename(path, currentName, input.value);
       }
-      input.remove();
+      if (input.isConnected) input.remove();
       nameText.style.display = '';
     };
+    finishRename.done = false;
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -2168,6 +3501,9 @@ class StorageExplorer {
     this._treeCache = null;
     await this.loadAll();
     this.render();
+    if (typeof loadSavedGamesList === 'function') {
+      await loadSavedGamesList();
+    }
   }
 
   // --- ダウンロード ---
@@ -2238,7 +3574,7 @@ class StorageExplorer {
   // --- ヘルパー ---
   _getSelectedItems() {
     const items = this.getCurrentItems();
-    return items.filter(i => this.selectedPaths.has(i.fullPath));
+    return items.filter(i => this.selectedPaths.has(i.selectionKey));
   }
 
   // --- ソート ---
@@ -2253,13 +3589,12 @@ class StorageExplorer {
   }
 
   // --- コンテキストメニュー ---
-  showContextMenu(x, y, targetPath) {
+  showContextMenu(x, y, targetItem) {
     // targetPathがnullなら背景右クリック
-    if (targetPath && !this.selectedPaths.has(targetPath)) {
+    if (targetItem && !this.selectedPaths.has(targetItem.selectionKey)) {
       this.selectedPaths.clear();
-      this.selectedPaths.add(targetPath);
-      this._updateSelectionUI();
-      this._updateToolbarState();
+      this.selectedPaths.add(targetItem.selectionKey);
+      this._syncSelectionState();
     }
 
     const hasSelection = this.selectedPaths.size > 0;
@@ -2346,11 +3681,13 @@ class StorageExplorer {
 
   // --- レンダリング ---
   render() {
+    this._pruneSelectionToCurrentItems();
     this._renderBreadcrumb();
     this._renderFileList();
     this._renderStatusBar();
     this._updateToolbarState();
     this._updateColumnHeaders();
+    this._updateSelectionUI();
   }
 
   _renderBreadcrumb() {
@@ -2414,15 +3751,16 @@ class StorageExplorer {
       const row = document.createElement('div');
       row.className = 'sexplorer-row';
       row.dataset.path = item.fullPath;
+      row.dataset.key = item.selectionKey;
       row.dataset.isdir = item.isDir ? '1' : '0';
 
-      if (this.selectedPaths.has(item.fullPath)) {
+      if (this.selectedPaths.has(item.selectionKey)) {
         row.classList.add('selected');
       }
 
       // クリップボードでcutされたアイテム
       if (this.clipboard.mode === 'cut' &&
-          this.clipboard.items.some(ci => ci.fullPath === item.fullPath)) {
+          this.clipboard.items.some(ci => ci.selectionKey === item.selectionKey)) {
         row.classList.add('cut');
       }
 
@@ -2435,7 +3773,7 @@ class StorageExplorer {
         : '';
 
       row.innerHTML = `
-        <div class="row-checkbox"><input type="checkbox" ${this.selectedPaths.has(item.fullPath) ? 'checked' : ''}></div>
+        <div class="row-checkbox"><input type="checkbox" ${this.selectedPaths.has(item.selectionKey) ? 'checked' : ''}></div>
         <div class="row-name">
           <span class="row-name-icon">${icon}</span>
           <span class="row-name-text">${escapeHtml(item.name)}</span>
@@ -2447,18 +3785,19 @@ class StorageExplorer {
 
       // イベント
       row.addEventListener('click', (e) => {
+        container.focus();
         if (e.target.type === 'checkbox') {
           // チェックボックスクリック
           if (e.target.checked) {
-            this.selectedPaths.add(item.fullPath);
+            this.selectedPaths.add(item.selectionKey);
           } else {
-            this.selectedPaths.delete(item.fullPath);
+            this.selectedPaths.delete(item.selectionKey);
           }
-          this.lastClickedPath = item.fullPath;
-          this._updateToolbarState();
+          this.lastClickedPath = item.selectionKey;
+          this._syncSelectionState();
           return;
         }
-        this.toggleSelect(item.fullPath, e);
+        this.toggleSelect(item, e);
       });
 
       row.addEventListener('dblclick', (e) => {
@@ -2472,7 +3811,7 @@ class StorageExplorer {
       row.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.showContextMenu(e.clientX, e.clientY, item.fullPath);
+        this.showContextMenu(e.clientX, e.clientY, item);
       });
 
       container.appendChild(row);
@@ -2525,8 +3864,8 @@ class StorageExplorer {
   _updateSelectionUI() {
     const rows = document.querySelectorAll('.sexplorer-row');
     rows.forEach(row => {
-      const path = row.dataset.path;
-      const isSelected = this.selectedPaths.has(path);
+      const key = row.dataset.key;
+      const isSelected = this.selectedPaths.has(key);
       row.classList.toggle('selected', isSelected);
       const checkbox = row.querySelector('input[type="checkbox"]');
       if (checkbox) checkbox.checked = isSelected;
@@ -2539,6 +3878,28 @@ class StorageExplorer {
       selectAllCb.checked = items.length > 0 && this.selectedPaths.size === items.length;
       selectAllCb.indeterminate = this.selectedPaths.size > 0 && this.selectedPaths.size < items.length;
     }
+  }
+
+  _pruneSelectionToCurrentItems() {
+    const visiblePaths = new Set(this.getCurrentItems().map(item => item.selectionKey));
+    let changed = false;
+    for (const path of [...this.selectedPaths]) {
+      if (!visiblePaths.has(path)) {
+        this.selectedPaths.delete(path);
+        changed = true;
+      }
+    }
+    if (this.lastClickedPath && !visiblePaths.has(this.lastClickedPath)) {
+      this.lastClickedPath = null;
+    }
+    return changed;
+  }
+
+  _syncSelectionState() {
+    this._pruneSelectionToCurrentItems();
+    this._updateSelectionUI();
+    this._renderStatusBar();
+    this._updateToolbarState();
   }
 
   _updateToolbarState() {
@@ -2569,7 +3930,7 @@ class StorageExplorer {
     document.querySelectorAll('.sexplorer-row.cut').forEach(r => r.classList.remove('cut'));
     if (this.clipboard.mode === 'cut') {
       for (const item of this.clipboard.items) {
-        const row = document.querySelector(`.sexplorer-row[data-path="${CSS.escape(item.fullPath)}"]`);
+        const row = document.querySelector(`.sexplorer-row[data-key="${CSS.escape(item.selectionKey)}"]`);
         if (row) row.classList.add('cut');
       }
     }
@@ -2796,6 +4157,7 @@ window.addEventListener('DOMContentLoaded', async function() {
     console.log('IndexedDB initialized');
     await loadSavedGamesList();
     await loadRTPStatusList();
+    await loadAssetSettings();
   } catch (error) {
     console.error('Failed to initialize storage:', error);
     alert('ストレージの初期化に失敗しました。ブラウザがIndexedDBをサポートしているか確認してください。');
@@ -2810,16 +4172,17 @@ async function loadSavedGamesList() {
     }
     
     const games = await storageManager.getAllGames();
-    
-    if (games.length === 0) {
-      return;
-    }
-    
     const listDiv = document.getElementById('saved-games-list');
     const containerDiv = document.getElementById('saved-games-container');
     
-    listDiv.style.display = 'block';
-    containerDiv.innerHTML = '';
+    if (games.length === 0) {
+      if (listDiv) listDiv.style.display = 'none';
+      if (containerDiv) containerDiv.innerHTML = '';
+      return;
+    }
+    
+    if (listDiv) listDiv.style.display = 'block';
+    if (containerDiv) containerDiv.innerHTML = '';
     
     games.forEach(game => {
       const gameDiv = document.createElement('div');
@@ -2842,6 +4205,7 @@ async function loadSavedGamesList() {
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
               <span id="game-title-${game.id}" style="font-weight: bold; font-size: 1.1rem;">${escapeHtml(game.name)}</span>
               <button onclick="event.stopPropagation(); editGameTitle('${game.id}', '${escapeHtml(game.name).replace(/'/g, "\\'")}');" 
+                      class="game-action-btn"
                       style="padding: 0.2rem 0.4rem; background: #666; border: none; color: white; border-radius: 3px; cursor: pointer; font-size: 0.8rem;"
                       title="タイトルを編集">
                 ✏️
@@ -2856,10 +4220,12 @@ async function loadSavedGamesList() {
           </div>
           <div style="display: flex; gap: 0.5rem;">
             <button onclick="event.stopPropagation(); loadSavedGame('${game.id}');" 
+                    class="game-action-btn"
                     style="padding: 0.5rem 1rem; background: #4CAF50; border: none; color: white; border-radius: 4px; cursor: pointer; font-weight: bold;">
               起動
             </button>
             <button onclick="event.stopPropagation(); deleteSavedGame('${game.id}');" 
+                    class="game-action-btn"
                     style="padding: 0.5rem 1rem; background: #f44336; border: none; color: white; border-radius: 4px; cursor: pointer;">
               削除
             </button>
@@ -2880,7 +4246,24 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function setGameButtonsDisabled(disabled) {
+  const buttons = document.querySelectorAll('.game-action-btn');
+  buttons.forEach(btn => {
+    btn.disabled = disabled;
+    btn.style.opacity = disabled ? '0.5' : '1.0';
+    btn.style.pointerEvents = disabled ? 'none' : 'auto';
+  });
+}
+
+let isGameLoading = false;
+let isGameDeleting = false;
+let isGameRenaming = false;
+
 async function loadSavedGame(gameId) {
+  if (isGameLoading || isGameDeleting || isGameRenaming) return;
+  isGameLoading = true;
+  setGameButtonsDisabled(true);
+  
   try {
     document.getElementById('status').textContent = 'ゲームを読み込み中...';
     
@@ -2888,6 +4271,8 @@ async function loadSavedGame(gameId) {
     
     if (!gameData || !gameData.files || gameData.files.length === 0) {
       alert('ゲームデータが見つかりません。');
+      isGameLoading = false;
+      setGameButtonsDisabled(false);
       return;
     }
     
@@ -2904,50 +4289,233 @@ async function loadSavedGame(gameId) {
     console.error('Failed to load saved game:', e);
     alert('ゲームの読み込みに失敗しました: ' + e.message);
     document.getElementById('status').textContent = 'エラーが発生しました';
+    isGameLoading = false;
+    setGameButtonsDisabled(false);
   }
 }
 
 async function deleteSavedGame(gameId) {
+  if (isGameLoading || isGameDeleting || isGameRenaming) return;
+  
   if (!confirm('このゲームを削除しますか？\n\n注意: ゲームファイルは削除されますが、セーブデータは保持されます。')) {
     return;
   }
+  
+  isGameDeleting = true;
+  setGameButtonsDisabled(true);
   
   try {
     await storageManager.deleteGame(gameId);
     console.log(`Deleted game: ${gameId}`);
     await loadSavedGamesList();
+    if (storageExplorer) {
+      storageExplorer._treeCache = null;
+      await storageExplorer.loadAll();
+      storageExplorer.render();
+    }
   } catch (e) {
     console.error('Failed to delete saved game:', e);
     alert('削除に失敗しました: ' + e.message);
+  } finally {
+    isGameDeleting = false;
+    setGameButtonsDisabled(false);
   }
 }
 
 async function editGameTitle(gameId, currentTitle) {
-  const newTitle = prompt('新しいゲームタイトルを入力してください:', currentTitle);
+  if (isGameLoading || isGameDeleting || isGameRenaming) return;
+  isGameRenaming = true;
+  setGameButtonsDisabled(true);
+  
+  let actualCurrentTitle = currentTitle;
+  try {
+    const gameData = await storageManager.getGame(gameId);
+    if (gameData && gameData.name) {
+      actualCurrentTitle = gameData.name;
+    }
+  } catch (e) {
+    console.warn('Failed to load current game title before rename:', e);
+  }
+
+  const newTitle = prompt('新しいゲームタイトルを入力してください:', actualCurrentTitle);
   
   if (newTitle === null || newTitle.trim() === '') {
+    isGameRenaming = false;
+    setGameButtonsDisabled(false);
     return; // キャンセルまたは空文字列
   }
+
+  const trimmedTitle = newTitle.trim();
+  const oldSaveDir = sanitizeGameTitleForStorageKey(actualCurrentTitle);
+  const newSaveDir = sanitizeGameTitleForStorageKey(trimmedTitle);
+  const oldGameId = gameId;
+  const newGameId = sanitizeGameTitleForStorageKey(trimmedTitle);
   
   try {
-    await storageManager.updateGameMetadata(gameId, {
-      name: newTitle.trim()
-    });
-    
-    console.log(`Updated game title: ${gameId} -> ${newTitle.trim()}`);
-    
-    // タイトルをその場で更新（リストを再読み込みせずに）
-    const titleElement = document.getElementById(`game-title-${gameId}`);
-    if (titleElement) {
-      titleElement.textContent = newTitle.trim();
+    // 1. セーブデータの移行
+    if (oldSaveDir !== newSaveDir) {
+      const copiedCount = await copySaveDirectoryForRenamedGame(oldSaveDir, newSaveDir);
+      console.log(`Copied ${copiedCount} save entries: ${oldSaveDir} -> ${newSaveDir}`);
+    }
+
+    // 2. ゲームIDとゲームディレクトリ自体の移行（games ストアおよび gameFiles ストアの更新）
+    if (oldGameId !== newGameId) {
+      await storageManager.renameGameId(oldGameId, newGameId);
+      console.log(`Renamed game metadata and files: ${oldGameId} -> ${newGameId}`);
+    } else {
+      // ID（サニタイズ後の名前）が変わらない場合でも、表示名（大文字小文字違いなど）だけ更新
+      await storageManager.updateGameMetadata(gameId, {
+        name: trimmedTitle
+      });
     }
     
     // リストも更新して他の情報も最新にする
     await loadSavedGamesList();
+    if (storageExplorer) {
+      storageExplorer._treeCache = null;
+      await storageExplorer.loadAll();
+      storageExplorer.render();
+    }
   } catch (e) {
     console.error('Failed to update game title:', e);
     alert('タイトルの更新に失敗しました: ' + e.message);
+  } finally {
+    isGameRenaming = false;
+    setGameButtonsDisabled(false);
   }
+}
+
+function cloneIdbfsEntry(entry) {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(entry);
+  }
+  return {
+    ...entry,
+    contents: entry && entry.contents instanceof Uint8Array
+      ? new Uint8Array(entry.contents)
+      : entry?.contents
+  };
+}
+
+function replaceSaveDirectoryInIdbfsKey(key, oldSaveDir, newSaveDir) {
+  const oldPrefix = `/Save/${oldSaveDir}`;
+  const newPrefix = `/Save/${newSaveDir}`;
+
+  if (key === oldPrefix) {
+    return newPrefix;
+  }
+  if (key.startsWith(oldPrefix + '/')) {
+    return newPrefix + key.substring(oldPrefix.length);
+  }
+
+  const embeddedOldPrefix = `${oldPrefix}/`;
+  const embeddedIndex = key.indexOf(embeddedOldPrefix);
+  if (embeddedIndex !== -1) {
+    return key.substring(0, embeddedIndex) + `${newPrefix}/` + key.substring(embeddedIndex + embeddedOldPrefix.length);
+  }
+
+  const legacyOldPrefix = `Save/${oldSaveDir}`;
+  const legacyNewPrefix = `Save/${newSaveDir}`;
+  if (key === legacyOldPrefix) {
+    return legacyNewPrefix;
+  }
+  if (key.startsWith(legacyOldPrefix + '/')) {
+    return legacyNewPrefix + key.substring(legacyOldPrefix.length);
+  }
+
+  return null;
+}
+
+async function copySaveDirectoryForRenamedGame(oldSaveDir, newSaveDir) {
+  if (!oldSaveDir || !newSaveDir || oldSaveDir === newSaveDir) {
+    return 0;
+  }
+
+  let dbInfos = [];
+  try {
+    dbInfos = await indexedDB.databases();
+  } catch (e) {
+    console.warn('indexedDB.databases() is unavailable; save copy skipped:', e);
+    return 0;
+  }
+
+  const saveDbNames = dbInfos
+    .map(db => db.name)
+    .filter(name => name && (name.endsWith('/Save') || name === 'Save'));
+
+  let copiedCount = 0;
+
+  for (const dbName of saveDbNames) {
+    copiedCount += await new Promise((resolve) => {
+      const req = indexedDB.open(dbName, 21);
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('FILE_DATA')) {
+          db.close();
+          resolve(0);
+          return;
+        }
+
+        const tx = db.transaction(['FILE_DATA'], 'readwrite');
+        const store = tx.objectStore('FILE_DATA');
+        const pendingCopies = [];
+        let count = 0;
+
+        store.openCursor().onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (!cursor) return;
+
+          const targetKey = replaceSaveDirectoryInIdbfsKey(String(cursor.key), oldSaveDir, newSaveDir);
+          if (targetKey) {
+            pendingCopies.push({ targetKey, value: cloneIdbfsEntry(cursor.value) });
+          }
+          cursor.continue();
+        };
+
+        tx.oncomplete = () => {
+          if (pendingCopies.length === 0) {
+            db.close();
+            resolve(0);
+            return;
+          }
+
+          const writeTx = db.transaction(['FILE_DATA'], 'readwrite');
+          const writeStore = writeTx.objectStore('FILE_DATA');
+
+          for (const copy of pendingCopies) {
+            const getReq = writeStore.get(copy.targetKey);
+            getReq.onsuccess = () => {
+              if (getReq.result !== undefined) return;
+              writeStore.put(copy.value, copy.targetKey);
+              count++;
+            };
+          }
+
+          writeTx.oncomplete = () => {
+            db.close();
+            resolve(count);
+          };
+          writeTx.onerror = () => {
+            console.warn(`Failed to copy save entries in ${dbName}:`, writeTx.error);
+            db.close();
+            resolve(count);
+          };
+        };
+
+        tx.onerror = () => {
+          console.warn(`Failed to read save entries in ${dbName}:`, tx.error);
+          db.close();
+          resolve(0);
+        };
+      };
+      req.onerror = () => {
+        console.warn(`Failed to open save database ${dbName}:`, req.error);
+        resolve(0);
+      };
+    });
+  }
+
+  return copiedCount;
 }
 
 // ZIP処理用のユーティリティ関数
@@ -3204,15 +4772,8 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
 
 // ZIP処理
 async function processZipFile(file) {
-  const startupDialog = document.getElementById('startup-dialog');
-  const statusDiv = document.getElementById('status');
-  
-  statusDiv.textContent = 'ZIPファイルを処理中...';
-  
   try {
     const arrayBuffer = await file.arrayBuffer();
-    
-    statusDiv.textContent = 'ZIPファイルを処理中...';
     
     // JSZipにdecodeFileNameオプションを追加してShift-JISに対応
     const zip = await JSZip.loadAsync(arrayBuffer, {
@@ -3255,19 +4816,39 @@ async function processZipFile(file) {
     // ファイル抽出
     const gameFiles = [];
     
-    // フォルダ構造を検出
-    let rootFolder = '';
+    // ゲームの真のルートフォルダ（RPG_RT.ldbが存在する場所）を検出
+    let gameRootPrefix = '';
     const filePaths = Object.keys(zip.files);
     
-    // 共通のルートフォルダを検出
-    if (filePaths.length > 0) {
-      const firstPath = filePaths[0];
-      const slashIndex = firstPath.indexOf('/');
-      if (slashIndex > 0) {
-        const potentialRoot = firstPath.substring(0, slashIndex + 1);
-        if (filePaths.every(p => p.startsWith(potentialRoot))) {
-          rootFolder = potentialRoot;
-          console.log(`Detected root folder: ${rootFolder}`);
+    // 1. RPG_RT.ldb（または rpg_rt.ini、rpg_rt.exe）を探す
+    let ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.ldb'));
+    if (!ldbEntry) {
+      ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.ini'));
+    }
+    if (!ldbEntry) {
+      ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.exe'));
+    }
+    
+    if (ldbEntry) {
+      const lastSlash = ldbEntry.lastIndexOf('/');
+      if (lastSlash !== -1) {
+        gameRootPrefix = ldbEntry.substring(0, lastSlash + 1); // "FolderName/" や "FolderName/Sub/"
+        console.log(`Detected game root directory from RPG_RT.ldb location: "${gameRootPrefix}"`);
+      } else {
+        gameRootPrefix = ''; // 直下にある
+        console.log('RPG_RT.ldb detected at zip root.');
+      }
+    } else {
+      // フォールバック: 従来の全ファイル共通親フォルダ検出
+      if (filePaths.length > 0) {
+        const firstPath = filePaths[0];
+        const slashIndex = firstPath.indexOf('/');
+        if (slashIndex > 0) {
+          const potentialRoot = firstPath.substring(0, slashIndex + 1);
+          if (filePaths.every(p => p.startsWith(potentialRoot))) {
+            gameRootPrefix = potentialRoot;
+            console.log(`Fallback detected root folder: "${gameRootPrefix}"`);
+          }
         }
       }
     }
@@ -3275,13 +4856,23 @@ async function processZipFile(file) {
     for (const [filename, zipEntry] of Object.entries(zip.files)) {
       if (zipEntry.dir) continue;
       
-      // ルートフォルダをスキップ
+      // ゲームの真のルートで始まらないファイル（ゲーム外のゴミやMacOS一時ファイル）は除外
+      if (gameRootPrefix && !filename.startsWith(gameRootPrefix)) {
+        continue;
+      }
+      
+      // パスからプレフィックスを削る
       let relativePath = filename;
-      if (rootFolder && filename.startsWith(rootFolder)) {
-        relativePath = filename.substring(rootFolder.length);
+      if (gameRootPrefix) {
+        relativePath = filename.substring(gameRootPrefix.length);
       }
       
       if (!relativePath) continue;
+      
+      // macOSなどのメタデータファイル（__MACOSXや.DS_Storeなど）は無視する
+      if (relativePath.includes('__MACOSX') || relativePath.split('/').some(part => part.startsWith('.'))) {
+        continue;
+      }
       
       const content = await zipEntry.async('uint8array');
       const base64Data = uint8ArrayToBase64(content);
@@ -3310,11 +4901,6 @@ async function processZipFile(file) {
 
     console.log(`Total files extracted: ${gameFiles.length}`);
     
-    // ダイアログを非表示
-    startupDialog.style.display = 'none';
-    
-    statusDiv.textContent = 'ゲームをロード中...';
-    
     // Base64からUint8Arrayに変換
     function base64ToUint8Array(base64) {
       const binary = atob(base64);
@@ -3325,19 +4911,68 @@ async function processZipFile(file) {
       return bytes;
     }
     
+    // ゲームタイトル（セーブ名や管理名）を決定
+    let gameTitle = 'Unknown Game';
+    if (gameRootPrefix) {
+      const parts = gameRootPrefix.split('/').filter(Boolean);
+      gameTitle = parts[parts.length - 1] || 'Unknown Game';
+    } else if (file && file.name) {
+      gameTitle = file.name.substring(0, file.name.lastIndexOf('.')) || 'Unknown Game';
+    }
+    
     // ファイルをUint8Array形式に変換
     const files = gameFiles.map(entry => ({
       path: entry.path,
       data: base64ToUint8Array(entry.data)
     }));
     
-    // EasyRPGを起動
-    await loadGameFiles(files, rootFolder || 'Unknown Game');
+    // ライブラリへ追加のみ（起動はしない）
+    await saveGameToLibrary(files, gameTitle);
     
   } catch (error) {
     console.error('Error processing ZIP:', error);
-    statusDiv.textContent = 'エラー: ' + error.message;
     alert('ZIPファイルの処理中にエラーが発生しました: ' + error.message);
+  }
+}
+
+// ゲームを起動せずにライブラリへ保存するだけの関数
+async function saveGameToLibrary(files, gameName) {
+  const fileInput = document.getElementById('game-file-input');
+  
+  // プレフィックス(games/ゲームID/)を一時的に除去
+  const cleanFiles = files.map(f => ({
+    path: f.path.replace(/^games\/[^/]+\//i, ''),
+    data: f.data
+  }));
+  
+  const gameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
+  
+  try {
+    await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
+    console.log('Game successfully saved to Library:', gameName);
+    
+    // ゲームリストを更新
+    await loadSavedGamesList();
+    
+    // ストレージエクスプローラーも同期して再ロード
+    if (typeof StorageExplorer !== 'undefined' && StorageExplorer.loadAll) {
+      await StorageExplorer.loadAll();
+    }
+    
+    // UIステートのリセット (画面遷移はせず、入力を空にしてリストに追加するだけ)
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  } catch (e) {
+    console.error('Failed to save game to Library:', e);
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    if (e.name === 'QuotaExceededError') {
+      alert('ストレージの容量が不足しています。他のゲームを削除してください。');
+    } else {
+      alert('ゲームの保存中にエラーが発生しました: ' + e.message);
+    }
   }
 }
 
@@ -3357,10 +4992,16 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   console.log(`Preparing ${files.length} files for EasyRPG...`);
   
   // ゲームを識別するためのハッシュを生成（RPG_RT.ldbの内容を使用）
+  // プレフィックス(games/ゲームID/)を一時的に除去してハッシュ生成やマージを行う
+  const cleanFiles = files.map(f => ({
+    path: f.path.replace(/^games\/[^/]+\//i, ''),
+    data: f.data
+  }));
+  
   let gameId = existingGameId;
   
   if (!gameId) {
-    const ldbFile = files.find(f => f.path.toLowerCase().endsWith('rpg_rt.ldb'));
+    const ldbFile = cleanFiles.find(f => f.path.toLowerCase().endsWith('rpg_rt.ldb'));
     gameId = 'default';
     
     if (ldbFile && ldbFile.data) {
@@ -3378,7 +5019,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   
   // IndexedDBにゲームデータを保存
   try {
-    await storageManager.saveGame(gameId, gameName || 'Unknown Game', files);
+    await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
     console.log('Game saved to IndexedDB');
     
     // ゲームリストを更新
@@ -3397,7 +5038,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   // インストール済みのRTPを順番（2000→2003）にマージする。
   // 既にある同名パスは上書きしないので、2000/2003を両方インストールしている場合は
   // 2000側の同名アセットが優先される。
-  let mergedFiles = [...files];
+  let mergedFiles = [...cleanFiles];
   
   try {
     statusDiv.textContent = 'RTPを確認中...';
@@ -3467,6 +5108,12 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     console.warn('Failed to load RTP:', e);
     // RTPの読み込みに失敗しても、ゲーム自体は起動を試みる
   }
+
+  try {
+    mergedFiles = await appendManagedConfigFiles(mergedFiles);
+  } catch (e) {
+    console.warn('Failed to apply managed font/soundfont settings:', e);
+  }
   
   // window.EASYRPG_GAME_TITLEにファイルを設定
   // ビルド済みのindex.jsのonPreRun関数がこれをチェックします
@@ -3483,25 +5130,50 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   // IndexedDBから読み込んだデータをその場で返せるようにする
   const fileMap = new Map();
   for (const f of mergedFiles) {
-    fileMap.set(f.path.toLowerCase(), f.data);
+    fileMap.set(normalizeGameAssetPath(f.path), f.data);
   }
   window.EASYRPG_FILE_MAP = fileMap;
   
   console.log('Custom files set, count:', mergedFiles.length);
   statusDiv.textContent = 'ゲームを起動中...';
   
-  // createEasyRpgPlayerを呼び出し
-  createEasyRpgPlayer({
-    game: '', // 空文字列を明示的に設定
-    saveFs: undefined
-  }).then(function(Module) {
+  // ゲーム起動前に IndexedDB へ設定やアセットを同期的に書き込み、クローズする
+  try {
+    await prepareAndInjectIdbfsAssets();
+  } catch (e) {
+    console.error('[loadGameFiles] Pre-launch asset injection failed:', e);
+  }
+
+  // index.js を動的にロードして実行を開始させる（DB競合を防ぐため）
+  console.log('[loadGameFiles] Dynamically loading index.js...');
+  try {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'index.js';
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load index.js'));
+      document.body.appendChild(script);
+    });
+  } catch (e) {
+    console.error('[loadGameFiles] Failed to load index.js script:', e);
+    statusDiv.textContent = 'エンジンのロードに失敗しました';
+    return;
+  }
+  
+  createEasyRpgPlayer(Module).then(function(Module) {
     console.log("EasyRPG Player initialized!");
+    window.EASYRPG_ACTIVE_MODULE = Module;
+    if (Module.FS) {
+      window.EASYRPG_FS = Module.FS;
+    }
+    hookSyncfs(Module); // Hook FS.syncfs using the active Module instance
     console.log("Module.arguments (before):", Module.arguments);
     
     // ゲームタイトルを使用してセーブパスを修正
     if (window.EASYRPG_GAME_TITLE) {
       const gameTitle = window.EASYRPG_GAME_TITLE;
-      const savePath = `Save/${gameTitle}`;
+      const savePath = `/Save/${gameTitle}`;
       
       // --save-path 引数のインデックスを探す
       const argIndex = Module.arguments.indexOf('--save-path');
@@ -3517,6 +5189,75 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     console.log("Module.arguments (after):", Module.arguments);
     console.log("Module.game:", Module.game);
     Module.initApi();
+
+    // Debug timer to verify Soundfont/Font files 5 seconds after initialization
+    setTimeout(() => {
+      const fsObj = typeof FS !== 'undefined' ? FS : (Module && Module.FS ? Module.FS : null);
+      if (fsObj) {
+        try {
+          console.log('[DEBUG-FS] Checking Soundfont/Font directories 5s after startup...');
+          const sfPath = '/home/web_user/.config/EasyRPG/Player/Soundfont';
+          const fontPath = '/home/web_user/.config/EasyRPG/Player/Font';
+          
+          if (fsObj.analyzePath(sfPath).exists) {
+            console.log('[DEBUG-FS] Files in Soundfont dir:', fsObj.readdir(sfPath));
+          } else {
+            console.log('[DEBUG-FS] Soundfont directory does NOT exist!');
+          }
+          
+          if (fsObj.analyzePath(fontPath).exists) {
+            console.log('[DEBUG-FS] Files in Font dir:', fsObj.readdir(fontPath));
+          } else {
+            console.log('[DEBUG-FS] Font directory does NOT exist!');
+          }
+        } catch (e) {
+          console.error('[DEBUG-FS] Error checking directories:', e);
+        }
+      } else {
+        console.warn('[DEBUG-FS] FS object not found for debug check!');
+      }
+    }, 5000);
+
+    // ゲーム内の「Settings > Upload Soundfont / Upload Font」で追加された
+    // ファイルを、外部の設定タブ（サウンドフォント/フォント管理）にも
+    // 自動的に反映する（EasyRPG本来の「アップロードして追加」機能との統合）。
+    // Module.initApi() が Module.api_private.uploadSoundfont_js / uploadFont_js
+    // を定義した直後にラップすることで、ネイティブの挙動（IDBFSへの書き込み・
+    // 即時反映）はそのまま維持しつつ、追加でstorageManager側にも保存する。
+    (function hookNativeAssetUploadsForSync() {
+      const originalUploadSoundfont = Module.api_private && Module.api_private.uploadSoundfont_js;
+      if (typeof originalUploadSoundfont === 'function') {
+        Module.api_private.uploadSoundfont_js = function () {
+          Module.api_private.createInputElement_js('easyrpg_sfFile', function (file, name) {
+            const result = new Uint8Array(file.currentTarget.result);
+            const content_buf = Module._malloc(result.length);
+            Module.HEAPU8.set(result, content_buf);
+            // ネイティブ側の処理（IDBFSへの書き込み・即時反映）は従来通り実行
+            Module.api_private.uploadSoundfontStep2(name, content_buf, result.length);
+            Module._free(content_buf);
+            Module.api.refreshScene();
+            // 追加: 外部の管理タブにも反映
+            syncNativeUploadedAsset('soundfont', name, result);
+          });
+        };
+      }
+
+      const originalUploadFont = Module.api_private && Module.api_private.uploadFont_js;
+      if (typeof originalUploadFont === 'function') {
+        Module.api_private.uploadFont_js = function () {
+          Module.api_private.createInputElement_js('easyrpg_sfFile', function (file, name) {
+            const result = new Uint8Array(file.currentTarget.result);
+            const content_buf = Module._malloc(result.length);
+            Module.HEAPU8.set(result, content_buf);
+            Module.api_private.uploadFontStep2(name, content_buf, result.length);
+            Module._free(content_buf);
+            Module.api.refreshScene();
+            syncNativeUploadedAsset('font', name, result);
+          });
+        };
+      }
+    })();
+
     canvas.focus();
   }).catch(function(error) {
     console.error("Failed to create EasyRPG Player:", error);
@@ -3536,12 +5277,10 @@ window.addEventListener('load', () => {
     const file = event.target.files[0];
     if (file) {
       const fileName = file.name.toLowerCase();
-      if (fileName.endsWith('.rar')) {
-        await processRarFile(file);
-      } else if (fileName.endsWith('.zip')) {
+      if (fileName.endsWith('.zip')) {
         await processZipFile(file);
       } else {
-        alert('対応していないファイル形式です。ZIPまたはRAR形式を選択してください。');
+        alert('対応していないファイル形式です。ZIPファイルを選択してください。');
       }
     }
   });
@@ -3565,7 +5304,68 @@ window.addEventListener('load', () => {
   
   wireRTPFileInput(rtp2000FileInput, { id: 'rtp2000', name: 'RPGツクール2000 RTP', dir: '2000' });
   wireRTPFileInput(rtp2003FileInput, { id: 'rtp2003', name: 'RPGツクール2003 RTP', dir: '2003' });
-  
+
+  // サウンドフォント/フォントの追加（ファイル選択→保存）
+  function wireAssetFileInput(inputId, type) {
+    const inputEl = document.getElementById(inputId);
+    if (!inputEl) return;
+    inputEl.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        try {
+          await saveAssetFromFile(type, file);
+        } catch (e) {
+          console.error(`Failed to save asset (${type}):`, e);
+          alert('ファイルの保存に失敗しました: ' + e.message);
+        }
+      }
+      // 同じファイルを再選択したときにもchangeイベントが発火するようリセット
+      inputEl.value = '';
+    });
+  }
+
+  wireAssetFileInput('soundfont-file-input', 'soundfont');
+  wireAssetFileInput('font1-file-input', 'font1');
+  wireAssetFileInput('font2-file-input', 'font2');
+
+  // サウンドフォント/フォントの選択（ドロップダウン→設定に反映）
+  function wireAssetSelect(selectId, settingKey) {
+    const selectEl = document.getElementById(selectId);
+    if (!selectEl) return;
+    selectEl.addEventListener('change', async (event) => {
+      try {
+        await storageManager.updateSettings({ [settingKey]: event.target.value });
+        await loadAssetSettings();
+      } catch (e) {
+        console.error(`Failed to update setting (${settingKey}):`, e);
+        alert('設定の保存に失敗しました: ' + e.message);
+      }
+    });
+  }
+
+  wireAssetSelect('soundfont-select', 'soundfont');
+  wireAssetSelect('font1-select', 'font1');
+  wireAssetSelect('font2-select', 'font2');
+
+  // Virtual controller keypad toggle
+  const keypadBtn = document.getElementById('controls-keypad');
+  const dpad = document.getElementById('dpad');
+  const apad = document.getElementById('apad');
+
+  if (dpad) dpad.style.display = 'none';
+  if (apad) apad.style.display = 'none';
+  if (keypadBtn) {
+    keypadBtn.style.opacity = '0.5';
+    keypadBtn.addEventListener('click', () => {
+      if (dpad && apad) {
+        const isHidden = dpad.style.display === 'none';
+        dpad.style.display = isHidden ? 'block' : 'none';
+        apad.style.display = isHidden ? 'block' : 'none';
+        keypadBtn.style.opacity = isHidden ? '1' : '0.5';
+      }
+    });
+  }
+
   // Fullscreen button
   document.querySelector('#controls-fullscreen').addEventListener('click', () => {
     const viewport = document.getElementById('viewport');
@@ -3580,8 +5380,187 @@ window.addEventListener('load', () => {
 <!-- Module initialization hook to set proper save path before index.js loads -->
 <script>
 // This will intercept Module creation to set the proper save path
+// This will intercept Module creation to set the proper save path
 var Module = Module || {};
 Module.preRun = Module.preRun || [];
+Module.onRuntimeInitialized = undefined;
+
+// Hook indexedDB.open to monitor config database write transactions and trigger reverse sync
+(function hookConfigDBWrites() {
+  const originalIndexedDBOpen = window.indexedDB.open;
+  window.indexedDB.open = function(name, version) {
+    const req = originalIndexedDBOpen.apply(this, arguments);
+    if (name === '/home/web_user/.config') {
+      req.addEventListener('success', function(event) {
+        const db = event.target.result;
+        console.log('[IDB-Hook] Hooked IndexedDB database successfully:', name);
+        
+        // Intercept db.transaction to catch any transaction complete events
+        const originalTransaction = db.transaction;
+        db.transaction = function(storeNames, mode) {
+          console.log('[IDB-Hook] db.transaction requested for:', name, 'store:', storeNames, 'mode:', mode);
+          const tx = originalTransaction.apply(this, arguments);
+          
+          tx.addEventListener('complete', function() {
+            console.log('[IDB-Hook] config database transaction completed:', name);
+            const activeFS = window.EASYRPG_FS || (typeof FS !== 'undefined' ? FS : (typeof Module !== 'undefined' && Module.FS ? Module.FS : null));
+            if (activeFS) {
+              syncConfigIniToSettings(activeFS);
+            }
+          });
+          return tx;
+        };
+      });
+    }
+    return req;
+  };
+})();
+
+// Function to prepare and perform pre-launch asset injection into the IDBFS IndexedDB database
+async function prepareAndInjectIdbfsAssets() {
+  if (!window.EASYRPG_CUSTOM_FILES) return;
+  
+  // Filter assets that are target to be synced on the config mount point
+  const configFiles = window.EASYRPG_CUSTOM_FILES.filter(f => f.path.startsWith('/home/web_user/.config/'));
+  if (configFiles.length === 0) {
+    console.log('[PRE-LAUNCH] No config assets to inject.');
+    return;
+  }
+  
+  console.log('[PRE-LAUNCH] Injecting config/assets into /home/web_user/.config database...');
+  
+  return new Promise((resolve, reject) => {
+    // Open the /home/web_user/.config database (Emscripten IDBFS default) with version 21
+    const req = indexedDB.open('/home/web_user/.config', 21);
+    
+    req.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('FILE_DATA')) {
+        db.createObjectStore('FILE_DATA');
+      }
+    };
+    
+    req.onsuccess = async (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('FILE_DATA')) {
+        db.close();
+        reject(new Error('FILE_DATA store missing in config database'));
+        return;
+      }
+      
+      try {
+        await performIdbfsInjection(db, '/home/web_user/.config', configFiles);
+        db.close();
+        resolve();
+      } catch (e) {
+        db.close();
+        reject(e);
+      }
+    };
+    
+    req.onerror = () => {
+      reject(req.error);
+    };
+  });
+}
+
+async function performIdbfsInjection(db, dbName, targetFiles) {
+  const prefix = dbName.endsWith('/') ? dbName : dbName + '/';
+  
+  // Prepare entries including all required parent directories
+  const idbEntries = new Map(); // path -> entry
+  
+  targetFiles.forEach(file => {
+    const filePath = file.path;
+    // Add file entry (mode 33206 = 0100000 | 0666)
+    idbEntries.set(filePath, {
+      timestamp: new Date(),
+      mode: 33206,
+      contents: file.data
+    });
+    
+    // Auto-create parent directory nodes down to the mount point
+    let currentDir = filePath;
+    while (true) {
+      const lastSlash = currentDir.lastIndexOf('/');
+      if (lastSlash === -1 || lastSlash < prefix.length) {
+        break; // Reached mount root
+      }
+      currentDir = currentDir.substring(0, lastSlash);
+      if (!idbEntries.has(currentDir)) {
+        idbEntries.set(currentDir, {
+          timestamp: new Date(),
+          mode: 16877, // 0040000 | 0755 (directory)
+          contents: undefined
+        });
+      }
+    }
+  });
+  
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['FILE_DATA'], 'readwrite');
+    const store = tx.objectStore('FILE_DATA');
+    
+    let pending = idbEntries.size;
+    let hasError = false;
+    
+    idbEntries.forEach((entry, key) => {
+      const req = store.put(entry, key);
+      req.onsuccess = () => {
+        pending--;
+        if (pending === 0 && !hasError) {
+          console.log(`[PRE-LAUNCH] All matching directories and assets (${idbEntries.size} entries) injected successfully into database ${dbName}.`);
+          resolve();
+        }
+      };
+      req.onerror = () => {
+        hasError = true;
+        console.error(`[PRE-LAUNCH] Failed to write ${key}`);
+        reject(req.error);
+      };
+    });
+    
+    tx.oncomplete = () => {
+      if (pending === 0) resolve();
+    };
+    tx.onerror = () => {
+      reject(tx.error);
+    };
+  });
+}
+
+// Helper to hook FS.syncfs to detect in-game config changes and sync back to indexedDB settings
+function hookSyncfs(activeModule) {
+  console.log('[hookSyncfs] Attempting to patch FS.syncfs. activeModule:', activeModule ? 'provided' : 'not provided');
+  const targetFS = (activeModule && activeModule.FS) ? activeModule.FS : (typeof FS !== 'undefined' ? FS : (typeof Module !== 'undefined' && Module.FS ? Module.FS : null));
+  if (targetFS) {
+    console.log('[hookSyncfs] Target FS object successfully resolved!');
+  } else {
+    console.warn('[hookSyncfs] Target FS object NOT resolved yet.');
+  }
+  
+  if (targetFS && targetFS.syncfs && !targetFS.syncfs.__patched) {
+    const originalSyncfs = targetFS.syncfs;
+    targetFS.syncfs = function(populate, callback) {
+      console.log('[hookSyncfs] FS.syncfs called. populate:', populate);
+      return originalSyncfs.call(this, populate, function(err) {
+        if (!err) {
+          console.log('[hookSyncfs] FS.syncfs execution succeeded. Triggering syncConfigIniToSettings...');
+          syncConfigIniToSettings(targetFS);
+        } else {
+          console.error('[hookSyncfs] FS.syncfs execution failed:', err);
+        }
+        if (callback) {
+          callback(err);
+        }
+      });
+    };
+    targetFS.syncfs.__patched = true;
+    console.log('[hookSyncfs] FS.syncfs successfully patched for settings reverse-synchronization');
+  } else if (targetFS && targetFS.syncfs && targetFS.syncfs.__patched) {
+    console.log('[hookSyncfs] FS.syncfs already patched. Skipping.');
+  }
+}
 
 // Hook to modify arguments before the game runs
 Module.preRun.push(function() {
@@ -3590,14 +5569,110 @@ Module.preRun.push(function() {
     const gameTitle = window.EASYRPG_GAME_TITLE;
     const argIndex = Module.arguments.indexOf('--save-path');
     if (argIndex !== -1 && argIndex + 1 < Module.arguments.length) {
-      Module.arguments[argIndex + 1] = `Save/${gameTitle}`;
-      console.log(`[Module.preRun] Updated save path to: Save/${gameTitle}`);
+      Module.arguments[argIndex + 1] = `/Save/${gameTitle}`;
+      console.log(`[Module.preRun] Updated save path to: /Save/${gameTitle}`);
     }
   }
 });
+
+// Double check hook on runtime initialized
+if (typeof Module.onRuntimeInitialized === 'function') {
+  const origRuntimeInit = Module.onRuntimeInitialized;
+  Module.onRuntimeInitialized = function() {
+    origRuntimeInit();
+    hookSyncfs(this);
+  };
+} else {
+  Module.onRuntimeInitialized = function() {
+    hookSyncfs(this);
+  };
+}
+
+// Function to read config.ini and sync its values back to indexedDB settings
+async function syncConfigIniToSettings(targetFS) {
+  console.log('[syncConfigIniToSettings] Executing sync check for config.ini...');
+  const fsObj = targetFS || window.EASYRPG_FS || (typeof FS !== 'undefined' ? FS : (typeof Module !== 'undefined' && Module.FS ? Module.FS : null));
+  try {
+    if (!fsObj) {
+      console.warn('[syncConfigIniToSettings] fsObj is missing. Cannot proceed.');
+      return;
+    }
+    try {
+      if (!fsObj.analyzePath('/home/web_user/.config/EasyRPG/Player/config.ini').exists) {
+        console.log('[syncConfigIniToSettings] config.ini does not exist on filesystem.');
+        return;
+      }
+    } catch (e) {
+      console.warn('[syncConfigIniToSettings] Failed to analyze config.ini path:', e);
+      return; // Path does not exist or error
+    }
+    
+    const content = fsObj.readFile('/home/web_user/.config/EasyRPG/Player/config.ini', { encoding: 'utf8' });
+    
+    // config.ini simple parser
+    let soundfont = null;
+    let font1 = null;
+    let font2 = null;
+    
+    const lines = content.split('\n');
+    let section = '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(';')) continue;
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        section = trimmed.substring(1, trimmed.length - 1).toLowerCase();
+        continue;
+      }
+      
+      const parts = trimmed.split('=');
+      if (parts.length >= 2) {
+        const key = parts[0].trim().toLowerCase();
+        const value = parts.slice(1).join('=').trim();
+        
+        if (section === 'audio' && key === 'soundfont') {
+          // Extract only the filename from the path
+          soundfont = value.split('/').pop() || '';
+        } else if (section === 'player') {
+          if (key === 'font1') {
+            font1 = value.split('/').pop() || '';
+          } else if (key === 'font2') {
+            font2 = value.split('/').pop() || '';
+          }
+        }
+      }
+    }
+    
+    if (storageManager) {
+      const settings = await storageManager.getSettings();
+      const updates = {};
+      let changed = false;
+      
+      if (soundfont !== null && soundfont !== settings.soundfont) {
+        updates.soundfont = soundfont;
+        changed = true;
+      }
+      if (font1 !== null && font1 !== settings.font1) {
+        updates.font1 = font1;
+        changed = true;
+      }
+      if (font2 !== null && font2 !== settings.font2) {
+        updates.font2 = font2;
+        changed = true;
+      }
+      
+      if (changed) {
+        await storageManager.updateSettings(updates);
+        await loadAssetSettings();
+        console.log('[syncConfigIniToSettings] Synchronized in-game settings to manager tab:', updates);
+      }
+    }
+  } catch (e) {
+    console.warn('[syncConfigIniToSettings] Failed to sync config.ini:', e);
+  }
+}
 </script>
 
-<script async type="text/javascript" src="index.js"></script>
+
 
 </body>
 </html>
