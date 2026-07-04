@@ -4,6 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RPGツクール2000/2003 ゲームローダー</title>
+
+  <script>
+    // モバイル端末ではアドレスバーの表示/非表示でCSSの100vh/100dvhが
+    // 実際の表示領域より大きくなる場合がある（環境によりdvhが効かないこともある）。
+    // window.visualViewport / innerHeight から実測した高さを --app-height に反映し、
+    // #viewport のCSSはこちらを優先して使う。
+    (function () {
+      function setAppHeight() {
+        const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+        document.documentElement.style.setProperty('--app-height', h + 'px');
+      }
+      setAppHeight();
+      window.addEventListener('resize', setAppHeight);
+      window.addEventListener('orientationchange', function () {
+        [0, 50, 150, 300, 600, 1000].forEach((delay) => setTimeout(setAppHeight, delay));
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setAppHeight);
+      }
+    })();
+  </script>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- RAR解凍用ライブラリ -->
@@ -745,9 +766,11 @@
     #viewport {
       position: fixed;
       inset: 0;
-      /* dvh gracefully falls back to full height on browsers without support */
+      /* --app-height is kept in sync with the real visible height by JS (see script near </body>).
+         100dvh/100vh are just a fallback for the brief moment before that JS runs. */
       height: 100vh;
       height: 100dvh;
+      height: var(--app-height, 100dvh);
       overflow: hidden;
     }
 
