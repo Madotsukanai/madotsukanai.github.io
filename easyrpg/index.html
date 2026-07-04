@@ -6,6 +6,19 @@
   <title>RPGツクール2000/2003 ゲームローダー</title>
 
   <script>
+    // スクリーンショット撮影（canvas.toDataURL）時に画面が真っ白/真っ黒になるのを防ぐため、
+    // 描画バッファを保持するオプションを強制適用する。
+    (function() {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, attributes) {
+        if (type === 'webgl' || type === 'experimental-webgl' || type === 'webgl2') {
+          attributes = attributes || {};
+          attributes.preserveDrawingBuffer = true;
+        }
+        return originalGetContext.call(this, type, attributes);
+      };
+    })();
+
     // モバイル端末ではアドレスバーの表示/非表示でCSSの100vh/100dvhが
     // 実際の表示領域より大きくなる場合がある（環境によりdvhが効かないこともある）。
     // window.visualViewport / innerHeight から実測した高さを --app-height に反映し、
@@ -868,6 +881,34 @@
     #dpad path:not(.active),
     #apad > *:not(.active) {
       opacity: 0.4;
+    }
+
+    #syspad {
+      position: fixed;
+      left: 1rem;
+      bottom: calc(2 * var(--controls-size) + 2rem + var(--mini-size));
+      z-index: 10;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    #syspad-screenshot,
+    #syspad-help {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: calc(2 * var(--mini-size));
+      height: var(--mini-size);
+      background-color: var(--color-gray);
+      border-radius: 0.4rem;
+      color: #fff;
+      opacity: 0.6;
+      cursor: pointer;
+    }
+
+    #syspad-screenshot:active,
+    #syspad-help:active {
+      opacity: 1;
     }
 
     #shiftpad {
@@ -1887,6 +1928,11 @@ Public License instead of this License.  But first, please read
       <div id="apad-enter" data-key="Enter"></div>
     </div>
 
+    <div id="syspad" class="unselectable">
+      <div id="syspad-screenshot" title="スクリーンショット">📸</div>
+      <div id="syspad-help" title="操作ヘルプ">❓</div>
+    </div>
+
     <div id="shiftpad" class="unselectable">
       <div id="shiftpad-shift" data-key="ShiftLeft">Shift</div>
     </div>
@@ -2852,6 +2898,7 @@ function applyVirtualControllerVisibility(visible) {
   const apad = document.getElementById('apad');
   const shiftpad = document.getElementById('shiftpad');
   const numpad = document.getElementById('numpad');
+  const syspad = document.getElementById('syspad');
   const keypadBtn = document.getElementById('controls-keypad');
   const checkbox = document.getElementById('virtual-controller-checkbox');
 
@@ -2859,6 +2906,7 @@ function applyVirtualControllerVisibility(visible) {
   if (apad) apad.style.display = visible ? 'block' : 'none';
   if (shiftpad) shiftpad.style.display = visible ? 'block' : 'none';
   if (numpad) numpad.style.display = visible ? 'grid' : 'none';
+  if (syspad) syspad.style.display = visible ? 'flex' : 'none';
   if (keypadBtn) keypadBtn.style.opacity = visible ? '1' : '0.5';
   if (checkbox) checkbox.checked = visible;
 }
@@ -3258,6 +3306,7 @@ class StorageExplorer {
             const relPath = s.path.replace(/^\//, '');
             
             const isConfigIni = s.path.endsWith('/config.ini') || relPath === 'config.ini';
+            const isScreenshot = s.path.includes('/Screenshots/');
             
             if (isConfigIni) {
               // Ignore config.ini if it comes from a database other than /home/web_user/.config
@@ -3286,6 +3335,20 @@ class StorageExplorer {
               cleanPath = 'config.ini';
               // Save the actual IDBFS key globally so updateSettings can use it
               window.EASYRPG_ACTUAL_CONFIG_PATH = s.path;
+            } else if (isScreenshot) {
+              groupType = 'screenshot';
+              groupName = 'スクリーンショット';
+              groupPath = 'Screenshots';
+              const ssIndex = cleanPath.indexOf('/Screenshots/');
+              if (ssIndex !== -1) {
+                cleanPath = 'Screenshots/' + cleanPath.substring(ssIndex + 13);
+              } else {
+                // For keys like "Save/Screenshots/..."
+                const saveSsIndex = cleanPath.indexOf('Screenshots/');
+                if (saveSsIndex !== -1) {
+                  cleanPath = 'Screenshots/' + cleanPath.substring(saveSsIndex + 12);
+                }
+              }
             } else {
               // 先頭の "/customgame/Save/" や "/easyrpg/XXX/Save/" などを除去して
               // エクスプローラー上で "Save/勇者と異常者/Save01.lsd" に統一する
@@ -3309,7 +3372,8 @@ class StorageExplorer {
               name: this._basename(cleanPath),
               size: s.value.contents ? s.value.contents.byteLength || s.value.contents.length : 0,
               data: s.value.contents,
-              date: s.value.timestamp ? new Date(s.value.timestamp).toISOString() : null
+              date: s.value.timestamp ? new Date(s.value.timestamp).toISOString() : null,
+              originalKey: s.path
             });
           }
         }
@@ -3473,7 +3537,8 @@ class StorageExplorer {
         date: f.date,
         data: f.data,
         groupType: f.groupType,
-        groupId: f.groupId
+        groupId: f.groupId,
+        originalKey: f.originalKey
       });
     }
 
@@ -3570,10 +3635,12 @@ class StorageExplorer {
       } else {
         this.selectedPaths.add(selectionKey);
       }
-    } else if (event && event.shiftKey && this.lastClickedPath) {
+      this.selectionAnchorPath = selectionKey;
+    } else if (event && event.shiftKey && this.selectionAnchorPath) {
       // Shift+クリック: 範囲選択
+      this.selectedPaths.clear();
       const items = this.getCurrentItems();
-      const idxA = items.findIndex(i => i.selectionKey === this.lastClickedPath);
+      const idxA = items.findIndex(i => i.selectionKey === this.selectionAnchorPath);
       const idxB = items.findIndex(i => i.selectionKey === selectionKey);
       if (idxA >= 0 && idxB >= 0) {
         const start = Math.min(idxA, idxB);
@@ -3586,6 +3653,7 @@ class StorageExplorer {
       // 通常クリック: 単一選択
       this.selectedPaths.clear();
       this.selectedPaths.add(selectionKey);
+      this.selectionAnchorPath = selectionKey;
     }
     this.lastClickedPath = selectionKey;
     this._syncSelectionState();
@@ -3839,7 +3907,7 @@ class StorageExplorer {
     }
   }
 
-  async _removeFileFromGroup(groupType, groupId, relativePath) {
+  async _removeFileFromGroup(groupType, groupId, relativePath, originalKey) {
     try {
       if (groupType === 'game') {
         const gameData = await storageManager.getGame(groupId);
@@ -3853,7 +3921,7 @@ class StorageExplorer {
           const files = (rtpData.files || []).filter(f => f.path !== relativePath);
           await storageManager.saveRTP(groupId, rtpData.name, files);
         }
-      } else if (groupType === 'save' || groupType === 'config') {
+      } else if (groupType === 'save' || groupType === 'config' || groupType === 'screenshot') {
         // IDBFS データベース (groupIdに格納された dbName) の "FILE_DATA" から削除
         await new Promise((resolve, reject) => {
           const req = indexedDB.open(groupId, 21);
@@ -3863,7 +3931,9 @@ class StorageExplorer {
             const store = tx.objectStore('FILE_DATA');
             
             let key;
-            if (groupType === 'config') {
+            if (originalKey) {
+              key = originalKey;
+            } else if (groupType === 'config') {
               if (relativePath === 'config.ini' && window.EASYRPG_ACTUAL_CONFIG_PATH) {
                 key = window.EASYRPG_ACTUAL_CONFIG_PATH;
               } else {
@@ -3914,15 +3984,13 @@ class StorageExplorer {
         // ディレクトリ配下の全ファイルを削除
         const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
         for (const entry of dirEntries) {
-          const groupInfo = { groupType: entry.groupType, groupId: entry.groupId, relativePath: entry.path };
-          if (groupInfo && groupInfo.groupType) {
-            await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+          if (entry.groupType) {
+            await this._removeFileFromGroup(entry.groupType, entry.groupId, entry.path, entry.originalKey);
           }
         }
       } else {
-        const groupInfo = { groupType: item.groupType, groupId: item.groupId, relativePath: item.fullPath };
-        if (groupInfo && groupInfo.groupType) {
-          await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+        if (item.groupType) {
+          await this._removeFileFromGroup(item.groupType, item.groupId, item.fullPath, item.originalKey);
         }
       }
     }
@@ -4479,8 +4547,11 @@ class StorageExplorer {
         } else {
           const ext = this._getExtension(item.name);
           const isText = ['txt', 'ini', 'json', 'xml', 'keep'].includes(ext);
+          const isImage = ['png', 'jpg', 'jpeg', 'bmp', 'gif'].includes(ext);
           if (isText) {
             await this.editTextSelected(item);
+          } else if (isImage) {
+            await this.viewImageSelected(item);
           } else {
             const data = await this._fetchFileData(item);
             if (data) {
@@ -4498,6 +4569,38 @@ class StorageExplorer {
 
       container.appendChild(row);
     }
+  }
+
+  async viewImageSelected(item) {
+    const data = await this._fetchFileData(item);
+    if (!data) return;
+    
+    // Uint8Array -> Blob -> URL
+    const blob = new Blob([data], { type: this._getMimeType(item.name) });
+    const url = URL.createObjectURL(blob);
+    
+    const modal = document.getElementById('image-viewer-modal');
+    const img = document.getElementById('image-viewer-img');
+    const title = document.getElementById('image-viewer-title');
+    if (!modal || !img || !title) return;
+    
+    title.textContent = item.name;
+    img.src = url;
+    modal.style.display = 'flex';
+    
+    const closeBtn = document.getElementById('image-viewer-close');
+    closeBtn.onclick = () => {
+      modal.style.display = 'none';
+      URL.revokeObjectURL(url);
+    };
+  }
+
+  _getMimeType(name) {
+    const ext = this._getExtension(name);
+    const map = {
+      png: 'image/png', bmp: 'image/bmp', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif'
+    };
+    return map[ext] || 'application/octet-stream';
   }
 
   _renderStatusBar() {
@@ -4767,6 +4870,35 @@ function _initExplorerEvents() {
     } else if (e.altKey && e.key === 'ArrowUp') {
       e.preventDefault();
       se.goUp();
+    } else if (!e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const items = se.getCurrentItems();
+      if (items.length === 0) return;
+      
+      let currentIndex = -1;
+      if (se.lastClickedPath) {
+        currentIndex = items.findIndex(i => i.selectionKey === se.lastClickedPath);
+      }
+      if (currentIndex === -1 && se.selectedPaths.size > 0) {
+        const firstSelected = Array.from(se.selectedPaths)[0];
+        currentIndex = items.findIndex(i => i.selectionKey === firstSelected);
+      }
+      
+      let nextIndex = e.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
+      if (currentIndex === -1) nextIndex = 0;
+      if (nextIndex < 0) nextIndex = 0;
+      if (nextIndex >= items.length) nextIndex = items.length - 1;
+      
+      const nextItem = items[nextIndex];
+      
+      if (e.shiftKey) {
+        se.toggleSelect(nextItem, { shiftKey: true });
+      } else {
+        se.toggleSelect(nextItem, { shiftKey: false });
+      }
+      
+      const row = fileList.children[nextIndex];
+      if (row) row.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'Escape') {
       se.deselectAll();
       se.hideContextMenu();
@@ -6281,6 +6413,124 @@ window.addEventListener('load', () => {
     });
   })();
 
+  function takeScreenshot() {
+    const canvas = document.getElementById('canvas');
+    if (!canvas) return;
+    try {
+      // EasyRPG (RPG Maker 2000/2003) のアスペクト比は 4:3 
+      const targetRatio = 4 / 3;
+      const canvasRatio = canvas.width / canvas.height;
+      
+      let sx = 0, sy = 0, sw = canvas.width, sh = canvas.height;
+      
+      if (canvasRatio > targetRatio + 0.01) {
+        // 左右に帯がある場合 (Pillarboxing)
+        sw = canvas.height * targetRatio;
+        sx = (canvas.width - sw) / 2;
+      } else if (canvasRatio < targetRatio - 0.01) {
+        // 上下に帯がある場合 (Letterboxing)
+        sh = canvas.width / targetRatio;
+        sy = (canvas.height - sh) / 2;
+      }
+
+      // 帯を切り落とすための一時キャンバスを作成
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = sw;
+      tempCanvas.height = sh;
+      const ctx = tempCanvas.getContext('2d');
+      // 画像をクロップして描画
+      ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+      
+      const dataUrl = tempCanvas.toDataURL('image/png');
+      const title = window.EASYRPG_GAME_TITLE || 'easyrpg';
+      
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+      const timestamp = `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
+      const filename = `${title}_${timestamp}.png`;
+      
+      const base64Data = dataUrl.split(',')[1];
+      const byteString = atob(base64Data);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      
+      const req = indexedDB.open('Save', 21);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('FILE_DATA')) {
+          db.createObjectStore('FILE_DATA');
+        }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('FILE_DATA')) {
+          db.close();
+          return;
+        }
+        const tx = db.transaction(['FILE_DATA'], 'readwrite');
+        const store = tx.objectStore('FILE_DATA');
+        store.put({
+          timestamp: new Date(),
+          mode: 33206,
+          contents: ia
+        }, 'Save/Screenshots/' + filename);
+        
+        tx.oncomplete = () => {
+          if (typeof storageExplorer !== 'undefined' && storageExplorer) {
+            storageExplorer._treeCache = null;
+            storageExplorer.loadAll().then(() => storageExplorer.render());
+          }
+        };
+      };
+      
+      // 撮影時のフラッシュ演出
+      const originalOpacity = canvas.style.opacity || '1';
+      canvas.style.opacity = '0.5';
+      setTimeout(() => { canvas.style.opacity = originalOpacity; }, 100);
+    } catch (e) {
+      console.error('Screenshot failed:', e);
+      alert('スクリーンショットの保存に失敗しました。WebGLコンテキストの設定等を確認してください。');
+    }
+  }
+
+  const syspadScreenshot = document.getElementById('syspad-screenshot');
+  if (syspadScreenshot) {
+    syspadScreenshot.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      takeScreenshot();
+    });
+  }
+
+  const syspadHelp = document.getElementById('syspad-help');
+  const controlsHelpModal = document.getElementById('controls-help-modal');
+  const controlsHelpClose = document.getElementById('controls-help-close');
+  
+  if (syspadHelp && controlsHelpModal && controlsHelpClose) {
+    syspadHelp.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      controlsHelpModal.style.display = 'flex';
+    });
+    controlsHelpClose.addEventListener('click', () => {
+      controlsHelpModal.style.display = 'none';
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'F8' || e.key === 'PrintScreen') {
+      e.preventDefault();
+      takeScreenshot();
+    }
+  });
+
   // Fullscreen button
   document.querySelector('#controls-fullscreen').addEventListener('click', () => {
     const viewport = document.getElementById('viewport');
@@ -6640,6 +6890,42 @@ async function syncConfigIniToSettings(targetFS) {
     <div style="display:flex; justify-content: flex-end; gap: 12px;">
       <button id="text-editor-cancel" style="background:#444; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#555'" onmouseout="this.style.background='#444'">キャンセル</button>
       <button id="text-editor-save" style="background:#007acc; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#008be6'" onmouseout="this.style.background='#007acc'">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 画像プレビュー用モーダル -->
+<div id="image-viewer-modal" style="display:none; z-index: 10000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+  <div style="background: #202020; color: #fff; max-width: 90vw; max-height: 90vh; width: 800px; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.5); border: 1px solid #333;">
+    <h3 id="image-viewer-title" style="margin-top:0; font-weight: 500; font-size: 1.25rem; border-bottom: 1px solid #333; padding-bottom: 10px; flex-shrink: 0;">画像プレビュー</h3>
+    <div style="flex: 1; margin: 15px 0; display: flex; align-items: center; justify-content: center; overflow: hidden; min-height: 0; min-width: 0;">
+      <img id="image-viewer-img" src="" alt="preview" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
+    </div>
+    <div style="display:flex; justify-content: flex-end; flex-shrink: 0;">
+      <button id="image-viewer-close" style="background:#007acc; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#008be6'" onmouseout="this.style.background='#007acc'">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 操作ヘルプ用モーダル -->
+<div id="controls-help-modal" style="display:none; z-index: 10000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+  <div style="background: #202020; color: #fff; max-width: 90vw; max-height: 90vh; width: 600px; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.5); border: 1px solid #333; overflow-y: auto;">
+    <h3 style="margin-top:0; font-weight: 500; font-size: 1.25rem; border-bottom: 1px solid #333; padding-bottom: 10px;">操作方法</h3>
+    <table style="width: 100%; text-align: left; border-collapse: collapse; margin-top: 10px;">
+      <tr>
+        <th style="padding: 10px; border-bottom: 1px solid #444;">キーボード</th>
+        <th style="padding: 10px; border-bottom: 1px solid #444;">操作</th>
+      </tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">方向キー</td><td style="padding: 10px; border-bottom: 1px solid #333;">移動・選択</td></tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">Enter / Z / Space</td><td style="padding: 10px; border-bottom: 1px solid #333;">決定・調べる</td></tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">Esc / X / Num0 / Insert</td><td style="padding: 10px; border-bottom: 1px solid #333;">キャンセル・メニュー</td></tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">Shift</td><td style="padding: 10px; border-bottom: 1px solid #333;">ダッシュ (対応ゲームのみ)</td></tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">F4</td><td style="padding: 10px; border-bottom: 1px solid #333;">フルスクリーン切り替え</td></tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">F5</td><td style="padding: 10px; border-bottom: 1px solid #333;">解像度切り替え</td></tr>
+      <tr><td style="padding: 10px; border-bottom: 1px solid #333;">F8 / PrintScreen</td><td style="padding: 10px; border-bottom: 1px solid #333;">スクリーンショット保存</td></tr>
+    </table>
+    <div style="display:flex; justify-content: flex-end; margin-top: 20px;">
+      <button id="controls-help-close" style="background:#007acc; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#008be6'" onmouseout="this.style.background='#007acc'">閉じる</button>
     </div>
   </div>
 </div>
