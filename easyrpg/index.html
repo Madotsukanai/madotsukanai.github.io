@@ -4255,6 +4255,41 @@ function setGameButtonsDisabled(disabled) {
   });
 }
 
+// Function to return to the startup menu when the game ends
+function returnToTopMenu() {
+  console.log('[returnToTopMenu] Re-displaying the top menu...');
+  
+  // 1. スタートアップダイアログ（ゲーム選択画面）を再表示
+  const startupDialog = document.getElementById('startup-dialog');
+  if (startupDialog) {
+    startupDialog.style.display = 'block';
+  }
+  
+  // 2. ステータス表示のリセット
+  const statusDiv = document.getElementById('status');
+  if (statusDiv) {
+    statusDiv.textContent = 'ZIPファイルを選択してください...';
+  }
+  
+  // 3. 多重起動防止フラグとボタン状態の解除
+  isGameLoading = false;
+  isGameDeleting = false;
+  isGameRenaming = false;
+  setGameButtonsDisabled(false);
+  
+  // 4. キー入力のフォーカスを解除してブラウザに戻す
+  const canvas = document.getElementById('canvas');
+  if (canvas) {
+    canvas.blur();
+  }
+  
+  // 5. 確実にゲーム一覧リストとストレージを最新状態に再ロードしておく
+  loadSavedGamesList();
+  if (typeof StorageExplorer !== 'undefined' && StorageExplorer.loadAll) {
+    StorageExplorer.loadAll();
+  }
+}
+
 let isGameLoading = false;
 let isGameDeleting = false;
 let isGameRenaming = false;
@@ -5384,6 +5419,20 @@ window.addEventListener('load', () => {
 var Module = Module || {};
 Module.preRun = Module.preRun || [];
 Module.onRuntimeInitialized = undefined;
+
+// Hook game exit and abort to return to the top menu
+Module.onExit = function(status) {
+  console.log('[Module.onExit] Game exited with status:', status);
+  if (typeof returnToTopMenu === 'function') {
+    returnToTopMenu();
+  }
+};
+Module.onAbort = function(what) {
+  console.warn('[Module.onAbort] Game aborted:', what);
+  if (typeof returnToTopMenu === 'function') {
+    returnToTopMenu();
+  }
+};
 
 // Hook indexedDB.open to monitor config database write transactions and trigger reverse sync
 (function hookConfigDBWrites() {
