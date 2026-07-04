@@ -6063,6 +6063,18 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     })();
 
     canvas.focus();
+
+    // iOS Safari対策: ゲーム起動直後はアドレスバーの状態遷移などにより
+    // #viewportの実サイズがまだ確定していない場合がある。この不正確な
+    // サイズでEasyRPG(Emscripten)側がキャンバスの内部解像度を確定して
+    // しまうと、以後ページサイズ自体が変化しない限り再計算されず、
+    // 画面の一部（多くの場合下半分）が描画されないまま固定されてしまう
+    // （ブラウザの拡大率を変更すると直るのはこのため）。
+    // 起動直後に明示的にresizeイベントを複数回発火させ、正しいサイズで
+    // キャンバス解像度を再計算させる。
+    [0, 100, 300, 600, 1000, 1500].forEach((delay) => {
+      setTimeout(() => window.dispatchEvent(new Event('resize')), delay);
+    });
   }).catch(function(error) {
     console.error("Failed to create EasyRPG Player:", error);
     document.getElementById('status').textContent = 'エラー: EasyRPGの初期化に失敗しました';
