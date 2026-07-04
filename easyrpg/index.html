@@ -68,7 +68,14 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      /* justify-content: center は使わない。
+         中身が画面より高くなった際、centerだとはみ出した分の
+         上側がクリップされ、overflow-y: autoにしてもスクロールで
+         出てこられなくなる（flexboxの既知の挙動）ため。
+         代わりに .dialog-box 側の margin: auto で中央寄せする。 */
+      overflow-y: auto;
+      padding: 1rem 0;
+      box-sizing: border-box;
       z-index: 100;
     }
 
@@ -79,7 +86,12 @@
       text-align: center;
       border: 1px solid var(--color-gray);
       width: min(680px, 92vw);
+      /* 画面が低い端末でも上下が見切れないよう、ダイアログ自体の高さを
+         画面の高さに応じて制限し、超えた分はスクロールできるようにする */
+      max-height: calc(var(--app-height, 100vh) - 2rem);
+      overflow-y: auto;
       box-sizing: border-box;
+      margin: auto;
     }
 
     .dialog-box h2 {
