@@ -1911,23 +1911,6 @@ function escapeIniValue(value) {
   return String(value || '').replace(/\r?\n/g, ' ');
 }
 
-function generateConfigIniContent(settings) {
-  const selectedSoundfont = settings.soundfont || '';
-  const selectedFont1 = settings.font1 || '';
-  const selectedFont2 = settings.font2 || '';
-  
-  return [
-    '[Audio]',
-    selectedSoundfont ? `Soundfont=Soundfont/${escapeIniValue(selectedSoundfont)}` : 'Soundfont=',
-    '',
-    '[Player]',
-    'SettingsAutosave=true',
-    selectedFont1 ? `Font1=Fonts/${escapeIniValue(selectedFont1)}` : 'Font1=',
-    selectedFont2 ? `Font2=Fonts/${escapeIniValue(selectedFont2)}` : 'Font2=',
-    ''
-  ].join('\n');
-}
-
 function mergeSettingsIntoIni(iniText, updates) {
   const lines = iniText.split(/\r?\n/);
   const resultLines = [];
@@ -3221,56 +3204,11 @@ class StorageExplorer {
             name === '/home/web_user/.config'
           ));
 
-        // もし config.ini が /home/web_user/.config データベース内にまだ一度も作られていない場合、デフォルト値で自動生成しておく
-        try {
-          const settings = await storageManager.getSettings();
-          const configIniContent = generateConfigIniContent(settings);
-          await new Promise((resolve) => {
-            const req = indexedDB.open('/home/web_user/.config', 21);
-            req.onupgradeneeded = (e) => {
-              const db = e.target.result;
-              if (!db.objectStoreNames.contains('FILE_DATA')) {
-                db.createObjectStore('FILE_DATA');
-              }
-            };
-            req.onsuccess = () => {
-              const db = req.result;
-              const tx = db.transaction(['FILE_DATA'], 'readwrite');
-              const store = tx.objectStore('FILE_DATA');
-              
-              const configPath = '/EasyRPG/Player/config.ini';
-              const getReq = store.get(configPath);
-              getReq.onsuccess = () => {
-                if (!getReq.result) {
-                  store.put({
-                    timestamp: new Date(),
-                    mode: 33206,
-                    contents: new TextEncoder().encode(configIniContent)
-                  }, configPath);
-                  
-                  // Make sure parent directories exist in FILE_DATA (some IDBFS implementations require this)
-                  store.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG');
-                  store.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG/Player');
-                  
-                  console.log('[StorageExplorer] Automatically initialized default config.ini in /home/web_user/.config database.');
-                }
-                db.close();
-                resolve();
-              };
-              getReq.onerror = () => {
-                db.close();
-                resolve();
-              };
-            };
-            req.onerror = () => resolve();
-          });
-
-          // もし 'Save' データベースが一覧に入っていなければ、作成されたのでスキャン対象に追加
-          if (!saveDbNames.includes('Save')) {
-            saveDbNames.push('Save');
-          }
-        } catch (e) {
-          console.warn('[StorageExplorer] Failed to auto-initialize config.ini:', e);
+        // もし 'Save' データベースが一覧に入っていなければ、スキャン対象に追加しておく
+        // （config.ini はサイト側では作成しない。EasyRPG本体が実際に作成/保存した
+        //   ものだけをストレージ画面に反映する）
+        if (!saveDbNames.includes('Save')) {
+          saveDbNames.push('Save');
         }
 
         for (const dbName of saveDbNames) {
@@ -4719,6 +4657,12 @@ async function loadStorageBrowser() {
     storageExplorer = new StorageExplorer();
     _initExplorerEvents();
   }
+  // ストレージタブを開くたびに必ず最新の状態を読み直す。
+  // （loadAll()には内部キャッシュがあり、_treeCacheが残っていると
+  //   IndexedDBの再スキャンをスキップしてしまうため、ここで明示的に
+  //   キャッシュを破棄してからロードする。これをしないと、ゲーム内で
+  //   config.iniを保存しても、ストレージ画面が古い内容のまま更新されない）
+  storageExplorer._treeCache = null;
   await storageExplorer.loadAll();
   storageExplorer.render();
 }
@@ -5791,7 +5735,24 @@ function sanitizeGameTitleForStorageKey(title) {
 async function loadGameFiles(files, gameName, existingGameId = null) {
   const statusDiv = document.getElementById('status');
   console.log(`Preparing ${files.length} files for EasyRPG...`);
-  
+
+  // エンジン本体(index.js、および内部で読み込まれる数十MB規模のwasm)のダウンロードは
+  // どのゲーム/RTPを使うかに関係なく開始できるため、他の準備処理を待たずに
+  // ここで先行してロードを開始しておく（起動全体の体感速度を大きく左右するため）。
+  // 実際にエンジンを起動する createEasyRpgPlayer() の呼び出し自体は、従来通り
+  // IndexedDBへの書き込み（DB競合防止）が全て完了してから行う。
+  const engineScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'index.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load index.js'));
+    document.body.appendChild(script);
+  });
+  // 後段で確実にawaitするが、それより前に他の処理でエラーが起きて
+  // この関数を抜けた場合でもunhandledrejectionにならないよう保険を掛けておく
+  engineScriptPromise.catch(() => {});
+
   // ゲームを識別するためのハッシュを生成（RPG_RT.ldbの内容を使用）
   // プレフィックス(games/ゲームID/)を一時的に除去してハッシュ生成やマージを行う
   const cleanFiles = files.map(f => ({
@@ -5818,19 +5779,23 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     }
   }
   
-  // IndexedDBにゲームデータを保存
-  try {
-    await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
-    console.log('Game saved to IndexedDB');
-    
-    // ゲームリストを更新
-    await loadSavedGamesList();
-  } catch (e) {
-    console.warn('Failed to save game to IndexedDB:', e);
-    if (e.name === 'QuotaExceededError') {
-      alert('ストレージの容量が不足しています。他のゲームを削除してください。');
+  // IndexedDBへのゲームデータ保存（ライブラリ一覧に表示するためのもので、
+  // 今回の起動処理自体には不要）はバックグラウンドで実行し、完了を待たずに
+  // 起動処理を先に進める。
+  (async () => {
+    try {
+      await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
+      console.log('Game saved to IndexedDB');
+      
+      // ゲームリストを更新
+      await loadSavedGamesList();
+    } catch (e) {
+      console.warn('Failed to save game to IndexedDB:', e);
+      if (e.name === 'QuotaExceededError') {
+        alert('ストレージの容量が不足しています。他のゲームを削除してください。');
+      }
     }
-  }
+  })();
   
   // RTPファイルをIndexedDBから読み込んでゲームファイルにマージ
   // EasyRPGのEmscriptenビルドではRTPが無効化されているため、
@@ -5849,14 +5814,21 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
       { id: 'rtp2003', label: 'RTP 2003' }
     ];
     
+    // 2000/2003の読み込みは互いに独立しているため並行して取得する
+    // （マージ処理自体は従来通り2000→2003の優先順位を守って順番に行う）
+    const rtpDataList = await Promise.all(
+      rtpMergeOrder.map(rtpEntry => storageManager.getRTP(rtpEntry.id))
+    );
+    
     const gamePathsLower = new Set(
       mergedFiles.map(f => f.path.toLowerCase())
     );
     
     let totalRtpMergeCount = 0;
     
-    for (const rtpEntry of rtpMergeOrder) {
-      const rtpData = await storageManager.getRTP(rtpEntry.id);
+    for (let i = 0; i < rtpMergeOrder.length; i++) {
+      const rtpEntry = rtpMergeOrder[i];
+      const rtpData = rtpDataList[i];
       
       if (rtpData && rtpData.files && rtpData.files.length > 0) {
         console.log(`${rtpEntry.label} found: ${rtpData.files.length} files`);
@@ -5945,17 +5917,12 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     console.error('[loadGameFiles] Pre-launch asset injection failed:', e);
   }
 
-  // index.js を動的にロードして実行を開始させる（DB競合を防ぐため）
-  console.log('[loadGameFiles] Dynamically loading index.js...');
+  // 先行してバックグラウンドでロードを開始しておいたエンジン本体(index.js)の
+  // 読み込み完了を待つ（DB書き込みが全て終わった後に実行を開始するため、
+  // ここまでの準備と並行してダウンロードが進んでいれば、待ち時間はほぼ無くなる）
+  console.log('[loadGameFiles] Waiting for index.js to finish loading...');
   try {
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'index.js';
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load index.js'));
-      document.body.appendChild(script);
-    });
+    await engineScriptPromise;
   } catch (e) {
     console.error('[loadGameFiles] Failed to load index.js script:', e);
     statusDiv.textContent = 'エンジンのロードに失敗しました';
