@@ -41,7 +41,7 @@
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- RAR解凍用ライブラリ -->
-  <script src="https://cdn.jsdelivr.net/npm/unrar.js@0.0.1/dist/unrar.js"></script>
+
 
   <style>
     :root {
@@ -3051,12 +3051,17 @@ async function appendManagedConfigFiles(files) {
   const configFiles = [];
 
   for (const asset of assets) {
-    if (asset.type === 'soundfont') {
+    if (asset.type === 'soundfont' && settings.soundfont === asset.name) {
       configFiles.push({
         path: `Soundfont/${asset.name}`,
         data: asset.data
       });
-    } else if (asset.type === 'font1' || asset.type === 'font2') {
+    } else if (asset.type === 'font1' && settings.font1 === asset.name) {
+      configFiles.push({
+        path: `Fonts/${asset.name}`,
+        data: asset.data
+      });
+    } else if (asset.type === 'font2' && settings.font2 === asset.name) {
       configFiles.push({
         path: `Fonts/${asset.name}`,
         data: asset.data
