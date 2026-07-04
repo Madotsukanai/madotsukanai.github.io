@@ -37,6 +37,25 @@
         window.visualViewport.addEventListener('resize', setAppHeight);
       }
     })();
+
+    // Emscriptenのエラーハンドラが `event.error.message` にアクセスしようとして
+    // TypeErrorでクラッシュするのを防ぐため、エラーイベントを傍受してダミーエラーオブジェクトを挿入する
+    const originalAddEventListener = window.addEventListener;
+    window.addEventListener = function(type, listener, options) {
+      if (type === 'error') {
+        const originalListener = listener;
+        listener = function(event) {
+          if (event && !event.error) {
+            Object.defineProperty(event, 'error', { 
+              value: new Error(event.message || 'Unknown event error'),
+              configurable: true 
+            });
+          }
+          return originalListener.apply(this, arguments);
+        };
+      }
+      return originalAddEventListener.call(this, type, listener, options);
+    };
   </script>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -833,8 +852,8 @@
         to bottom,
         rgba(255,255,255,0),
         rgba(255,255,255,0) 50%,
-        rgba(0,0,0,0.15) 50%,
-        rgba(0,0,0,0.15)
+        rgba(0,0,0,var(--scanline-opacity, 0.15)) 50%,
+        rgba(0,0,0,var(--scanline-opacity, 0.15))
       );
       background-size: 100% 4px;
       display: none;
@@ -1121,6 +1140,14 @@
                   <span id="crt-blur-value" style="font-size: 0.85rem; color: #aaa;">0.6px</span>
                 </div>
                 <input type="range" id="crt-blur-slider" min="0" max="2" step="0.1" value="0.6" style="width: 100%; cursor: pointer;">
+              </div>
+              
+              <div id="scanline-opacity-container" style="display: flex; flex-direction: column; gap: 0.5rem; width: 100%; max-width: 300px; padding-left: 1.5rem; opacity: 0.5; pointer-events: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 0.9rem;">スキャンラインの濃さ</span>
+                  <span id="scanline-opacity-value" style="font-size: 0.85rem; color: #aaa;">15%</span>
+                </div>
+                <input type="range" id="scanline-opacity-slider" min="0" max="100" step="5" value="15" style="width: 100%; cursor: pointer;">
               </div>
             </div>
           </div>
@@ -2969,6 +2996,18 @@ async function loadAssetSettings() {
     document.documentElement.style.setProperty('--crt-blur', initialBlur + 'px');
     crtBlurContainer.style.opacity = hasScanlines ? '1' : '0.5';
     crtBlurContainer.style.pointerEvents = hasScanlines ? 'auto' : 'none';
+  }
+
+  const scanlineOpacitySlider = document.getElementById('scanline-opacity-slider');
+  const scanlineOpacityValue = document.getElementById('scanline-opacity-value');
+  const scanlineOpacityContainer = document.getElementById('scanline-opacity-container');
+  const initialOpacity = settings.scanlineOpacity !== undefined ? Number(settings.scanlineOpacity) : 15;
+  if (scanlineOpacitySlider && scanlineOpacityValue && scanlineOpacityContainer) {
+    scanlineOpacitySlider.value = initialOpacity;
+    scanlineOpacityValue.textContent = initialOpacity + '%';
+    document.documentElement.style.setProperty('--scanline-opacity', (initialOpacity / 100).toString());
+    scanlineOpacityContainer.style.opacity = hasScanlines ? '1' : '0.5';
+    scanlineOpacityContainer.style.pointerEvents = hasScanlines ? 'auto' : 'none';
   }
 
   // Initialize virtual controller (touch pad) visibility
@@ -6320,6 +6359,11 @@ window.addEventListener('load', () => {
         if (crtBlurContainer) {
           crtBlurContainer.style.opacity = event.target.checked ? '1' : '0.5';
           crtBlurContainer.style.pointerEvents = event.target.checked ? 'auto' : 'none';
+          const scanlineOpacityContainer = document.getElementById('scanline-opacity-container');
+          if (scanlineOpacityContainer) {
+            scanlineOpacityContainer.style.opacity = event.target.checked ? '1' : '0.5';
+            scanlineOpacityContainer.style.pointerEvents = event.target.checked ? 'auto' : 'none';
+          }
         }
       } catch (e) {
         console.error('Failed to update scanlines setting:', e);
@@ -6346,6 +6390,12 @@ window.addEventListener('load', () => {
         crtBlurContainer.style.pointerEvents = newState ? 'auto' : 'none';
       }
       
+      const scanlineOpacityContainer = document.getElementById('scanline-opacity-container');
+      if (scanlineOpacityContainer) {
+        scanlineOpacityContainer.style.opacity = newState ? '1' : '0.5';
+        scanlineOpacityContainer.style.pointerEvents = newState ? 'auto' : 'none';
+      }
+      
       try {
         await storageManager.updateSettings({ scanlines: newState });
       } catch (e) {
@@ -6366,6 +6416,22 @@ window.addEventListener('load', () => {
         await storageManager.updateSettings({ crtBlur: parseFloat(e.target.value) });
       } catch (err) {
         console.error('Failed to save crtBlur setting:', err);
+      }
+    });
+  }
+
+  const scanlineOpacitySlider = document.getElementById('scanline-opacity-slider');
+  if (scanlineOpacitySlider) {
+    scanlineOpacitySlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      document.documentElement.style.setProperty('--scanline-opacity', (val / 100).toString());
+      document.getElementById('scanline-opacity-value').textContent = val + '%';
+    });
+    scanlineOpacitySlider.addEventListener('change', async (e) => {
+      try {
+        await storageManager.updateSettings({ scanlineOpacity: parseInt(e.target.value, 10) });
+      } catch (err) {
+        console.error('Failed to save scanlineOpacity setting:', err);
       }
     });
   }
