@@ -892,8 +892,7 @@
       gap: 0.5rem;
     }
 
-    #syspad-screenshot,
-    #syspad-help {
+    #syspad-screenshot {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -906,8 +905,7 @@
       cursor: pointer;
     }
 
-    #syspad-screenshot:active,
-    #syspad-help:active {
+    #syspad-screenshot:active {
       opacity: 1;
     }
 
@@ -1884,6 +1882,13 @@ Public License instead of this License.  But first, please read
   </div>
 
   <div id="controls">
+    <button id="controls-help" class="unselectable" title="操作ヘルプ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="25" height="25">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    </button>
     <button id="controls-scanlines" class="unselectable" title="スキャンライン（走査線）の表示／非表示">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="25" height="25">
         <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
@@ -1930,7 +1935,6 @@ Public License instead of this License.  But first, please read
 
     <div id="syspad" class="unselectable">
       <div id="syspad-screenshot" title="スクリーンショット">📸</div>
-      <div id="syspad-help" title="操作ヘルプ">❓</div>
     </div>
 
     <div id="shiftpad" class="unselectable">
@@ -6509,12 +6513,12 @@ window.addEventListener('load', () => {
     });
   }
 
-  const syspadHelp = document.getElementById('syspad-help');
+  const controlsHelp = document.getElementById('controls-help');
   const controlsHelpModal = document.getElementById('controls-help-modal');
   const controlsHelpClose = document.getElementById('controls-help-close');
   
-  if (syspadHelp && controlsHelpModal && controlsHelpClose) {
-    syspadHelp.addEventListener('pointerdown', (e) => {
+  if (controlsHelp && controlsHelpModal && controlsHelpClose) {
+    controlsHelp.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       controlsHelpModal.style.display = 'flex';
