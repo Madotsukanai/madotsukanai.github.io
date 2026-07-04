@@ -1980,13 +1980,13 @@ function mergeSettingsIntoIni(iniText, updates) {
   
   const targetUpdates = {};
   if (updates.soundfont !== undefined) {
-    targetUpdates['audio:soundfont'] = updates.soundfont ? `Soundfont=Soundfont/${escapeIniValue(updates.soundfont)}` : 'Soundfont=';
+    targetUpdates['audio:soundfont'] = updates.soundfont ? `Soundfont=/Soundfont/${escapeIniValue(updates.soundfont)}` : 'Soundfont=';
   }
   if (updates.font1 !== undefined) {
-    targetUpdates['player:font1'] = updates.font1 ? `Font1=Fonts/${escapeIniValue(updates.font1)}` : 'Font1=';
+    targetUpdates['player:font1'] = updates.font1 ? `Font1=/Fonts/${escapeIniValue(updates.font1)}` : 'Font1=';
   }
   if (updates.font2 !== undefined) {
-    targetUpdates['player:font2'] = updates.font2 ? `Font2=Fonts/${escapeIniValue(updates.font2)}` : 'Font2=';
+    targetUpdates['player:font2'] = updates.font2 ? `Font2=/Fonts/${escapeIniValue(updates.font2)}` : 'Font2=';
   }
   
   for (const line of lines) {
