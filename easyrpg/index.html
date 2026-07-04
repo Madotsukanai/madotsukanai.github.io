@@ -12,12 +12,13 @@
   <style>
     :root {
       --color-gray: hsl(0, 0%, 55%);
-      --controls-size: 10vh;
+      --controls-size: clamp(60px, 10vh, 110px);
+      --mini-size: clamp(34px, 8vmin, 48px);
     }
 
     @media (orientation: landscape) {
       :root {
-        --controls-size: 20vh;
+        --controls-size: clamp(60px, 18vh, 130px);
       }
     }
 
@@ -826,8 +827,8 @@
 
     #shiftpad {
       position: fixed;
-      right: 1rem;
-      bottom: calc(2 * var(--controls-size) + 1.2rem);
+      left: 1rem;
+      bottom: calc(2 * var(--controls-size) + 1rem);
       z-index: 10;
     }
 
@@ -835,13 +836,13 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: calc(1.7 * var(--controls-size));
-      height: calc(0.7 * var(--controls-size));
+      width: calc(2 * var(--mini-size));
+      height: var(--mini-size);
       background-color: var(--color-gray);
       border-radius: 0.4rem;
       color: #fff;
       font-weight: bold;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       opacity: 0.4;
     }
 
@@ -851,13 +852,13 @@
 
     #numpad {
       position: fixed;
-      top: 1rem;
       right: 1rem;
+      bottom: calc(var(--controls-size) + 1rem);
       z-index: 10;
       display: grid;
-      grid-template-columns: repeat(3, calc(0.85 * var(--controls-size)));
-      grid-auto-rows: calc(0.85 * var(--controls-size));
-      gap: 0.4rem;
+      grid-template-columns: repeat(3, var(--mini-size));
+      grid-auto-rows: var(--mini-size);
+      gap: 0.35rem;
     }
 
     #numpad .numpad-key {
@@ -868,7 +869,7 @@
       border-radius: 0.4rem;
       color: #fff;
       font-weight: bold;
-      font-size: 1.1rem;
+      font-size: 1rem;
       opacity: 0.4;
     }
 
@@ -878,6 +879,28 @@
 
     #numpad .numpad-key[data-key="Numpad0"] {
       grid-column: 1 / span 3;
+    }
+
+    /* 横向き・低い画面（ランドスケープでの背の低いスマホ等）ではテンキーを横長の2行にして高さを圧縮する */
+    @media (orientation: landscape) and (max-height: 480px) {
+      #numpad {
+        grid-template-columns: repeat(5, var(--mini-size));
+      }
+
+      #numpad .numpad-key[data-key="Numpad0"] {
+        grid-column: auto;
+      }
+
+      #numpad .numpad-key[data-key="Numpad1"] { order: 1; }
+      #numpad .numpad-key[data-key="Numpad2"] { order: 2; }
+      #numpad .numpad-key[data-key="Numpad3"] { order: 3; }
+      #numpad .numpad-key[data-key="Numpad4"] { order: 4; }
+      #numpad .numpad-key[data-key="Numpad5"] { order: 5; }
+      #numpad .numpad-key[data-key="Numpad6"] { order: 6; }
+      #numpad .numpad-key[data-key="Numpad7"] { order: 7; }
+      #numpad .numpad-key[data-key="Numpad8"] { order: 8; }
+      #numpad .numpad-key[data-key="Numpad9"] { order: 9; }
+      #numpad .numpad-key[data-key="Numpad0"] { order: 10; }
     }
 
     #dpad, #apad, #shiftpad, #numpad {
