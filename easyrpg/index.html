@@ -24,6 +24,7 @@
 
     html {
       touch-action: none;
+      height: 100%;
     }
 
     body {
@@ -31,6 +32,8 @@
       margin: 0;
       color: white;
       background: black;
+      height: 100%;
+      overflow: hidden;
     }
 
     /* 起動時のダイアログ用CSS */
@@ -739,6 +742,15 @@
       pointer-events: none;
     }
 
+    #viewport {
+      position: fixed;
+      inset: 0;
+      /* dvh gracefully falls back to full height on browsers without support */
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
     #canvas {
       position: absolute;
       top: 50%;
@@ -748,6 +760,7 @@
       border: 0;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
+      object-fit: contain;
       transform: translate(-50%, -50%);
     }
     
@@ -778,10 +791,6 @@
     
     #scanline-overlay.active {
       display: block;
-    }
-
-    img#canvas {
-      object-fit: contain;
     }
 
     #dpad,
@@ -853,7 +862,7 @@
     #numpad {
       position: fixed;
       right: 1rem;
-      bottom: calc(var(--controls-size) + 1rem);
+      bottom: calc(2 * var(--controls-size) + 1rem);
       z-index: 10;
       display: grid;
       grid-template-columns: repeat(3, var(--mini-size));
