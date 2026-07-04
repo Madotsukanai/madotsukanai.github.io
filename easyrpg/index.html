@@ -296,18 +296,19 @@
 
     .rtp-delete-btn {
       padding: 0.4rem 0.8rem;
-      background: #
-      4336;
-      border: none;
+      background: #f44336;
+      border: 1px solid #f44336;
       color: white;
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.85rem;
       margin-left: 0.5rem;
+      transition: all 0.2s;
     }
 
     .rtp-delete-btn:hover {
-      background: #d32f2f;
+      background: white;
+      color: #f44336;
     }
 
     #rtp-file-input {
@@ -816,7 +817,7 @@
     
     #canvas.crt-mode {
       image-rendering: auto; /* ドットの滲み（バイリニア補間） */
-      filter: blur(0.6px) contrast(1.1) brightness(1.05); /* CRT特有の滲みとコントラスト強調 */
+      filter: blur(var(--crt-blur, 0.6px)) contrast(1.1) brightness(1.05); /* CRT特有の滲みとコントラスト強調 */
     }
 
     #scanline-overlay {
@@ -1108,11 +1109,19 @@
             <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.75rem;">
               ゲーム画面の見た目を変更します。
             </p>
-            <div class="settings-inline">
+            <div class="settings-inline" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
               <label style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer;">
                 <input type="checkbox" id="scanlines-checkbox" style="width: auto; height: 1.2rem;">
                 スキャンライン（ブラウン管フィルター）を有効にする
               </label>
+              
+              <div id="crt-blur-container" style="display: flex; flex-direction: column; gap: 0.5rem; width: 100%; max-width: 300px; padding-left: 1.5rem; opacity: 0.5; pointer-events: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 0.9rem;">スキャンラインの滲み</span>
+                  <span id="crt-blur-value" style="font-size: 0.85rem; color: #aaa;">0.6px</span>
+                </div>
+                <input type="range" id="crt-blur-slider" min="0" max="2" step="0.1" value="0.6" style="width: 100%; cursor: pointer;">
+              </div>
             </div>
           </div>
 
@@ -2948,6 +2957,18 @@ async function loadAssetSettings() {
   }
   if (scanlinesBtn) {
     scanlinesBtn.style.opacity = hasScanlines ? '1' : '0.5';
+  }
+  
+  const crtBlurSlider = document.getElementById('crt-blur-slider');
+  const crtBlurValue = document.getElementById('crt-blur-value');
+  const crtBlurContainer = document.getElementById('crt-blur-container');
+  const initialBlur = settings.crtBlur !== undefined ? Number(settings.crtBlur) : 0.6;
+  if (crtBlurSlider && crtBlurValue && crtBlurContainer) {
+    crtBlurSlider.value = initialBlur;
+    crtBlurValue.textContent = initialBlur.toFixed(1) + 'px';
+    document.documentElement.style.setProperty('--crt-blur', initialBlur + 'px');
+    crtBlurContainer.style.opacity = hasScanlines ? '1' : '0.5';
+    crtBlurContainer.style.pointerEvents = hasScanlines ? 'auto' : 'none';
   }
 
   // Initialize virtual controller (touch pad) visibility
@@ -6287,9 +6308,14 @@ window.addEventListener('load', () => {
         const overlay = document.getElementById('scanline-overlay');
         const btn = document.getElementById('controls-scanlines');
         const canvas = document.getElementById('canvas');
+        const crtBlurContainer = document.getElementById('crt-blur-container');
         if (overlay) overlay.classList.toggle('active', event.target.checked);
         if (canvas) canvas.classList.toggle('crt-mode', event.target.checked);
         if (btn) btn.style.opacity = event.target.checked ? '1' : '0.5';
+        if (crtBlurContainer) {
+          crtBlurContainer.style.opacity = event.target.checked ? '1' : '0.5';
+          crtBlurContainer.style.pointerEvents = event.target.checked ? 'auto' : 'none';
+        }
       } catch (e) {
         console.error('Failed to update scanlines setting:', e);
       }
@@ -6302,6 +6328,7 @@ window.addEventListener('load', () => {
       const overlay = document.getElementById('scanline-overlay');
       const checkbox = document.getElementById('scanlines-checkbox');
       const canvas = document.getElementById('canvas');
+      const crtBlurContainer = document.getElementById('crt-blur-container');
       const isCurrentlyActive = overlay ? overlay.classList.contains('active') : false;
       const newState = !isCurrentlyActive;
       
@@ -6309,11 +6336,31 @@ window.addEventListener('load', () => {
       if (canvas) canvas.classList.toggle('crt-mode', newState);
       if (checkbox) checkbox.checked = newState;
       if (scanlinesBtn) scanlinesBtn.style.opacity = newState ? '1' : '0.5';
+      if (crtBlurContainer) {
+        crtBlurContainer.style.opacity = newState ? '1' : '0.5';
+        crtBlurContainer.style.pointerEvents = newState ? 'auto' : 'none';
+      }
       
       try {
         await storageManager.updateSettings({ scanlines: newState });
       } catch (e) {
         console.error('Failed to update scanlines setting:', e);
+      }
+    });
+  }
+
+  const crtBlurSlider = document.getElementById('crt-blur-slider');
+  if (crtBlurSlider) {
+    crtBlurSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      document.documentElement.style.setProperty('--crt-blur', val + 'px');
+      document.getElementById('crt-blur-value').textContent = val.toFixed(1) + 'px';
+    });
+    crtBlurSlider.addEventListener('change', async (e) => {
+      try {
+        await storageManager.updateSettings({ crtBlur: parseFloat(e.target.value) });
+      } catch (err) {
+        console.error('Failed to save crtBlur setting:', err);
       }
     });
   }
