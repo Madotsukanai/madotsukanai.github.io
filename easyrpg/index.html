@@ -1,4 +1,4 @@
-IO<!doctype html>
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
@@ -749,6 +749,35 @@ IO<!doctype html>
       image-rendering: crisp-edges;
       transform: translate(-50%, -50%);
     }
+    
+    #canvas.crt-mode {
+      image-rendering: auto; /* ドットの滲み（バイリニア補間） */
+      filter: blur(0.6px) contrast(1.1) brightness(1.05); /* CRT特有の滲みとコントラスト強調 */
+    }
+
+    #scanline-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 10;
+      background: linear-gradient(
+        to bottom,
+        rgba(255,255,255,0),
+        rgba(255,255,255,0) 50%,
+        rgba(0,0,0,0.15) 50%,
+        rgba(0,0,0,0.15)
+      );
+      background-size: 100% 4px;
+      display: none;
+    }
+    
+    #scanline-overlay.active {
+      display: block;
+    }
 
     img#canvas {
       object-fit: contain;
@@ -793,6 +822,66 @@ IO<!doctype html>
     #dpad path:not(.active),
     #apad > *:not(.active) {
       opacity: 0.4;
+    }
+
+    #shiftpad {
+      position: fixed;
+      right: 1rem;
+      bottom: calc(2 * var(--controls-size) + 1.2rem);
+      z-index: 10;
+    }
+
+    #shiftpad-shift {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: calc(1.7 * var(--controls-size));
+      height: calc(0.7 * var(--controls-size));
+      background-color: var(--color-gray);
+      border-radius: 0.4rem;
+      color: #fff;
+      font-weight: bold;
+      font-size: 0.9rem;
+      opacity: 0.4;
+    }
+
+    #shiftpad-shift.active {
+      opacity: 1;
+    }
+
+    #numpad {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(3, calc(0.85 * var(--controls-size)));
+      grid-auto-rows: calc(0.85 * var(--controls-size));
+      gap: 0.4rem;
+    }
+
+    #numpad .numpad-key {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--color-gray);
+      border-radius: 0.4rem;
+      color: #fff;
+      font-weight: bold;
+      font-size: 1.1rem;
+      opacity: 0.4;
+    }
+
+    #numpad .numpad-key.active {
+      opacity: 1;
+    }
+
+    #numpad .numpad-key[data-key="Numpad0"] {
+      grid-column: 1 / span 3;
+    }
+
+    #dpad, #apad, #shiftpad, #numpad {
+      display: none;
     }
   </style>
 </head>
@@ -903,6 +992,36 @@ IO<!doctype html>
               </label>
             </div>
           </div>
+          
+          <hr style="border-color: #444; margin: 1.5rem 0;">
+
+          <div class="settings-group">
+            <h3>グラフィック設定</h3>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.75rem;">
+              ゲーム画面の見た目を変更します。
+            </p>
+            <div class="settings-inline">
+              <label style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="scanlines-checkbox" style="width: auto; height: 1.2rem;">
+                スキャンライン（ブラウン管フィルター）を有効にする
+              </label>
+            </div>
+          </div>
+
+          <hr style="border-color: #444; margin: 1.5rem 0;">
+
+          <div class="settings-group">
+            <h3>操作設定</h3>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.75rem;">
+              タッチ操作向けの仮想コントローラー（方向キー／ボタン／Shift／テンキー）の表示を切り替えます。
+            </p>
+            <div class="settings-inline">
+              <label style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="virtual-controller-checkbox" style="width: auto; height: 1.2rem;">
+                仮想コントローラーを表示する
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -923,6 +1042,7 @@ IO<!doctype html>
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-paste" title="貼り付け (Ctrl+V)" disabled>貼り付け</button>
             <div class="sexplorer-toolbar-sep"></div>
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-rename" title="名前の変更 (F2)" disabled>名前変更</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-edit" title="テキストを編集" disabled>編集</button>
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-delete" title="削除 (Delete)" disabled>削除</button>
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-download" title="ダウンロード" disabled>DL</button>
             <div class="sexplorer-toolbar-spacer"></div>
@@ -1655,6 +1775,16 @@ Public License instead of this License.  But first, please read
   </div>
 
   <div id="controls">
+    <button id="controls-scanlines" class="unselectable" title="スキャンライン（走査線）の表示／非表示">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="25" height="25">
+        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+        <line x1="2" y1="7" x2="22" y2="7" />
+        <line x1="2" y1="11" x2="22" y2="11" />
+        <line x1="2" y1="15" x2="22" y2="15" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+      </svg>
+    </button>
     <button id="controls-keypad" class="unselectable" title="仮想コントローラーの表示／非表示">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="25" height="25">
         <path d="M6 12h4M8 10v4" />
@@ -1672,6 +1802,7 @@ Public License instead of this License.  But first, please read
 
   <div id="viewport">
     <canvas id="canvas" tabindex="-1" class="unselectable"></canvas>
+    <div id="scanline-overlay"></div>
 
     <div id="dpad" class="unselectable">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">
@@ -1687,9 +1818,131 @@ Public License instead of this License.  But first, please read
       <div id="apad-escape" data-key="Escape"></div>
       <div id="apad-enter" data-key="Enter"></div>
     </div>
+
+    <div id="shiftpad" class="unselectable">
+      <div id="shiftpad-shift" data-key="ShiftLeft">Shift</div>
+    </div>
+
+    <div id="numpad" class="unselectable">
+      <div class="numpad-key" data-key="Numpad7">7</div>
+      <div class="numpad-key" data-key="Numpad8">8</div>
+      <div class="numpad-key" data-key="Numpad9">9</div>
+      <div class="numpad-key" data-key="Numpad4">4</div>
+      <div class="numpad-key" data-key="Numpad5">5</div>
+      <div class="numpad-key" data-key="Numpad6">6</div>
+      <div class="numpad-key" data-key="Numpad1">1</div>
+      <div class="numpad-key" data-key="Numpad2">2</div>
+      <div class="numpad-key" data-key="Numpad3">3</div>
+      <div class="numpad-key" data-key="Numpad0">0</div>
+    </div>
   </div>
 
 <script>
+
+function escapeIniValue(value) {
+  return String(value || '').replace(/\r?\n/g, ' ');
+}
+
+function generateConfigIniContent(settings) {
+  const selectedSoundfont = settings.soundfont || '';
+  const selectedFont1 = settings.font1 || '';
+  const selectedFont2 = settings.font2 || '';
+  
+  return [
+    '[Audio]',
+    selectedSoundfont ? `Soundfont=Soundfont/${escapeIniValue(selectedSoundfont)}` : 'Soundfont=',
+    '',
+    '[Player]',
+    'SettingsAutosave=true',
+    selectedFont1 ? `Font1=Fonts/${escapeIniValue(selectedFont1)}` : 'Font1=',
+    selectedFont2 ? `Font2=Fonts/${escapeIniValue(selectedFont2)}` : 'Font2=',
+    ''
+  ].join('\n');
+}
+
+function mergeSettingsIntoIni(iniText, updates) {
+  const lines = iniText.split(/\r?\n/);
+  const resultLines = [];
+  
+  let currentSection = '';
+  const updatedKeys = new Set();
+  
+  const targetUpdates = {};
+  if (updates.soundfont !== undefined) {
+    targetUpdates['audio:soundfont'] = updates.soundfont ? `Soundfont=Soundfont/${escapeIniValue(updates.soundfont)}` : 'Soundfont=';
+  }
+  if (updates.font1 !== undefined) {
+    targetUpdates['player:font1'] = updates.font1 ? `Font1=Fonts/${escapeIniValue(updates.font1)}` : 'Font1=';
+  }
+  if (updates.font2 !== undefined) {
+    targetUpdates['player:font2'] = updates.font2 ? `Font2=Fonts/${escapeIniValue(updates.font2)}` : 'Font2=';
+  }
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      currentSection = trimmed.substring(1, trimmed.length - 1).toLowerCase();
+      resultLines.push(line);
+      continue;
+    }
+    
+    if (trimmed.startsWith(';') || !trimmed) {
+      resultLines.push(line);
+      continue;
+    }
+    
+    const parts = trimmed.split('=');
+    const key = parts[0].trim().toLowerCase();
+    const mapKey = `${currentSection}:${key}`;
+    
+    if (targetUpdates[mapKey] !== undefined) {
+      resultLines.push(targetUpdates[mapKey]);
+      updatedKeys.add(mapKey);
+    } else {
+      resultLines.push(line);
+    }
+  }
+  
+  const sectionsToAppend = {};
+  for (const [mapKey, newline] of Object.entries(targetUpdates)) {
+    if (!updatedKeys.has(mapKey)) {
+      const [sec, key] = mapKey.split(':');
+      if (!sectionsToAppend[sec]) sectionsToAppend[sec] = [];
+      sectionsToAppend[sec].push(newline);
+    }
+  }
+  
+  if (Object.keys(sectionsToAppend).length > 0) {
+    let finalLines = [];
+    let currentSec = '';
+    
+    for (const line of resultLines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        if (currentSec && sectionsToAppend[currentSec]) {
+          finalLines.push(...sectionsToAppend[currentSec]);
+          delete sectionsToAppend[currentSec];
+        }
+        currentSec = trimmed.substring(1, trimmed.length - 1).toLowerCase();
+      }
+      finalLines.push(line);
+    }
+    
+    if (currentSec && sectionsToAppend[currentSec]) {
+      finalLines.push(...sectionsToAppend[currentSec]);
+      delete sectionsToAppend[currentSec];
+    }
+    
+    for (const [sec, newlines] of Object.entries(sectionsToAppend)) {
+      finalLines.push('', `[${sec.charAt(0).toUpperCase() + sec.slice(1)}]`);
+      finalLines.push(...newlines);
+    }
+    
+    return finalLines.join('\n');
+  }
+  
+  return resultLines.join('\n');
+}
 
 // IndexedDBストレージマネージャー
 class GameStorageManager {
@@ -1750,31 +2003,38 @@ class GameStorageManager {
   async saveGame(gameId, gameName, files) {
     const transaction = this.db.transaction(['games', 'gameFiles'], 'readwrite');
     
-    // ゲームメタデータを保存
+    // ゲームファイルの保存パスプレフィックス付与用の正規化配列を作成
+    const mappedFiles = files.map(f => {
+      const prefix = `games/${gameId}/`;
+      let path = f.path;
+      if (!path.startsWith('games/')) {
+        path = prefix + path.replace(/^\/+/, '');
+      }
+      return {
+        path: path,
+        data: f.data
+      };
+    });
+    
+    // ゲームメタデータを保存 (軽量な fileList を追加して、大容量実データの読み込みを不要にする)
     const gameData = {
       id: gameId,
       name: gameName,
       lastPlayed: new Date().toISOString(),
       fileCount: files.length,
-      totalSize: files.reduce((sum, f) => sum + f.data.length, 0)
+      totalSize: files.reduce((sum, f) => sum + f.data.length, 0),
+      fileList: mappedFiles.map(f => ({
+        path: f.path,
+        size: f.data ? f.data.length || f.data.byteLength : 0
+      }))
     };
     
     await transaction.objectStore('games').put(gameData);
     
-    // ゲームファイルを保存（games/gameId/ プレフィックスを自動付与して保存）
+    // ゲームファイルを保存
     const fileData = {
       gameId: gameId,
-      files: files.map(f => {
-        const prefix = `games/${gameId}/`;
-        let path = f.path;
-        if (!path.startsWith('games/')) {
-          path = prefix + path.replace(/^\/+/, '');
-        }
-        return {
-          path: path,
-          data: f.data
-        };
-      })
+      files: mappedFiles
     };
     
     await transaction.objectStore('gameFiles').put(fileData);
@@ -1810,11 +2070,23 @@ class GameStorageManager {
       throw new Error(`Game "${oldGameId}" metadata not found.`);
     }
     
-    // 2. Put new games record and delete old
+    // 2. Put new games record and delete old (with updating fileList metadata paths)
     const newGameData = {
       ...oldGameData,
       id: newGameId,
-      name: newGameId
+      name: newGameId,
+      fileList: oldGameData.fileList ? oldGameData.fileList.map(f => {
+        const oldPrefix = `games/${oldGameId}/`;
+        const newPrefix = `games/${newGameId}/`;
+        let newPath = f.path;
+        if (f.path.startsWith(oldPrefix)) {
+          newPath = newPrefix + f.path.substring(oldPrefix.length);
+        }
+        return {
+          path: newPath,
+          size: f.size
+        };
+      }) : undefined
     };
     await gamesStore.put(newGameData);
     await gamesStore.delete(oldGameId);
@@ -1940,13 +2212,17 @@ class GameStorageManager {
   async saveRTP(rtpId, rtpName, files) {
     const transaction = this.db.transaction(['rtp', 'rtpFiles'], 'readwrite');
     
-    // RTPメタデータを保存
+    // RTPメタデータを保存 (軽量な fileList を追加して高速ロードに対応)
     const rtpData = {
       id: rtpId,
       name: rtpName,
       savedAt: new Date().toISOString(),
       fileCount: files.length,
-      totalSize: files.reduce((sum, f) => sum + f.data.length, 0)
+      totalSize: files.reduce((sum, f) => sum + f.data.length, 0),
+      fileList: files.map(f => ({
+        path: f.path,
+        size: f.data ? f.data.length || f.data.byteLength : 0
+      }))
     };
     
     await transaction.objectStore('rtp').put(rtpData);
@@ -2048,13 +2324,30 @@ class GameStorageManager {
   }
 
   async deleteAsset(assetId) {
+    // Check if asset is actively used before deleting
+    const assets = await this.getAllAssets();
+    const asset = assets.find(a => a.id === assetId);
+    
     const transaction = this.db.transaction(['assets'], 'readwrite');
     await transaction.objectStore('assets').delete(assetId);
 
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
     });
+    
+    // Auto-sync settings if the deleted asset was selected
+    if (asset) {
+      const settings = await this.getSettings();
+      let settingKey = null;
+      if (asset.type === 'soundfont') settingKey = 'soundfont';
+      else if (asset.type === 'font1') settingKey = 'font1';
+      else if (asset.type === 'font2') settingKey = 'font2';
+      
+      if (settingKey && settings[settingKey] === asset.name) {
+        await this.updateSettings({ [settingKey]: '' });
+      }
+    }
   }
 
   async getSettings() {
@@ -2080,10 +2373,57 @@ class GameStorageManager {
     Object.assign(current, updates);
     await store.put(current);
 
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       transaction.oncomplete = () => resolve(current);
       transaction.onerror = () => reject(transaction.error);
     });
+
+    // 設定が更新されたので、/home/web_user/.config データベース内の config.ini も連動して自動更新する
+    try {
+      const req = indexedDB.open('/home/web_user/.config', 21);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('FILE_DATA')) {
+          db.createObjectStore('FILE_DATA');
+        }
+      };
+      req.onsuccess = (event) => {
+        const db = event.target.result;
+        const tx = db.transaction(['FILE_DATA'], 'readwrite');
+        const fileStore = tx.objectStore('FILE_DATA');
+        
+        const configPath = window.EASYRPG_ACTUAL_CONFIG_PATH || '/EasyRPG/Player/config.ini';
+        const getReq = fileStore.get(configPath);
+        getReq.onsuccess = () => {
+          let existingContent = '';
+          if (getReq.result && getReq.result.contents) {
+            existingContent = new TextDecoder().decode(getReq.result.contents);
+          }
+          
+          const newContent = mergeSettingsIntoIni(existingContent, updates);
+          
+          fileStore.put({
+            timestamp: new Date(),
+            mode: 33206,
+            contents: new TextEncoder().encode(newContent)
+          }, configPath);
+          
+          // Make sure parent directories exist in FILE_DATA
+          fileStore.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG');
+          fileStore.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG/Player');
+        };
+        
+        tx.oncomplete = () => {
+          db.close();
+          console.log('[StorageManager] Automatically updated config.ini in /home/web_user/.config database.');
+        };
+        tx.onerror = () => db.close();
+      };
+    } catch (e) {
+      console.warn('[StorageManager] Failed to update config.ini in Save DB:', e);
+    }
+
+    return current;
   }
 }
 
@@ -2387,7 +2727,7 @@ async function saveAssetFromFile(type, file) {
 // EasyRPG Player本体には設定画面(Settings > Audio/Engine)に
 // 「<Upload Soundfont>」「<Upload Font>」というプレイ中にファイルを
 // 追加できるオプションが標準で存在する（`window_settings.cpp` / `interface.cpp`）。
-// これらはIDBFS上の /home/web_user/.config/Soundfont/ または /Font/ に
+// これらはIDBFS上の Soundfont/ または Fonts/ に
 // 直接ファイルを書き込むだけで、外部の設定タブ（本アプリのIndexedDB管理）
 // とは連動していなかった。
 // ここでは、ゲーム内Uploadで追加されたファイルを外部タブの資産管理
@@ -2423,18 +2763,7 @@ async function deleteAsset(assetId) {
   if (!confirm('このファイルを削除しますか？')) return;
 
   try {
-    const assets = await storageManager.getAllAssets();
-    const asset = assets.find(a => a.id === assetId);
     await storageManager.deleteAsset(assetId);
-
-    if (asset) {
-      const settings = await storageManager.getSettings();
-      const settingKey = getAssetSettingKey(asset.type);
-      if (settingKey && settings[settingKey] === asset.name) {
-        await storageManager.updateSettings({ [settingKey]: '' });
-      }
-    }
-
     await loadAssetSettings();
   } catch (e) {
     console.error('Failed to delete asset:', e);
@@ -2465,6 +2794,24 @@ function fillAssetSelect(selectId, assets, type, selectedName) {
   select.value = selectedName || '';
 }
 
+// 仮想コントローラー（方向キー／ボタン／Shift／テンキー）の表示・非表示をまとめて切り替える。
+// storageManagerへの保存はここでは行わない（呼び出し側で必要に応じて行う）。
+function applyVirtualControllerVisibility(visible) {
+  const dpad = document.getElementById('dpad');
+  const apad = document.getElementById('apad');
+  const shiftpad = document.getElementById('shiftpad');
+  const numpad = document.getElementById('numpad');
+  const keypadBtn = document.getElementById('controls-keypad');
+  const checkbox = document.getElementById('virtual-controller-checkbox');
+
+  if (dpad) dpad.style.display = visible ? 'block' : 'none';
+  if (apad) apad.style.display = visible ? 'block' : 'none';
+  if (shiftpad) shiftpad.style.display = visible ? 'block' : 'none';
+  if (numpad) numpad.style.display = visible ? 'grid' : 'none';
+  if (keypadBtn) keypadBtn.style.opacity = visible ? '1' : '0.5';
+  if (checkbox) checkbox.checked = visible;
+}
+
 async function loadAssetSettings() {
   const sfContainer = document.getElementById('soundfont-status-list');
   const fontContainer = document.getElementById('font-status-list');
@@ -2478,6 +2825,29 @@ async function loadAssetSettings() {
   fillAssetSelect('soundfont-select', assets, 'soundfont', settings.soundfont);
   fillAssetSelect('font1-select', assets, 'font1', settings.font1);
   fillAssetSelect('font2-select', assets, 'font2', settings.font2);
+
+  // Initialize scanlines toggle
+  const scanlinesCheckbox = document.getElementById('scanlines-checkbox');
+  const scanlinesOverlay = document.getElementById('scanline-overlay');
+  const scanlinesBtn = document.getElementById('controls-scanlines');
+  const canvas = document.getElementById('canvas');
+  const hasScanlines = Boolean(settings.scanlines);
+  
+  if (scanlinesCheckbox) {
+    scanlinesCheckbox.checked = hasScanlines;
+  }
+  if (scanlinesOverlay) {
+    scanlinesOverlay.classList.toggle('active', hasScanlines);
+  }
+  if (canvas) {
+    canvas.classList.toggle('crt-mode', hasScanlines);
+  }
+  if (scanlinesBtn) {
+    scanlinesBtn.style.opacity = hasScanlines ? '1' : '0.5';
+  }
+
+  // Initialize virtual controller (touch pad) visibility
+  applyVirtualControllerVisibility(Boolean(settings.virtualController));
 
   // Render soundfonts list
   if (sfContainer) {
@@ -2529,11 +2899,16 @@ async function loadAssetSettings() {
         });
     }
   }
+
+  // 設定が変更された際にストレージエクスプローラー側もリアルタイム再ロード・再描画する
+  if (storageExplorer) {
+    storageExplorer._treeCache = null;
+    await storageExplorer.loadAll();
+    storageExplorer.render();
+  }
 }
 
-function escapeIniValue(value) {
-  return String(value || '').replace(/\r?\n/g, ' ');
-}
+
 
 async function appendManagedConfigFiles(files) {
   if (!storageManager) return files;
@@ -2548,40 +2923,21 @@ async function appendManagedConfigFiles(files) {
     console.log(`[DEBUG-ASSETS] Asset - ID: ${a.id}, Type: ${a.type}, Name: ${a.name}, Size: ${a.size} bytes`);
   });
 
-  const selectedSoundfont = settings.soundfont || '';
-  const selectedFont1 = settings.font1 || '';
-  const selectedFont2 = settings.font2 || '';
   const configFiles = [];
 
   for (const asset of assets) {
     if (asset.type === 'soundfont') {
       configFiles.push({
-        path: `/home/web_user/.config/EasyRPG/Player/Soundfont/${asset.name}`,
+        path: `Soundfont/${asset.name}`,
         data: asset.data
       });
     } else if (asset.type === 'font1' || asset.type === 'font2') {
       configFiles.push({
-        path: `/home/web_user/.config/EasyRPG/Player/Font/${asset.name}`,
+        path: `Fonts/${asset.name}`,
         data: asset.data
       });
     }
   }
-
-  const configIni = [
-    '[Audio]',
-    selectedSoundfont ? `Soundfont=/home/web_user/.config/EasyRPG/Player/Soundfont/${escapeIniValue(selectedSoundfont)}` : 'Soundfont=',
-    '',
-    '[Player]',
-    'SettingsAutosave=true',
-    selectedFont1 ? `Font1=/home/web_user/.config/EasyRPG/Player/Font/${escapeIniValue(selectedFont1)}` : 'Font1=',
-    selectedFont2 ? `Font2=/home/web_user/.config/EasyRPG/Player/Font/${escapeIniValue(selectedFont2)}` : 'Font2=',
-    ''
-  ].join('\n');
-
-  configFiles.push({
-    path: '/home/web_user/.config/EasyRPG/Player/config.ini',
-    data: new TextEncoder().encode(configIni)
-  });
 
   return [...files, ...configFiles];
 }
@@ -2670,6 +3026,13 @@ class StorageExplorer {
   // --- データのロード ---
   async loadAll() {
     if (!storageManager) return;
+    
+    // すでにデータがロードされており、キャッシュツリーが存在する場合は再ロードをスキップ
+    if (this.allEntries && this.allEntries.length > 0 && this._treeCache !== null) {
+      console.log('[StorageExplorer] allEntries already loaded (cache hit), skipping loadAll');
+      return;
+    }
+    
     this.allEntries = [];
     this._treeCache = null;
 
@@ -2682,21 +3045,37 @@ class StorageExplorer {
       // ゲームファイルを読み込み
       for (const game of games) {
         try {
-          const data = await storageManager.getGame(game.id);
-          if (data && data.files) {
+          let fileList = game.fileList;
+          
+          // 後方互換性フォールバック: メタデータに fileList がない場合は実データから取得して自動アップグレード
+          if (!fileList) {
+            console.log(`[StorageExplorer] fileList missing for game "${game.id}". Fetching full data to auto-upgrade metadata...`);
+            const data = await storageManager.getGame(game.id);
+            if (data && data.files) {
+              fileList = data.files.map(f => ({
+                path: f.path,
+                size: f.data ? f.data.length || f.data.byteLength : 0
+              }));
+              // games メタデータに fileList を追記保存
+              game.fileList = fileList;
+              await storageManager.updateGameMetadata(game.id, { fileList });
+              console.log(`[StorageExplorer] Successfully auto-upgraded metadata for game "${game.id}" with fileList.`);
+            }
+          }
+
+          if (fileList) {
             const gameGroupPath = `games/${game.id}`;
-            for (const f of data.files) {
-              // 既にgames/XXXX/プレフィックスが付いていれば除去して正規化
+            for (const f of fileList) {
               const cleanPath = f.path.replace(/^games\/[^/]+\//i, '');
               this.allEntries.push({
                 groupType: 'game',
                 groupId: game.id,
                 groupName: game.name || game.id,
                 groupPath: gameGroupPath,
-                path: `${gameGroupPath}/${cleanPath}`,
+                path: f.path,
                 name: this._basename(cleanPath),
-                size: f.data ? f.data.byteLength || f.data.length : 0,
-                data: f.data,
+                size: f.size,
+                data: null, // オンデマンド取得のため実データはnullにする
                 date: game.lastPlayed || null
               });
             }
@@ -2707,26 +3086,52 @@ class StorageExplorer {
       }
 
       // RTPファイルを読み込み
-      // RTP IDからディレクトリ名へのマッピング
       const rtpDirMap = { 'rtp2000': '2000', 'rtp2003': '2003' };
       for (const rtp of rtps) {
         try {
-          const data = await storageManager.getRTP(rtp.id);
-          if (data && data.files) {
+          let fileList = rtp.fileList;
+          
+          // 後方互換性フォールバック: メタデータに fileList がない場合は実データから取得して自動アップグレード
+          if (!fileList) {
+            console.log(`[StorageExplorer] fileList missing for RTP "${rtp.id}". Fetching full data to auto-upgrade...`);
+            const data = await storageManager.getRTP(rtp.id);
+            if (data && data.files) {
+              fileList = data.files.map(f => ({
+                path: f.path,
+                size: f.data ? f.data.length || f.data.byteLength : 0
+              }));
+              rtp.fileList = fileList;
+              
+              // rtpストアに直接書き込んでメタデータを更新
+              const tx = storageManager.db.transaction(['rtp'], 'readwrite');
+              const store = tx.objectStore('rtp');
+              const rtpRecord = await new Promise((res, rej) => {
+                const req = store.get(rtp.id);
+                req.onsuccess = () => res(req.result);
+                req.onerror = () => rej(req.error);
+              });
+              if (rtpRecord) {
+                rtpRecord.fileList = fileList;
+                await store.put(rtpRecord);
+              }
+              console.log(`[StorageExplorer] Successfully auto-upgraded metadata for RTP "${rtp.id}" with fileList.`);
+            }
+          }
+
+          if (fileList) {
             const rtpDir = rtpDirMap[rtp.id] || rtp.id;
             const rtpGroupPath = `RTP/${rtpDir}`;
-            for (const f of data.files) {
-              // 既にRTP/XXXX/プレフィックスが付いていれば除去して正規化
+            for (const f of fileList) {
               const cleanPath = f.path.replace(/^RTP\/\d{4}\//, '');
               this.allEntries.push({
                 groupType: 'rtp',
                 groupId: rtp.id,
                 groupName: rtp.name || rtp.id,
                 groupPath: rtpGroupPath,
-                path: `${rtpGroupPath}/${cleanPath}`,
+                path: f.path,
                 name: this._basename(cleanPath),
-                size: f.data ? f.data.byteLength || f.data.length : 0,
-                data: f.data,
+                size: f.size,
+                data: null,
                 date: rtp.savedAt || null
               });
             }
@@ -2742,7 +3147,63 @@ class StorageExplorer {
         // "/Save" で終わる、または "Save" と完全一致するデータベース名をフィルタリング
         const saveDbNames = dbInfos
           .map(db => db.name)
-          .filter(name => name && (name.endsWith('/Save') || name === 'Save'));
+          .filter(name => name && (
+            name.endsWith('/Save') || 
+            name === 'Save' ||
+            name === '/home/web_user/.config'
+          ));
+
+        // もし config.ini が /home/web_user/.config データベース内にまだ一度も作られていない場合、デフォルト値で自動生成しておく
+        try {
+          const settings = await storageManager.getSettings();
+          const configIniContent = generateConfigIniContent(settings);
+          await new Promise((resolve) => {
+            const req = indexedDB.open('/home/web_user/.config', 21);
+            req.onupgradeneeded = (e) => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains('FILE_DATA')) {
+                db.createObjectStore('FILE_DATA');
+              }
+            };
+            req.onsuccess = () => {
+              const db = req.result;
+              const tx = db.transaction(['FILE_DATA'], 'readwrite');
+              const store = tx.objectStore('FILE_DATA');
+              
+              const configPath = '/EasyRPG/Player/config.ini';
+              const getReq = store.get(configPath);
+              getReq.onsuccess = () => {
+                if (!getReq.result) {
+                  store.put({
+                    timestamp: new Date(),
+                    mode: 33206,
+                    contents: new TextEncoder().encode(configIniContent)
+                  }, configPath);
+                  
+                  // Make sure parent directories exist in FILE_DATA (some IDBFS implementations require this)
+                  store.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG');
+                  store.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG/Player');
+                  
+                  console.log('[StorageExplorer] Automatically initialized default config.ini in /home/web_user/.config database.');
+                }
+                db.close();
+                resolve();
+              };
+              getReq.onerror = () => {
+                db.close();
+                resolve();
+              };
+            };
+            req.onerror = () => resolve();
+          });
+
+          // もし 'Save' データベースが一覧に入っていなければ、作成されたのでスキャン対象に追加
+          if (!saveDbNames.includes('Save')) {
+            saveDbNames.push('Save');
+          }
+        } catch (e) {
+          console.warn('[StorageExplorer] Failed to auto-initialize config.ini:', e);
+        }
 
         for (const dbName of saveDbNames) {
           const saves = await new Promise((resolve) => {
@@ -2761,7 +3222,7 @@ class StorageExplorer {
                 const cursor = e.target.result;
                 if (cursor) {
                   files.push({
-                    path: cursor.key, // 例: "/customgame/Save/勇者と異常者/Save01.lsd"
+                    path: cursor.key, // 例: "/Save/... " または "/config.ini"
                     value: cursor.value
                   });
                   cursor.continue();
@@ -2778,32 +3239,67 @@ class StorageExplorer {
             req.onerror = () => resolve([]);
           });
 
-          const saveGroupPath = 'Save';
           for (const s of saves) {
             if (isIdbfsDirectoryEntry(s.value)) {
               continue;
             }
 
             let cleanPath = s.path;
+            let groupType = 'save';
+            let groupName = 'セーブデータ';
+            let groupPath = 'Save';
             
-            // 先頭の "/customgame/Save/" や "/easyrpg/XXX/Save/" などを除去して
-            // エクスプローラー上で "Save/勇者と異常者/Save01.lsd" に統一する
-            const saveIndex = cleanPath.indexOf('/Save/');
-            if (saveIndex !== -1) {
-              cleanPath = 'Save/' + cleanPath.substring(saveIndex + 6);
-            } else if (cleanPath.startsWith('Save/') || cleanPath.startsWith('/Save/')) {
-              cleanPath = cleanPath.replace(/^\//, '');
+            const relPath = s.path.replace(/^\//, '');
+            
+            const isConfigIni = s.path.endsWith('/config.ini') || relPath === 'config.ini';
+            
+            if (isConfigIni) {
+              // Ignore config.ini if it comes from a database other than /home/web_user/.config
+              if (dbName !== '/home/web_user/.config') {
+                continue;
+              }
+              
+              groupType = 'config';
+              groupName = '設定';
+              groupPath = ''; // ルート（Save/と同じ階層）
+              
+              // If there's already a config.ini in allEntries, keep the larger one
+              const existingIndex = this.allEntries.findIndex(e => e.groupType === 'config' && e.name === 'config.ini');
+              const currentSize = s.value.contents ? s.value.contents.byteLength || s.value.contents.length : 0;
+              
+              if (existingIndex !== -1) {
+                if (currentSize > this.allEntries[existingIndex].size) {
+                  // Current one is larger, remove the old one
+                  this.allEntries.splice(existingIndex, 1);
+                } else {
+                  // Old one is larger, skip this one
+                  continue;
+                }
+              }
+              
+              cleanPath = 'config.ini';
+              // Save the actual IDBFS key globally so updateSettings can use it
+              window.EASYRPG_ACTUAL_CONFIG_PATH = s.path;
             } else {
-              // home/web_user/.config/ などのシステムパスがセーブDBに入っていても除外する
-              continue;
+              // 先頭の "/customgame/Save/" や "/easyrpg/XXX/Save/" などを除去して
+              // エクスプローラー上で "Save/勇者と異常者/Save01.lsd" に統一する
+              const saveIndex = cleanPath.indexOf('/Save/');
+              if (saveIndex !== -1) {
+                cleanPath = 'Save/' + cleanPath.substring(saveIndex + 6);
+              } else if (cleanPath.startsWith('Save/') || cleanPath.startsWith('/Save/')) {
+                cleanPath = cleanPath.replace(/^\//, '');
+              } else {
+                // システムパスなどのイレギュラーデータは除外
+                continue;
+              }
             }
             
             this.allEntries.push({
-              groupType: 'save',
+              groupType: groupType,
               groupId: dbName, // 保存や削除の際に正しいデータベース名を特定するためにgroupIdにdbNameを保持
-              groupName: 'セーブデータ',
-              groupPath: saveGroupPath,
-              path: cleanPath, // "Save/勇者と異常者/Save01.lsd"
+              groupName: groupName,
+              groupPath: groupPath,
+              path: cleanPath,
               name: this._basename(cleanPath),
               size: s.value.contents ? s.value.contents.byteLength || s.value.contents.length : 0,
               data: s.value.contents,
@@ -2821,14 +3317,13 @@ class StorageExplorer {
         
         // サウンドフォント
         const soundfonts = assets.filter(a => a.type === 'soundfont');
-        const sfGroupPath = 'soundfonts';
         for (const sf of soundfonts) {
           this.allEntries.push({
             groupType: 'asset',
             groupId: sf.id,
             groupName: 'サウンドフォント',
-            groupPath: sfGroupPath,
-            path: `${sfGroupPath}/${sf.name}`,
+            groupPath: '',
+            path: `Soundfont/${sf.name}`,
             name: sf.name,
             size: sf.data ? sf.data.byteLength || sf.data.length : 0,
             data: sf.data,
@@ -2838,14 +3333,13 @@ class StorageExplorer {
 
         // フォント
         const fonts = assets.filter(a => a.type === 'font1' || a.type === 'font2');
-        const fontGroupPath = 'fonts';
         for (const font of fonts) {
           this.allEntries.push({
             groupType: 'asset',
             groupId: font.id,
             groupName: 'フォント',
-            groupPath: fontGroupPath,
-            path: `${fontGroupPath}/${font.name}`,
+            groupPath: '',
+            path: `Fonts/${font.name}`,
             name: font.name,
             size: font.data ? font.data.byteLength || font.data.length : 0,
             data: font.data,
@@ -3152,7 +3646,8 @@ class StorageExplorer {
   }
 
   async _pasteFile(item, mode) {
-    if (!item.data) return;
+    const data = await this._fetchFileData(item);
+    if (!data) return;
     // コピー先のパスを決定
     const destPath = this.currentPath
       ? `${this.currentPath}/${item.name}`
@@ -3189,7 +3684,7 @@ class StorageExplorer {
     }
 
     // グループ内のファイルリストを更新
-    await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, item.data);
+    await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, data);
 
     // 切り取りの場合、元ファイルを削除
     if (mode === 'cut' && item.groupType && item.groupId) {
@@ -3210,8 +3705,9 @@ class StorageExplorer {
         : `${item.name}/${relativeToDirRoot}`;
 
       const groupInfo = this._resolveGroup(newPath);
-      if (groupInfo && entry.data) {
-        await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, entry.data);
+      const data = await this._fetchFileData(entry);
+      if (groupInfo && data) {
+        await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, data);
       }
 
       if (mode === 'cut') {
@@ -3227,29 +3723,38 @@ class StorageExplorer {
   // グループのパス（groupPath、例: 'games/MyGame' や 'RTP/2000'）が複数階層に
   // またがる場合にも対応するため、最も長く一致するグループを採用する。
   _resolveGroupAtParts(parts) {
-    let best = null;
-    let bestLen = 0;
-    for (const entry of this.allEntries) {
-      const groupParts = (entry.groupPath || '').split('/').filter(s => s);
-      if (groupParts.length === 0 || groupParts.length > parts.length) continue;
-      if (groupParts.length <= bestLen) continue;
-      let match = true;
-      for (let i = 0; i < groupParts.length; i++) {
-        if (groupParts[i] !== parts[i]) { match = false; break; }
-      }
-      if (match) {
-        best = entry;
-        bestLen = groupParts.length;
-      }
+    if (parts.length === 0) return null;
+    const rootDir = parts[0];
+    
+    if (rootDir === 'games' && parts.length >= 2) {
+      return { groupType: 'game', groupId: parts[1], groupPathLen: 2 };
     }
-    if (!best) return null;
-    return { groupType: best.groupType, groupId: best.groupId, groupPathLen: bestLen };
+    if (rootDir === 'RTP' && parts.length >= 2) {
+      return { groupType: 'rtp', groupId: parts[1], groupPathLen: 2 };
+    }
+    if (rootDir === 'Save' && parts.length >= 2) {
+      // Find the correct dbName from existing entries if possible, otherwise fallback
+      const existing = this.allEntries.find(e => e.groupType === 'save' && e.path.startsWith(`Save/${parts[1]}/`));
+      const groupId = existing ? existing.groupId : `/customgame/Save/${parts[1]}`;
+      return { groupType: 'save', groupId, groupPathLen: 2 };
+    }
+    if (rootDir === 'Soundfont') {
+      return { groupType: 'asset', groupId: 'soundfont', groupPathLen: 1 };
+    }
+    if (rootDir === 'Fonts') {
+      return { groupType: 'asset', groupId: 'font1', groupPathLen: 1 };
+    }
+    if (parts[0] === 'config.ini') {
+      return { groupType: 'config', groupId: '/home/web_user/.config', groupPathLen: 0 };
+    }
+    
+    return null;
   }
 
   // パス → {groupType, groupId, relativePath} のマッピング
   _resolveGroup(fullPath) {
     const parts = fullPath.split('/').filter(s => s);
-    if (parts.length < 2) return null;
+    if (parts.length < 1) return null;
     const groupInfo = this._resolveGroupAtParts(parts);
     if (!groupInfo) return null;
     return {
@@ -3275,7 +3780,7 @@ class StorageExplorer {
           files.push({ path: relativePath, data: data });
           await storageManager.saveRTP(groupId, rtpData.name, files);
         }
-      } else if (groupType === 'save') {
+      } else if (groupType === 'save' || groupType === 'config') {
         // IDBFS データベース (groupIdに格納された dbName) の "FILE_DATA" に追加
         await new Promise((resolve, reject) => {
           const req = indexedDB.open(groupId, 21);
@@ -3283,7 +3788,18 @@ class StorageExplorer {
             const db = req.result;
             const tx = db.transaction(['FILE_DATA'], 'readwrite');
             const store = tx.objectStore('FILE_DATA');
-            const key = groupId + '/' + relativePath;
+            
+            let key;
+            if (groupType === 'config') {
+              if (relativePath === 'config.ini' && window.EASYRPG_ACTUAL_CONFIG_PATH) {
+                key = window.EASYRPG_ACTUAL_CONFIG_PATH;
+              } else {
+                key = '/' + relativePath; // For Soundfont, Fonts, or fallback
+              }
+            } else {
+              key = groupId + '/' + relativePath;
+            }
+            
             const entry = {
               timestamp: new Date(),
               mode: 33206, // Regular file with 0666 permissions
@@ -3331,7 +3847,7 @@ class StorageExplorer {
           const files = (rtpData.files || []).filter(f => f.path !== relativePath);
           await storageManager.saveRTP(groupId, rtpData.name, files);
         }
-      } else if (groupType === 'save') {
+      } else if (groupType === 'save' || groupType === 'config') {
         // IDBFS データベース (groupIdに格納された dbName) の "FILE_DATA" から削除
         await new Promise((resolve, reject) => {
           const req = indexedDB.open(groupId, 21);
@@ -3339,7 +3855,18 @@ class StorageExplorer {
             const db = req.result;
             const tx = db.transaction(['FILE_DATA'], 'readwrite');
             const store = tx.objectStore('FILE_DATA');
-            const key = groupId + '/' + relativePath;
+            
+            let key;
+            if (groupType === 'config') {
+              if (relativePath === 'config.ini' && window.EASYRPG_ACTUAL_CONFIG_PATH) {
+                key = window.EASYRPG_ACTUAL_CONFIG_PATH;
+              } else {
+                key = '/' + relativePath; // For Soundfont, Fonts, or fallback
+              }
+            } else {
+              key = groupId + '/' + relativePath;
+            }
+            
             const delReq = store.delete(key);
             delReq.onsuccess = () => {
               db.close();
@@ -3381,14 +3908,14 @@ class StorageExplorer {
         // ディレクトリ配下の全ファイルを削除
         const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
         for (const entry of dirEntries) {
-          const groupInfo = this._resolveGroup(entry.path);
-          if (groupInfo) {
+          const groupInfo = { groupType: entry.groupType, groupId: entry.groupId, relativePath: entry.path };
+          if (groupInfo && groupInfo.groupType) {
             await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
           }
         }
       } else {
-        const groupInfo = this._resolveGroup(item.fullPath);
-        if (groupInfo) {
+        const groupInfo = { groupType: item.groupType, groupId: item.groupId, relativePath: item.fullPath };
+        if (groupInfo && groupInfo.groupType) {
           await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
         }
       }
@@ -3473,25 +4000,29 @@ class StorageExplorer {
 
       const affectedEntries = this.allEntries.filter(e => e.path.startsWith(oldPrefix));
       for (const entry of affectedEntries) {
-        const groupInfo = this._resolveGroup(entry.path);
-        const newEntryPath = newPrefix + entry.path.substring(oldPrefix.length);
-        const newGroupInfo = this._resolveGroup(newEntryPath);
-        if (groupInfo && newGroupInfo) {
-          await this._addFileToGroup(newGroupInfo.groupType, newGroupInfo.groupId, newGroupInfo.relativePath, entry.data);
+        const groupInfo = { groupType: entry.groupType, groupId: entry.groupId, relativePath: entry.path };
+        // Determine new relative path by replacing the old folder name
+        const relativeSuffix = entry.path.substring(oldPrefix.length);
+        const newRelativePath = groupInfo.relativePath.substring(0, groupInfo.relativePath.lastIndexOf(oldName + '/' + relativeSuffix)) + newName + '/' + relativeSuffix;
+        
+        const data = await this._fetchFileData(entry);
+        if (data) {
+          await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, newRelativePath, data);
           await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
         }
       }
     } else {
       // ファイルのリネーム
-      const groupInfo = this._resolveGroup(fullPath);
-      if (groupInfo) {
+      const entry = this.allEntries.find(e => e.path === fullPath);
+      if (entry) {
+        const groupInfo = { groupType: entry.groupType, groupId: entry.groupId, relativePath: entry.path };
         const newRelativePath = groupInfo.relativePath.replace(
           new RegExp(escapeRegExp(oldName) + '$'),
           newName
         );
-        const entry = this.allEntries.find(e => e.path === fullPath);
-        if (entry && entry.data) {
-          await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, newRelativePath, entry.data);
+        const data = await this._fetchFileData(entry);
+        if (data) {
+          await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, newRelativePath, data);
           await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
         }
       }
@@ -3506,12 +4037,39 @@ class StorageExplorer {
     }
   }
 
+  // ファイルの実データを必要に応じて IndexedDB から動的に取得するヘルパー
+  async _fetchFileData(item) {
+    if (item.data) return item.data;
+    try {
+      if (item.groupType === 'game') {
+        const gameData = await storageManager.getGame(item.groupId);
+        if (gameData && gameData.files) {
+          const file = gameData.files.find(f => f.path === item.path);
+          if (file) return file.data;
+        }
+      } else if (item.groupType === 'rtp') {
+        const rtpData = await storageManager.getRTP(item.groupId);
+        if (rtpData && rtpData.files) {
+          const file = rtpData.files.find(f => f.path === item.path);
+          if (file) return file.data;
+        }
+      }
+    } catch (e) {
+      console.error(`Failed to fetch file data for ${item.path}:`, e);
+    }
+    return null;
+  }
+
   // --- ダウンロード ---
-  downloadSelected() {
+  async downloadSelected() {
     const items = this._getSelectedItems();
     for (const item of items) {
-      if (!item.isDir && item.data) {
-        downloadStorageFile(item.name, item.data);
+      if (item.isDir) continue;
+      const data = await this._fetchFileData(item);
+      if (data) {
+        downloadStorageFile(item.name, data);
+      } else {
+        alert(`ファイル "${item.name}" の取得に失敗しました。`);
       }
     }
   }
@@ -3520,23 +4078,39 @@ class StorageExplorer {
   async uploadFiles(fileList) {
     if (!fileList || fileList.length === 0) return;
 
-    // 現在のパスからグループを判定
     const parts = this.currentPath.split('/').filter(s => s);
-    if (parts.length === 0) {
-      alert('ゲーム、RTP、またはセーブデータフォルダ内に移動してからアップロードしてください。');
-      return;
-    }
-
-    const groupInfo = this._resolveGroupAtParts(parts);
-    if (!groupInfo) {
-      alert('アップロード先のグループが特定できません。');
-      return;
-    }
 
     for (const file of fileList) {
       const arrayBuffer = await file.arrayBuffer();
       const data = new Uint8Array(arrayBuffer);
-      const relativePath = parts.slice(groupInfo.groupPathLen).concat(file.name).join('/');
+      
+      let groupInfo = null;
+      let relativePath = '';
+
+      if (parts.length === 0) {
+        // ルートへの直接アップロード
+        if (file.name === 'config.ini') {
+          groupInfo = { groupType: 'config', groupId: '/home/web_user/.config', groupPathLen: 0 };
+          relativePath = 'config.ini';
+        } else if (file.name.toLowerCase().endsWith('.sf2')) {
+          groupInfo = { groupType: 'asset', groupId: 'soundfont', groupPathLen: 1 };
+          relativePath = file.name;
+        } else if (file.name.toLowerCase().endsWith('.ttf') || file.name.toLowerCase().endsWith('.otf')) {
+          groupInfo = { groupType: 'asset', groupId: 'font1', groupPathLen: 1 };
+          relativePath = file.name;
+        } else {
+          alert(`ルートディレクトリへのアップロードは config.ini、サウンドフォント(.sf2)、フォント(.ttf/.otf)のみ対応しています: ${file.name}`);
+          continue;
+        }
+      } else {
+        groupInfo = this._resolveGroupAtParts(parts);
+        if (!groupInfo) {
+          alert('アップロード先のグループが特定できません: ' + file.name);
+          continue;
+        }
+        relativePath = parts.slice(groupInfo.groupPathLen).concat(file.name).join('/');
+      }
+
       await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, data);
     }
 
@@ -3549,7 +4123,7 @@ class StorageExplorer {
   async createNewFolder() {
     const parts = this.currentPath.split('/').filter(s => s);
     if (parts.length === 0) {
-      alert('ゲーム、RTP、またはセーブデータフォルダ内に移動してからフォルダを作成してください。');
+      alert('ルートディレクトリには新しいフォルダを作成できません。ゲーム、RTP、またはセーブデータのフォルダ内に移動してください。');
       return;
     }
 
@@ -3569,6 +4143,94 @@ class StorageExplorer {
     this._treeCache = null;
     await this.loadAll();
     this.render();
+  }
+
+  async editTextSelected(item) {
+    const targetItem = item || this._getSelectedItems()[0];
+    if (!targetItem || targetItem.isDir) return;
+
+    // ファイルデータをロード (オンデマンドフェッチ)
+    const data = await this._fetchFileData(targetItem);
+    if (!data) {
+      alert(`ファイル "${targetItem.name}" の読み込みに失敗しました。`);
+      return;
+    }
+
+    // デコードしてテキストにする
+    const text = new TextDecoder('utf-8').decode(data);
+
+    // テキスト編集モーダルを開く
+    const modal = document.getElementById('text-editor-modal');
+    const textarea = document.getElementById('text-editor-textarea');
+    const title = document.getElementById('text-editor-title');
+    if (!modal || !textarea || !title) return;
+    
+    title.textContent = `テキスト編集: ${targetItem.name}`;
+    textarea.value = text;
+    modal.style.display = 'flex';
+
+    // 保存ボタンのイベントリスナを一時的に設定
+    const saveBtn = document.getElementById('text-editor-save');
+    const cancelBtn = document.getElementById('text-editor-cancel');
+
+    // 古いイベントリスナをクリアするためにcloneNodeで再生成
+    const newSaveBtn = saveBtn.cloneNode(true);
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+    newCancelBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    newSaveBtn.addEventListener('click', async () => {
+      const newText = textarea.value;
+      const newData = new TextEncoder().encode(newText);
+
+      // IndexedDB (グループ) に保存する
+      const groupInfo = {
+        groupType: targetItem.groupType,
+        groupId: targetItem.groupId,
+        relativePath: targetItem.fullPath
+      };
+
+      if (groupInfo && groupInfo.groupType) {
+        // セーブデータ（IDBFSデータベース）、ゲーム、RTPなどの各対象グループへ更新保存
+        await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, newData);
+        
+        // もし config.ini が更新された場合、設定（settingsストア）にも逆同期させる
+        if (targetItem.name === 'config.ini') {
+          const fsObj = typeof FS !== 'undefined' ? FS : (typeof Module !== 'undefined' && Module.FS ? Module.FS : null);
+          // もしゲーム実行中なら、メモリ上の /home/web_user/.config/EasyRPG/Player/config.ini にも同期させて反映する
+          if (fsObj) {
+            try {
+              fsObj.writeFile('/home/web_user/.config/EasyRPG/Player/config.ini', newData);
+              console.log('[TextEditor] Synced config.ini to running IDBFS.');
+            } catch (e) {
+              console.warn('[TextEditor] Failed to sync config.ini to running IDBFS:', e);
+            }
+          }
+          // settings設定への同期
+          if (typeof syncConfigIniToSettings === 'function') {
+            const dummyFS = {
+              analyzePath: () => ({ exists: true }),
+              readFile: () => newText
+            };
+            await syncConfigIniToSettings(dummyFS);
+          }
+        }
+
+        modal.style.display = 'none';
+        
+        // 再描画
+        this._treeCache = null;
+        await this.loadAll();
+        this.render();
+        console.log(`[TextEditor] Successfully saved changes to "${targetItem.name}"`);
+      } else {
+        alert('保存先のグループを解決できませんでした。');
+      }
+    });
   }
 
   // --- ヘルパー ---
@@ -3632,7 +4294,12 @@ class StorageExplorer {
       addSep();
     }
 
-    if (singleSelection && !isDir && selectedItem?.data) {
+    if (singleSelection && !isDir) {
+      const ext = this._getExtension(selectedItem.name);
+      const isText = ['txt', 'ini', 'json', 'xml', 'keep'].includes(ext);
+      if (isText) {
+        addItem('📝', '閲覧と編集', '', () => this.editTextSelected(selectedItem));
+      }
       addItem('💾', 'ダウンロード', '', () => this.downloadSelected());
       addSep();
     }
@@ -3800,11 +4467,20 @@ class StorageExplorer {
         this.toggleSelect(item, e);
       });
 
-      row.addEventListener('dblclick', (e) => {
+      row.addEventListener('dblclick', async (e) => {
         if (item.isDir) {
           this.navigateTo(item.fullPath);
-        } else if (item.data) {
-          downloadStorageFile(item.name, item.data);
+        } else {
+          const ext = this._getExtension(item.name);
+          const isText = ['txt', 'ini', 'json', 'xml', 'keep'].includes(ext);
+          if (isText) {
+            await this.editTextSelected(item);
+          } else {
+            const data = await this._fetchFileData(item);
+            if (data) {
+              downloadStorageFile(item.name, data);
+            }
+          }
         }
       });
 
@@ -3924,6 +4600,16 @@ class StorageExplorer {
     btn('sexplorer-btn-download', hasSelection);
     btn('sexplorer-btn-upload', inGroup);
     btn('sexplorer-btn-newfolder', inGroup);
+
+    let canEdit = false;
+    if (singleSelection) {
+      const selItem = this._getSelectedItems()[0];
+      if (selItem && !selItem.isDir) {
+        const ext = this._getExtension(selItem.name);
+        canEdit = ['txt', 'ini', 'json', 'xml', 'keep'].includes(ext);
+      }
+    }
+    btn('sexplorer-btn-edit', canEdit);
   }
 
   _updateCutVisual() {
@@ -3981,6 +4667,7 @@ function _initExplorerEvents() {
   document.getElementById('sexplorer-btn-copy')?.addEventListener('click', () => se.copySelected());
   document.getElementById('sexplorer-btn-paste')?.addEventListener('click', () => se.pasteItems());
   document.getElementById('sexplorer-btn-rename')?.addEventListener('click', () => se.startRename());
+  document.getElementById('sexplorer-btn-edit')?.addEventListener('click', () => se.editTextSelected());
   document.getElementById('sexplorer-btn-delete')?.addEventListener('click', () => se.deleteSelected());
   document.getElementById('sexplorer-btn-download')?.addEventListener('click', () => se.downloadSelected());
   document.getElementById('sexplorer-btn-upload')?.addEventListener('click', () => {
@@ -4259,10 +4946,17 @@ function setGameButtonsDisabled(disabled) {
 function returnToTopMenu() {
   console.log('[returnToTopMenu] Re-displaying the top menu...');
   
+  if (isGamePlaying) {
+    console.log('[returnToTopMenu] Game was active. Performing a clean reload to avoid memory/input leaks...');
+    isGamePlaying = false;
+    window.location.reload();
+    return;
+  }
+  
   // 1. スタートアップダイアログ（ゲーム選択画面）を再表示
   const startupDialog = document.getElementById('startup-dialog');
   if (startupDialog) {
-    startupDialog.style.display = 'block';
+    startupDialog.style.display = 'flex';
   }
   
   // 2. ステータス表示のリセット
@@ -4285,14 +4979,16 @@ function returnToTopMenu() {
   
   // 5. 確実にゲーム一覧リストとストレージを最新状態に再ロードしておく
   loadSavedGamesList();
-  if (typeof StorageExplorer !== 'undefined' && StorageExplorer.loadAll) {
-    StorageExplorer.loadAll();
+  if (storageExplorer) {
+    storageExplorer._treeCache = null;
+    storageExplorer.loadAll().then(() => storageExplorer.render());
   }
 }
 
 let isGameLoading = false;
 let isGameDeleting = false;
 let isGameRenaming = false;
+let isGamePlaying = false;
 
 async function loadSavedGame(gameId) {
   if (isGameLoading || isGameDeleting || isGameRenaming) return;
@@ -4990,8 +5686,10 @@ async function saveGameToLibrary(files, gameName) {
     await loadSavedGamesList();
     
     // ストレージエクスプローラーも同期して再ロード
-    if (typeof StorageExplorer !== 'undefined' && StorageExplorer.loadAll) {
-      await StorageExplorer.loadAll();
+    if (storageExplorer) {
+      storageExplorer._treeCache = null;
+      await storageExplorer.loadAll();
+      storageExplorer.render();
     }
     
     // UIステートのリセット (画面遷移はせず、入力を空にしてリストに追加するだけ)
@@ -5196,8 +5894,23 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     return;
   }
   
+  // Ensure exit hooks are attached to this specific Module instance
+  Module.onExit = function(status) {
+    console.log('[Module.onExit] Game exited with status:', status);
+    if (typeof returnToTopMenu === 'function') {
+      returnToTopMenu();
+    }
+  };
+  Module.onAbort = function(what) {
+    console.warn('[Module.onAbort] Game aborted:', what);
+    if (typeof returnToTopMenu === 'function') {
+      returnToTopMenu();
+    }
+  };
+
   createEasyRpgPlayer(Module).then(function(Module) {
     console.log("EasyRPG Player initialized!");
+    isGamePlaying = true;
     window.EASYRPG_ACTIVE_MODULE = Module;
     if (Module.FS) {
       window.EASYRPG_FS = Module.FS;
@@ -5230,9 +5943,9 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
       const fsObj = typeof FS !== 'undefined' ? FS : (Module && Module.FS ? Module.FS : null);
       if (fsObj) {
         try {
-          console.log('[DEBUG-FS] Checking Soundfont/Font directories 5s after startup...');
-          const sfPath = '/home/web_user/.config/EasyRPG/Player/Soundfont';
-          const fontPath = '/home/web_user/.config/EasyRPG/Player/Font';
+          console.log('[DEBUG-FS] Checking Soundfont/Fonts directories 5s after startup...');
+          const sfPath = '/customgame/Soundfont';
+          const fontPath = '/customgame/Fonts';
           
           if (fsObj.analyzePath(sfPath).exists) {
             console.log('[DEBUG-FS] Files in Soundfont dir:', fsObj.readdir(sfPath));
@@ -5241,9 +5954,9 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
           }
           
           if (fsObj.analyzePath(fontPath).exists) {
-            console.log('[DEBUG-FS] Files in Font dir:', fsObj.readdir(fontPath));
+            console.log('[DEBUG-FS] Files in Fonts dir:', fsObj.readdir(fontPath));
           } else {
-            console.log('[DEBUG-FS] Font directory does NOT exist!');
+            console.log('[DEBUG-FS] Fonts directory does NOT exist!');
           }
         } catch (e) {
           console.error('[DEBUG-FS] Error checking directories:', e);
@@ -5382,24 +6095,144 @@ window.addEventListener('load', () => {
   wireAssetSelect('font1-select', 'font1');
   wireAssetSelect('font2-select', 'font2');
 
-  // Virtual controller keypad toggle
-  const keypadBtn = document.getElementById('controls-keypad');
-  const dpad = document.getElementById('dpad');
-  const apad = document.getElementById('apad');
-
-  if (dpad) dpad.style.display = 'none';
-  if (apad) apad.style.display = 'none';
-  if (keypadBtn) {
-    keypadBtn.style.opacity = '0.5';
-    keypadBtn.addEventListener('click', () => {
-      if (dpad && apad) {
-        const isHidden = dpad.style.display === 'none';
-        dpad.style.display = isHidden ? 'block' : 'none';
-        apad.style.display = isHidden ? 'block' : 'none';
-        keypadBtn.style.opacity = isHidden ? '1' : '0.5';
+  const scanlineCheckbox = document.getElementById('scanlines-checkbox');
+  if (scanlineCheckbox) {
+    scanlineCheckbox.addEventListener('change', async (event) => {
+      try {
+        await storageManager.updateSettings({ scanlines: event.target.checked });
+        const overlay = document.getElementById('scanline-overlay');
+        const btn = document.getElementById('controls-scanlines');
+        const canvas = document.getElementById('canvas');
+        if (overlay) overlay.classList.toggle('active', event.target.checked);
+        if (canvas) canvas.classList.toggle('crt-mode', event.target.checked);
+        if (btn) btn.style.opacity = event.target.checked ? '1' : '0.5';
+      } catch (e) {
+        console.error('Failed to update scanlines setting:', e);
       }
     });
   }
+
+  const scanlinesBtn = document.getElementById('controls-scanlines');
+  if (scanlinesBtn) {
+    scanlinesBtn.addEventListener('click', async () => {
+      const overlay = document.getElementById('scanline-overlay');
+      const checkbox = document.getElementById('scanlines-checkbox');
+      const canvas = document.getElementById('canvas');
+      const isCurrentlyActive = overlay ? overlay.classList.contains('active') : false;
+      const newState = !isCurrentlyActive;
+      
+      if (overlay) overlay.classList.toggle('active', newState);
+      if (canvas) canvas.classList.toggle('crt-mode', newState);
+      if (checkbox) checkbox.checked = newState;
+      if (scanlinesBtn) scanlinesBtn.style.opacity = newState ? '1' : '0.5';
+      
+      try {
+        await storageManager.updateSettings({ scanlines: newState });
+      } catch (e) {
+        console.error('Failed to update scanlines setting:', e);
+      }
+    });
+  }
+
+  // Virtual controller keypad toggle（表示状態はstorageManagerの設定に保存し、次回起動時にも復元する）
+  const keypadBtn = document.getElementById('controls-keypad');
+  const dpad = document.getElementById('dpad');
+  const apad = document.getElementById('apad');
+  const shiftpad = document.getElementById('shiftpad');
+  const numpad = document.getElementById('numpad');
+  const virtualControllerCheckbox = document.getElementById('virtual-controller-checkbox');
+
+  async function setVirtualControllerEnabled(enabled) {
+    applyVirtualControllerVisibility(enabled);
+    try {
+      await storageManager.updateSettings({ virtualController: enabled });
+    } catch (e) {
+      console.error('Failed to update virtual controller setting:', e);
+    }
+  }
+
+  if (keypadBtn) {
+    keypadBtn.addEventListener('click', () => {
+      const isCurrentlyHidden = !dpad || dpad.style.display === 'none';
+      setVirtualControllerEnabled(isCurrentlyHidden);
+    });
+  }
+
+  if (virtualControllerCheckbox) {
+    virtualControllerCheckbox.addEventListener('change', (event) => {
+      setVirtualControllerEnabled(event.target.checked);
+    });
+  }
+
+  // 仮想コントローラー（方向キー／ボタン／Shift／テンキー）のタッチ・クリック操作を、
+  // ゲーム側のキーボード入力として扱うためのキーシミュレーション処理。
+  (function initVirtualControllerInput() {
+    const activePointers = new Map(); // pointerId -> ノード
+    const canvas = document.getElementById('canvas');
+
+    function simulateKeyboardEvent(eventType, key) {
+      if (!canvas) return;
+      const event = new KeyboardEvent(eventType, {
+        code: key,
+        key: key,
+        bubbles: true,
+        cancelable: true
+      });
+      canvas.dispatchEvent(event);
+    }
+
+    function pressNode(node) {
+      const key = node.dataset.key;
+      if (!key) return;
+      node.classList.add('active');
+      simulateKeyboardEvent('keydown', key);
+    }
+
+    function releaseNode(node) {
+      const key = node.dataset.key;
+      if (!key) return;
+      node.classList.remove('active');
+      simulateKeyboardEvent('keyup', key);
+    }
+
+    function endPointer(pointerId) {
+      const node = activePointers.get(pointerId);
+      if (node) {
+        releaseNode(node);
+        activePointers.delete(pointerId);
+      }
+    }
+
+    const keyNodes = document.querySelectorAll(
+      '#dpad [data-key], #apad [data-key], #shiftpad [data-key], #numpad [data-key]'
+    );
+
+    keyNodes.forEach((node) => {
+      node.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        endPointer(event.pointerId);
+        activePointers.set(event.pointerId, node);
+        pressNode(node);
+      });
+
+      // 方向キーなど、指を離さずに隣接するボタンへスライドした場合にも追従させる
+      node.addEventListener('pointermove', (event) => {
+        if (activePointers.get(event.pointerId) !== node) return;
+        const target = document.elementFromPoint(event.clientX, event.clientY);
+        if (target === node) return;
+        if (target && target.dataset && target.dataset.key && target.closest('#dpad, #apad, #shiftpad, #numpad')) {
+          releaseNode(node);
+          activePointers.set(event.pointerId, target);
+          pressNode(target);
+        } else {
+          endPointer(event.pointerId);
+        }
+      });
+
+      node.addEventListener('pointerup', (event) => endPointer(event.pointerId));
+      node.addEventListener('pointercancel', (event) => endPointer(event.pointerId));
+    });
+  })();
 
   // Fullscreen button
   document.querySelector('#controls-fullscreen').addEventListener('click', () => {
@@ -5434,53 +6267,27 @@ Module.onAbort = function(what) {
   }
 };
 
-// Hook indexedDB.open to monitor config database write transactions and trigger reverse sync
-(function hookConfigDBWrites() {
-  const originalIndexedDBOpen = window.indexedDB.open;
-  window.indexedDB.open = function(name, version) {
-    const req = originalIndexedDBOpen.apply(this, arguments);
-    if (name === '/home/web_user/.config') {
-      req.addEventListener('success', function(event) {
-        const db = event.target.result;
-        console.log('[IDB-Hook] Hooked IndexedDB database successfully:', name);
-        
-        // Intercept db.transaction to catch any transaction complete events
-        const originalTransaction = db.transaction;
-        db.transaction = function(storeNames, mode) {
-          console.log('[IDB-Hook] db.transaction requested for:', name, 'store:', storeNames, 'mode:', mode);
-          const tx = originalTransaction.apply(this, arguments);
-          
-          tx.addEventListener('complete', function() {
-            console.log('[IDB-Hook] config database transaction completed:', name);
-            const activeFS = window.EASYRPG_FS || (typeof FS !== 'undefined' ? FS : (typeof Module !== 'undefined' && Module.FS ? Module.FS : null));
-            if (activeFS) {
-              syncConfigIniToSettings(activeFS);
-            }
-          });
-          return tx;
-        };
-      });
-    }
-    return req;
-  };
-})();
+// Removed hookConfigDBWrites to prevent infinite loop
 
 // Function to prepare and perform pre-launch asset injection into the IDBFS IndexedDB database
 async function prepareAndInjectIdbfsAssets() {
   if (!window.EASYRPG_CUSTOM_FILES) return;
   
-  // Filter assets that are target to be synced on the config mount point
-  const configFiles = window.EASYRPG_CUSTOM_FILES.filter(f => f.path.startsWith('/home/web_user/.config/'));
+  // Soundfont, and Fonts files (which are on the root level, not Save/)
+  const configFiles = window.EASYRPG_CUSTOM_FILES.filter(f => 
+    f.path.startsWith('Soundfont/') || f.path.startsWith('Fonts/')
+  );
   if (configFiles.length === 0) {
     console.log('[PRE-LAUNCH] No config assets to inject.');
     return;
   }
   
-  console.log('[PRE-LAUNCH] Injecting config/assets into /home/web_user/.config database...');
+  const targetDbName = 'Save';
+  console.log(`[PRE-LAUNCH] Injecting config/assets into ${targetDbName} database...`);
   
   return new Promise((resolve, reject) => {
-    // Open the /home/web_user/.config database (Emscripten IDBFS default) with version 21
-    const req = indexedDB.open('/home/web_user/.config', 21);
+    // Open the Save database with version 21
+    const req = indexedDB.open(targetDbName, 21);
     
     req.onupgradeneeded = (event) => {
       const db = event.target.result;
@@ -5493,12 +6300,17 @@ async function prepareAndInjectIdbfsAssets() {
       const db = event.target.result;
       if (!db.objectStoreNames.contains('FILE_DATA')) {
         db.close();
-        reject(new Error('FILE_DATA store missing in config database'));
+        reject(new Error('FILE_DATA store missing in Save database'));
         return;
       }
       
       try {
-        await performIdbfsInjection(db, '/home/web_user/.config', configFiles);
+        // IDBFS absolute path keys (e.g. "/config.ini", "/Soundfont/Scc1t2.sf2")
+        const mappedConfigFiles = configFiles.map(f => ({
+          path: '/' + f.path,
+          data: f.data
+        }));
+        await performIdbfsInjection(db, targetDbName, mappedConfigFiles);
         db.close();
         resolve();
       } catch (e) {
@@ -5621,6 +6433,14 @@ Module.preRun.push(function() {
       Module.arguments[argIndex + 1] = `/Save/${gameTitle}`;
       console.log(`[Module.preRun] Updated save path to: /Save/${gameTitle}`);
     }
+    
+    // Inject --font-path Fonts argument
+    const fontArgIndex = Module.arguments.indexOf('--font-path');
+    if (fontArgIndex !== -1 && fontArgIndex + 1 < Module.arguments.length) {
+      Module.arguments[fontArgIndex + 1] = 'Fonts';
+    } else {
+      Module.arguments.push('--font-path', 'Fonts');
+    }
   }
 });
 
@@ -5648,7 +6468,7 @@ async function syncConfigIniToSettings(targetFS) {
     }
     try {
       if (!fsObj.analyzePath('/home/web_user/.config/EasyRPG/Player/config.ini').exists) {
-        console.log('[syncConfigIniToSettings] config.ini does not exist on filesystem.');
+        console.log('[syncConfigIniToSettings] config.ini does not exist on filesystem at /home/web_user/.config/EasyRPG/Player/config.ini.');
         return;
       }
     } catch (e) {
@@ -5722,6 +6542,18 @@ async function syncConfigIniToSettings(targetFS) {
 </script>
 
 
+
+<!-- テキスト編集用モーダル -->
+<div id="text-editor-modal" style="display:none; z-index: 10000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+  <div style="background: #202020; color: #fff; width: 80%; height: 80%; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.5); border: 1px solid #333;">
+    <h3 id="text-editor-title" style="margin-top:0; font-weight: 500; font-size: 1.25rem; border-bottom: 1px solid #333; padding-bottom: 10px;">テキスト編集</h3>
+    <textarea id="text-editor-textarea" style="flex: 1; background: #151515; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; line-height: 1.5; resize: none; margin: 15px 0; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#007acc'" onblur="this.style.borderColor='#333'"></textarea>
+    <div style="display:flex; justify-content: flex-end; gap: 12px;">
+      <button id="text-editor-cancel" style="background:#444; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#555'" onmouseout="this.style.background='#444'">キャンセル</button>
+      <button id="text-editor-save" style="background:#007acc; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#008be6'" onmouseout="this.style.background='#007acc'">保存する</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
