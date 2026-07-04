@@ -6275,6 +6275,48 @@ window.addEventListener('load', () => {
   });
 });
 
+// モバイル端末では、ページ読込直後にアドレスバーが表示/非表示になったり、
+// 画面回転した際に実際の表示領域(#viewport)のサイズが変わるが、
+// ブラウザが window の resize イベントを確実に発火するとは限らない。
+// EasyRPG本体(Emscripten)はこの resize イベントを受けてキャンバスの
+// 描画解像度を再計算しているため、確実に発火させて追従させる。
+(function () {
+  let lastW = 0;
+  let lastH = 0;
+
+  function forceEngineResize() {
+    window.dispatchEvent(new Event('resize'));
+  }
+
+  function checkViewportSize() {
+    const viewportEl = document.getElementById('viewport');
+    if (!viewportEl) return;
+    const rect = viewportEl.getBoundingClientRect();
+    if (rect.width !== lastW || rect.height !== lastH) {
+      lastW = rect.width;
+      lastH = rect.height;
+      forceEngineResize();
+    }
+  }
+
+  function scheduleRetries() {
+    // 回転直後・読込直後はアドレスバーの収縮などでサイズが遅れて確定することがあるため、
+    // 少し間隔を空けて複数回チェックし直す
+    [50, 150, 300, 600, 1000, 1500].forEach((delay) => setTimeout(checkViewportSize, delay));
+  }
+
+  const viewportEl = document.getElementById('viewport');
+  if (window.ResizeObserver && viewportEl) {
+    new ResizeObserver(checkViewportSize).observe(viewportEl);
+  }
+
+  window.addEventListener('orientationchange', scheduleRetries);
+  window.addEventListener('load', scheduleRetries);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', checkViewportSize);
+  }
+})();
+
 </script>
 
 <!-- Module initialization hook to set proper save path before index.js loads -->
