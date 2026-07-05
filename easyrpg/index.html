@@ -1100,14 +1100,22 @@
             <div id="rtp-status-list" class="rtp-status-list">
               <!-- RTPのステータスがここに表示されます -->
             </div>
-            <div class="settings-inline">
+            <div class="settings-inline" style="flex-wrap: wrap;">
               <label>
-                RPGツクール2000 RTP
+                RPGツクール2000 RTP (日本語)
                 <input type="file" id="rtp2000-file-input" accept=".zip" />
               </label>
               <label>
-                RPGツクール2003 RTP
+                RPGツクール2003 RTP (日本語)
                 <input type="file" id="rtp2003-file-input" accept=".zip" />
+              </label>
+              <label>
+                RPGツクール2000 RTP (英語)
+                <input type="file" id="rtp2000en-file-input" accept=".zip" />
+              </label>
+              <label>
+                RPGツクール2003 RTP (英語)
+                <input type="file" id="rtp2003en-file-input" accept=".zip" />
               </label>
             </div>
             <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
@@ -2544,6 +2552,91 @@ class GameStorageManager {
     });
   }
   
+  async deleteGameFiles(gameId, pathsToRemove) {
+    const transaction = this.db.transaction(['games', 'gameFiles', 'gameFilesV2'], 'readwrite');
+    const pathSet = new Set(pathsToRemove);
+
+    // 1. メタデータを更新
+    const gameReq = transaction.objectStore('games').get(gameId);
+    gameReq.onsuccess = () => {
+      const gameData = gameReq.result;
+      if (gameData && gameData.fileList) {
+        gameData.fileList = gameData.fileList.filter(f => !pathSet.has(f.path));
+        gameData.fileCount = gameData.fileList.length;
+        gameData.totalSize = gameData.fileList.reduce((sum, f) => sum + f.size, 0);
+        transaction.objectStore('games').put(gameData);
+      }
+    };
+
+    // 2. V1ストアからの削除（V1の場合は全再書き込み）
+    const v1Req = transaction.objectStore('gameFiles').get(gameId);
+    v1Req.onsuccess = () => {
+      const v1Data = v1Req.result;
+      if (v1Data && v1Data.files) {
+        v1Data.files = v1Data.files.filter(f => !pathSet.has(f.path));
+        transaction.objectStore('gameFiles').put(v1Data);
+      }
+    };
+
+    // 3. V2ストアからの削除
+    const v2Store = transaction.objectStore('gameFilesV2');
+    const v2Index = v2Store.index('gameId_path');
+    for (const path of pathsToRemove) {
+      const req = v2Index.getKey([gameId, path]);
+      req.onsuccess = () => {
+        if (req.result !== undefined) {
+          v2Store.delete(req.result);
+        }
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  async deleteRTPFiles(rtpId, pathsToRemove) {
+    const transaction = this.db.transaction(['rtp', 'rtpFiles', 'rtpFilesV2'], 'readwrite');
+    const pathSet = new Set(pathsToRemove);
+
+    const rtpReq = transaction.objectStore('rtp').get(rtpId);
+    rtpReq.onsuccess = () => {
+      const rtpData = rtpReq.result;
+      if (rtpData && rtpData.fileList) {
+        rtpData.fileList = rtpData.fileList.filter(f => !pathSet.has(f.path));
+        rtpData.fileCount = rtpData.fileList.length;
+        rtpData.totalSize = rtpData.fileList.reduce((sum, f) => sum + f.size, 0);
+        transaction.objectStore('rtp').put(rtpData);
+      }
+    };
+
+    const v1Req = transaction.objectStore('rtpFiles').get(rtpId);
+    v1Req.onsuccess = () => {
+      const v1Data = v1Req.result;
+      if (v1Data && v1Data.files) {
+        v1Data.files = v1Data.files.filter(f => !pathSet.has(f.path));
+        transaction.objectStore('rtpFiles').put(v1Data);
+      }
+    };
+
+    const v2Store = transaction.objectStore('rtpFilesV2');
+    const v2Index = v2Store.index('rtpId_path');
+    for (const path of pathsToRemove) {
+      const req = v2Index.getKey([rtpId, path]);
+      req.onsuccess = () => {
+        if (req.result !== undefined) {
+          v2Store.delete(req.result);
+        }
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
   async deleteGame(gameId) {
     const transaction = this.db.transaction(['games', 'gameFiles', 'gameFilesV2'], 'readwrite');
     
@@ -3108,9 +3201,10 @@ async function loadRTPStatusList() {
   
   // 既知のRTP定義リスト
   const knownRTPs = [
-    { id: 'rtp2000', name: 'RPGツクール2000 RTP', type: '2000' },
-    { id: 'rtp2003', name: 'RPGツクール2003 RTP', type: '2003' },
-    // 必要に応じて追加
+    { id: 'rtp2000', name: 'RPGツクール2000 RTP (日本語)', type: '2000' },
+    { id: 'rtp2003', name: 'RPGツクール2003 RTP (日本語)', type: '2003' },
+    { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)', type: '2000' },
+    { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)', type: '2003' }
   ];
   
   // インストール済みRTPを取得
@@ -3686,7 +3780,7 @@ class StorageExplorer {
             const rtpDir = rtpDirMap[rtp.id] || rtp.id;
             const rtpGroupPath = `RTP/${rtpDir}`;
             for (const f of fileList) {
-              const cleanPath = f.path.replace(/^RTP\/\d{4}\//, '');
+              const cleanPath = f.path.replace(/^RTP\/[^/]+\//, '');
               this.allEntries.push({
                 groupType: 'rtp',
                 groupId: rtp.id,
@@ -4170,16 +4264,117 @@ class StorageExplorer {
     
     console.log(`[StorageExplorer] Starting ${mode} for ${items.length} items...`);
 
+    const batchAdd = {};
+    const batchRemove = {}; // only used for 'cut'
+
     for (const item of items) {
       if (item.isDir) {
-        // ディレクトリの場合: 中のファイルを全部コピー/移動
-        console.log(`[StorageExplorer] ${mode === 'cut' ? 'Moving' : 'Copying'} directory: ${item.name}...`);
-        await this._pasteDir(item, mode);
+        // Collect all files under this dir
+        const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
+        for (const entry of dirEntries) {
+          const relativeToDirRoot = entry.path.substring(item.fullPath.length + 1);
+          const newPath = this.currentPath
+            ? `${this.currentPath}/${item.name}/${relativeToDirRoot}`
+            : `${item.name}/${relativeToDirRoot}`;
+
+          const groupInfo = this._resolveGroup(newPath);
+          if (groupInfo) {
+            const data = await this._fetchFileData(entry);
+            if (data) {
+              const key = `${groupInfo.groupType}:${groupInfo.groupId}`;
+              if (!batchAdd[key]) batchAdd[key] = { groupType: groupInfo.groupType, groupId: groupInfo.groupId, files: [] };
+              batchAdd[key].files.push({ path: groupInfo.relativePath, data: data });
+
+              if (mode === 'cut' && entry.groupType) {
+                const srcKey = `${entry.groupType}:${entry.groupId}`;
+                if (!batchRemove[srcKey]) batchRemove[srcKey] = { groupType: entry.groupType, groupId: entry.groupId, paths: [], originalKeys: [] };
+                batchRemove[srcKey].paths.push(entry.path);
+                batchRemove[srcKey].originalKeys.push(entry.originalKey);
+              }
+            }
+          }
+        }
       } else {
-        console.log(`[StorageExplorer] ${mode === 'cut' ? 'Moving' : 'Copying'} file: ${item.name}...`);
-        await this._pasteFile(item, mode);
+        const data = await this._fetchFileData(item);
+        if (data) {
+          let finalName = item.name;
+          const node = this._getNode(this.currentPath);
+          if (node) {
+            const existingNames = new Set([
+              ...Object.keys(node.dirs),
+              ...node.files.map(f => f.name)
+            ]);
+            let counter = 1;
+            while (existingNames.has(finalName)) {
+              const ext = this._getExtension(item.name);
+              const base = ext ? item.name.slice(0, -(ext.length + 1)) : item.name;
+              finalName = ext ? `${base} (${counter}).${ext}` : `${base} (${counter})`;
+              counter++;
+            }
+          }
+
+          const destFull = this.currentPath ? `${this.currentPath}/${finalName}` : finalName;
+          const groupInfo = this._resolveGroup(destFull);
+          if (groupInfo) {
+            const key = `${groupInfo.groupType}:${groupInfo.groupId}`;
+            if (!batchAdd[key]) batchAdd[key] = { groupType: groupInfo.groupType, groupId: groupInfo.groupId, files: [] };
+            batchAdd[key].files.push({ path: groupInfo.relativePath, data: data });
+
+            if (mode === 'cut' && item.groupType) {
+              const srcKey = `${item.groupType}:${item.groupId}`;
+              if (!batchRemove[srcKey]) batchRemove[srcKey] = { groupType: item.groupType, groupId: item.groupId, paths: [], originalKeys: [] };
+              batchRemove[srcKey].paths.push(item.fullPath);
+              batchRemove[srcKey].originalKeys.push(item.originalKey);
+            }
+          }
+        }
       }
     }
+
+    // Process Add Batches
+    for (const key in batchAdd) {
+      const batch = batchAdd[key];
+      console.log(`[StorageExplorer] Batch adding ${batch.files.length} files to ${key}...`);
+      if (batch.groupType === 'game' || batch.groupType === 'games') {
+        if (typeof storageManager.appendGameFiles === 'function') {
+          await storageManager.appendGameFiles(batch.groupId, batch.groupId, batch.files);
+        } else {
+          for (const f of batch.files) await this._addFileToGroup(batch.groupType, batch.groupId, f.path, f.data);
+        }
+      } else if (batch.groupType === 'rtp') {
+        if (typeof storageManager.appendRTPFiles === 'function') {
+          await storageManager.appendRTPFiles(batch.groupId, batch.groupId, batch.files);
+        } else {
+          for (const f of batch.files) await this._addFileToGroup(batch.groupType, batch.groupId, f.path, f.data);
+        }
+      } else {
+        for (const f of batch.files) await this._addFileToGroup(batch.groupType, batch.groupId, f.path, f.data);
+      }
+    }
+
+    // Process Remove Batches (for Cut)
+    if (mode === 'cut') {
+      for (const key in batchRemove) {
+        const batch = batchRemove[key];
+        console.log(`[StorageExplorer] Batch removing ${batch.paths.length} files from ${key}...`);
+        if (batch.groupType === 'game' || batch.groupType === 'games') {
+          if (typeof storageManager.deleteGameFiles === 'function') {
+            await storageManager.deleteGameFiles(batch.groupId, batch.paths);
+          } else {
+            for (let i = 0; i < batch.paths.length; i++) await this._removeFileFromGroup(batch.groupType, batch.groupId, batch.paths[i], batch.originalKeys[i]);
+          }
+        } else if (batch.groupType === 'rtp') {
+          if (typeof storageManager.deleteRTPFiles === 'function') {
+            await storageManager.deleteRTPFiles(batch.groupId, batch.paths);
+          } else {
+            for (let i = 0; i < batch.paths.length; i++) await this._removeFileFromGroup(batch.groupType, batch.groupId, batch.paths[i], batch.originalKeys[i]);
+          }
+        } else {
+          for (let i = 0; i < batch.paths.length; i++) await this._removeFileFromGroup(batch.groupType, batch.groupId, batch.paths[i], batch.originalKeys[i]);
+        }
+      }
+    }
+
     console.log(`[StorageExplorer] ${mode} complete.`);
 
     if (mode === 'cut') {
@@ -4190,81 +4385,6 @@ class StorageExplorer {
     this._treeCache = null;
     await this.loadAll();
     this.render();
-  }
-
-  async _pasteFile(item, mode) {
-    const data = await this._fetchFileData(item);
-    if (!data) return;
-    // コピー先のパスを決定
-    const destPath = this.currentPath
-      ? `${this.currentPath}/${item.name}`
-      : item.name;
-
-    // 名前衝突チェック
-    let finalName = item.name;
-    const node = this._getNode(this.currentPath);
-    if (node) {
-      const existingNames = new Set([
-        ...Object.keys(node.dirs),
-        ...node.files.map(f => f.name)
-      ]);
-
-      let counter = 1;
-      while (existingNames.has(finalName)) {
-        const ext = this._getExtension(item.name);
-        const base = ext ? item.name.slice(0, -(ext.length + 1)) : item.name;
-        finalName = ext ? `${base} (${counter}).${ext}` : `${base} (${counter})`;
-        counter++;
-      }
-    }
-
-    // 実際のIndexedDBへの書き込みは、対象グループに対して行う
-    // パスからグループを特定
-    const destFull = this.currentPath
-      ? `${this.currentPath}/${finalName}`
-      : finalName;
-
-    // 対象グループを特定
-    const groupInfo = this._resolveGroup(destFull);
-    if (!groupInfo) {
-      console.warn('Cannot paste: destination group not resolved', destFull);
-      return;
-    }
-
-    // グループ内のファイルリストを更新
-    await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, data);
-
-    // 切り取りの場合、元ファイルを削除
-    if (mode === 'cut' && item.groupType && item.groupId) {
-      const srcGroupInfo = this._resolveGroup(item.fullPath);
-      if (srcGroupInfo) {
-        await this._removeFileFromGroup(srcGroupInfo.groupType, srcGroupInfo.groupId, srcGroupInfo.relativePath);
-      }
-    }
-  }
-
-  async _pasteDir(item, mode) {
-    // ディレクトリ配下の全ファイルを取得してコピー/移動
-    const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
-    for (const entry of dirEntries) {
-      const relativeToDirRoot = entry.path.substring(item.fullPath.length + 1);
-      const newPath = this.currentPath
-        ? `${this.currentPath}/${item.name}/${relativeToDirRoot}`
-        : `${item.name}/${relativeToDirRoot}`;
-
-      const groupInfo = this._resolveGroup(newPath);
-      const data = await this._fetchFileData(entry);
-      if (groupInfo && data) {
-        await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath, data);
-      }
-
-      if (mode === 'cut') {
-        const srcGroupInfo = this._resolveGroup(entry.path);
-        if (srcGroupInfo) {
-          await this._removeFileFromGroup(srcGroupInfo.groupType, srcGroupInfo.groupId, srcGroupInfo.relativePath);
-        }
-      }
-    }
   }
 
   // パスの先頭部分（例: ['games', 'MyGame']）に一致するグループを探す。
@@ -4513,37 +4633,61 @@ class StorageExplorer {
       : `${selected.length} 個の項目を削除しますか？`;
     if (!confirm(msg)) return;
 
+    // Collect all entries to delete
+    const entriesToDelete = [];
     for (const item of selected) {
       if (item.isDir) {
-        // ゲームルートディレクトリ (games/XXX) 自体が削除された場合、データベースからゲームごと完全に削除する
         const parts = item.fullPath.split('/');
         if (parts.length === 2 && parts[0] === 'games') {
           const gameId = parts[1];
           console.log(`[StorageExplorer] Deleting game: ${gameId}...`);
           await storageManager.deleteGame(gameId);
           console.log(`[StorageExplorer] Game deleted: ${gameId}`);
-          continue; // このゲームの配下ファイルは deleteGame で消えるためスキップ
+          continue;
         }
-
-        // ディレクトリ配下の全ファイルを削除
         const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
-        console.log(`[StorageExplorer] Deleting directory: ${item.fullPath} (${dirEntries.length} files)...`);
-        let count = 0;
-        for (const entry of dirEntries) {
-          if (entry.groupType) {
-            await this._removeFileFromGroup(entry.groupType, entry.groupId, entry.path, entry.originalKey);
-            count++;
-            if (count % 500 === 0) {
-              console.log(`[StorageExplorer] Deleted ${count} files from directory...`);
-            }
+        entriesToDelete.push(...dirEntries);
+      } else {
+        const entry = this.allEntries.find(e => e.path === item.fullPath);
+        if (entry) entriesToDelete.push(entry);
+      }
+    }
+
+    // Group by groupType and groupId
+    const batches = {};
+    for (const entry of entriesToDelete) {
+      if (!entry.groupType) continue;
+      const key = `${entry.groupType}:${entry.groupId}`;
+      if (!batches[key]) batches[key] = { groupType: entry.groupType, groupId: entry.groupId, paths: [], originalKeys: [] };
+      batches[key].paths.push(entry.path);
+      batches[key].originalKeys.push(entry.originalKey);
+    }
+
+    // Process batches
+    for (const key in batches) {
+      const batch = batches[key];
+      console.log(`[StorageExplorer] Batch deleting ${batch.paths.length} files from ${key}...`);
+      if (batch.groupType === 'game') {
+        if (typeof storageManager.deleteGameFiles === 'function') {
+          await storageManager.deleteGameFiles(batch.groupId, batch.paths);
+        } else {
+          // Fallback
+          for (let i = 0; i < batch.paths.length; i++) {
+            await this._removeFileFromGroup(batch.groupType, batch.groupId, batch.paths[i], batch.originalKeys[i]);
           }
         }
-        console.log(`[StorageExplorer] Directory deletion complete: ${item.fullPath}`);
+      } else if (batch.groupType === 'rtp') {
+        if (typeof storageManager.deleteRTPFiles === 'function') {
+          await storageManager.deleteRTPFiles(batch.groupId, batch.paths);
+        } else {
+          for (let i = 0; i < batch.paths.length; i++) {
+            await this._removeFileFromGroup(batch.groupType, batch.groupId, batch.paths[i], batch.originalKeys[i]);
+          }
+        }
       } else {
-        if (item.groupType) {
-          console.log(`[StorageExplorer] Deleting file: ${item.fullPath}...`);
-          await this._removeFileFromGroup(item.groupType, item.groupId, item.fullPath, item.originalKey);
-          console.log(`[StorageExplorer] File deleted: ${item.fullPath}`);
+        // saves, config, assets still use individual deletion for now
+        for (let i = 0; i < batch.paths.length; i++) {
+          await this._removeFileFromGroup(batch.groupType, batch.groupId, batch.paths[i], batch.originalKeys[i]);
         }
       }
     }
@@ -5896,8 +6040,8 @@ async function loadSavedGamesList() {
       }
       
       gameDiv.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="flex: 1;" onclick="loadSavedGame('${game.id}')">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="flex: 1; min-width: 200px;" onclick="loadSavedGame('${game.id}')">
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
               <span id="game-title-${game.id}" style="font-weight: bold; font-size: 1.1rem;">${escapeHtml(game.name)}</span>
               <button onclick="event.stopPropagation(); editGameTitle('${game.id}', '${escapeHtml(game.name).replace(/'/g, "\\'")}');" 
@@ -5915,7 +6059,13 @@ async function loadSavedGamesList() {
               ${game.fileCount} ファイル / ${sizeInMB} MB
             </div>
           </div>
-          <div style="display: flex; gap: 0.5rem;">
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <select onclick="event.stopPropagation();" onchange="changeGameRTP('${game.id}', this.value)" class="game-action-btn" style="background: #333; color: white; border: 1px solid #555; padding: 0.4rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+              <option value="auto" ${!game.rtpConfig || game.rtpConfig === 'auto' ? 'selected' : ''}>RTP自動判定 (実験的)</option>
+              <option value="jp" ${game.rtpConfig === 'jp' ? 'selected' : ''}>日本語(2000/2003)</option>
+              <option value="en" ${game.rtpConfig === 'en' ? 'selected' : ''}>英語(2000/2003)</option>
+              <option value="none" ${game.rtpConfig === 'none' ? 'selected' : ''}>RTPなし</option>
+            </select>
             <button onclick="event.stopPropagation(); loadSavedGame('${game.id}');" 
                     class="game-action-btn"
                     style="padding: 0.5rem 1rem; background: #4CAF50; border: none; color: white; border-radius: 4px; cursor: pointer; font-weight: bold;">
@@ -5999,6 +6149,15 @@ let isGameLoading = false;
 let isGameDeleting = false;
 let isGameRenaming = false;
 let isGamePlaying = false;
+
+window.changeGameRTP = async function(gameId, value) {
+  try {
+    await storageManager.updateGameMetadata(gameId, { rtpConfig: value });
+    console.log(`Updated RTP config for ${gameId} to ${value}`);
+  } catch (e) {
+    console.error('Failed to update RTP config', e);
+  }
+};
 
 async function loadSavedGame(gameId) {
   if (isGameLoading || isGameDeleting || isGameRenaming) return;
@@ -6838,10 +6997,53 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   try {
     statusDiv.textContent = 'RTPを確認中...';
     
-    const rtpMergeOrder = [
-      { id: 'rtp2000', label: 'RTP 2000' },
-      { id: 'rtp2003', label: 'RTP 2003' }
-    ];
+    let rtpConfig = 'auto';
+    if (existingGameId) {
+      const meta = await storageManager.getGame(existingGameId, false);
+      if (meta && meta.rtpConfig) rtpConfig = meta.rtpConfig;
+    }
+
+    if (rtpConfig === 'auto') {
+      let isJapanese = true;
+      const ldbFile = cleanFiles.find(f => f.path.toLowerCase().endsWith('rpg_rt.ldb'));
+      let ldbData = null;
+      if (ldbFile) {
+        if (ldbFile.data) {
+          ldbData = ldbFile.data;
+        } else if (ldbFile.lazy) {
+          try { ldbData = await storageManager.getGameFile(ldbFile.gameId, ldbFile.path); } catch(e) {}
+        }
+      }
+      
+      // バイナリデータ(LDBなど)を直接スキャンすると、画像データや設定数値などの純粋なバイナリ値が
+      // 偶然Shift-JISの漢字コード等に合致してしまい、英語ゲームでも「数万文字の日本語が含まれる」
+      // と誤判定されるケースが多発するため、確実な「ファイル名」のみで判定する。
+      let hasJapaneseFileName = false;
+      for (const f of cleanFiles) {
+        // ファイル名にひらがな・カタカナ・漢字が含まれているかチェック
+        if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(f.path)) {
+          hasJapaneseFileName = true;
+          break;
+        }
+      }
+      isJapanese = hasJapaneseFileName;
+      console.log(`[AutoDetect] Checked filenames for Japanese characters. isJapanese: ${isJapanese}`);
+      
+      rtpConfig = isJapanese ? 'jp' : 'en';
+    }
+
+    let rtpMergeOrder = [];
+    if (rtpConfig === 'jp') {
+      rtpMergeOrder = [
+        { id: 'rtp2000', label: 'RTP 2000' },
+        { id: 'rtp2003', label: 'RTP 2003' }
+      ];
+    } else if (rtpConfig === 'en') {
+      rtpMergeOrder = [
+        { id: 'rtp2000en', label: 'RTP 2000 (English)' },
+        { id: 'rtp2003en', label: 'RTP 2003 (English)' }
+      ];
+    }
     
     // 2000/2003の読み込みは互いに独立しているため並行して取得する
     // （マージ処理自体は従来通り2000→2003の優先順位を守って順番に行う）
@@ -6869,7 +7071,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
           // RTP/XXXX/ プレフィックスを除去してゲームのルートレベルにマージ
           // （EasyRPGのEmscriptenビルドではRTPパス検索が無効化されているため、
           // ゲームディレクトリ直下に配置する必要がある）
-          const gamePath = rtpFile.path.replace(/^RTP\/\d{4}\//, '');
+          const gamePath = rtpFile.path.replace(/^RTP\/[^/]+\//, '');
           const pathLower = gamePath.toLowerCase();
           // ゲーム側・既にマージ済みのRTPに同名ファイルがなければ追加
           if (!gamePathsLower.has(pathLower)) {
@@ -7133,8 +7335,13 @@ window.addEventListener('load', () => {
     });
   }
   
-  wireRTPFileInput(rtp2000FileInput, { id: 'rtp2000', name: 'RPGツクール2000 RTP', dir: '2000' });
-  wireRTPFileInput(rtp2003FileInput, { id: 'rtp2003', name: 'RPGツクール2003 RTP', dir: '2003' });
+  const rtp2000enFileInput = document.getElementById('rtp2000en-file-input');
+  const rtp2003enFileInput = document.getElementById('rtp2003en-file-input');
+  
+  if (rtp2000FileInput) wireRTPFileInput(rtp2000FileInput, { id: 'rtp2000', name: 'RPGツクール2000 RTP (日本語)' });
+  if (rtp2003FileInput) wireRTPFileInput(rtp2003FileInput, { id: 'rtp2003', name: 'RPGツクール2003 RTP (日本語)' });
+  if (rtp2000enFileInput) wireRTPFileInput(rtp2000enFileInput, { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)' });
+  if (rtp2003enFileInput) wireRTPFileInput(rtp2003enFileInput, { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)' });
 
   // サウンドフォント/フォントの追加（ファイル選択→保存）
   function wireAssetFileInput(inputId, type) {
