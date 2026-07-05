@@ -3997,6 +3997,7 @@ class StorageExplorer {
       items.push({
         name: f.name,
         fullPath: f.path,
+        path: f.path,
         selectionKey: `file:${f.groupType}:${f.groupId}:${f.path}`,
         isDir: false,
         size: f.size,
@@ -4668,16 +4669,24 @@ class StorageExplorer {
     if (item.data) return item.data;
     try {
       if (item.groupType === 'game') {
-        const gameData = await storageManager.getGame(item.groupId);
-        if (gameData && gameData.files) {
-          const file = gameData.files.find(f => f.path === item.path);
-          if (file) return file.data;
+        if (typeof storageManager.getGameFile === 'function') {
+          return await storageManager.getGameFile(item.groupId, item.path);
+        } else {
+          const gameData = await storageManager.getGame(item.groupId);
+          if (gameData && gameData.files) {
+            const file = gameData.files.find(f => f.path === item.path);
+            return file ? file.data : null;
+          }
         }
       } else if (item.groupType === 'rtp') {
-        const rtpData = await storageManager.getRTP(item.groupId);
-        if (rtpData && rtpData.files) {
-          const file = rtpData.files.find(f => f.path === item.path);
-          if (file) return file.data;
+        if (typeof storageManager.getRTPFile === 'function') {
+          return await storageManager.getRTPFile(item.groupId, item.path);
+        } else {
+          const rtpData = await storageManager.getRTP(item.groupId);
+          if (rtpData && rtpData.files) {
+            const file = rtpData.files.find(f => f.path === item.path);
+            return file ? file.data : null;
+          }
         }
       }
     } catch (e) {
