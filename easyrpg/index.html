@@ -4132,6 +4132,14 @@ class StorageExplorer {
 
     for (const item of selected) {
       if (item.isDir) {
+        // ゲームルートディレクトリ (games/XXX) 自体が削除された場合、データベースからゲームごと完全に削除する
+        const parts = item.fullPath.split('/');
+        if (parts.length === 2 && parts[0] === 'games') {
+          const gameId = parts[1];
+          await storageManager.deleteGame(gameId);
+          continue; // このゲームの配下ファイルは deleteGame で消えるためスキップ
+        }
+
         // ディレクトリ配下の全ファイルを削除
         const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
         for (const entry of dirEntries) {
