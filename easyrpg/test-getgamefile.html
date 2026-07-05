@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+  const request = indexedDB.open('easyrpg-storage', 4);
+  request.onsuccess = (e) => {
+    const db = e.target.result;
+    const tx = db.transaction(['gameFilesV2'], 'readonly');
+    const store = tx.objectStore('gameFilesV2');
+    store.getAll().onsuccess = (e2) => {
+      console.log(e2.target.result.slice(0, 5));
+    };
+  };
+</script>
+</body>
+</html>
