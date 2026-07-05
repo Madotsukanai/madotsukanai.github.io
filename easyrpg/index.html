@@ -3485,11 +3485,13 @@ class StorageExplorer {
                 }
               }
             } else {
-              // 先頭の "/customgame/Save/" や "/easyrpg/XXX/Save/" などを除去して
-              // エクスプローラー上で "Save/勇者と異常者/Save01.lsd" に統一する
-              const saveIndex = cleanPath.indexOf('/Save/');
-              if (saveIndex !== -1) {
-                cleanPath = 'Save/' + cleanPath.substring(saveIndex + 6);
+              // 先頭のシステムパスを除去して、エクスプローラー上で "Save/勇者と異常者/Save01.lsd" に統一する
+              const match1 = cleanPath.match(/\/customgame\/([^/]+)\/Save\/(.*)/);
+              const match2 = cleanPath.match(/\/customgame\/Save\/([^/]+)\/(.*)/); // 互換性用
+              if (match1) {
+                cleanPath = `Save/${match1[1]}/${match1[2]}`;
+              } else if (match2) {
+                cleanPath = `Save/${match2[1]}/${match2[2]}`;
               } else if (cleanPath.startsWith('Save/') || cleanPath.startsWith('/Save/')) {
                 cleanPath = cleanPath.replace(/^\//, '');
               } else {
@@ -3870,6 +3872,7 @@ class StorageExplorer {
         ...Object.keys(node.dirs),
         ...node.files.map(f => f.name)
       ]);
+
       let counter = 1;
       while (existingNames.has(finalName)) {
         const ext = this._getExtension(item.name);
@@ -3932,7 +3935,7 @@ class StorageExplorer {
   // グループのパス（groupPath、例: 'games/MyGame' や 'RTP/2000'）が複数階層に
   // またがる場合にも対応するため、最も長く一致するグループを採用する。
   _resolveGroupAtParts(parts) {
-    if (parts.length === 0) return null;
+    if (parts.length === 0) return { groupType: 'game', groupId: '__root__', groupPathLen: 0 };
     const rootDir = parts[0];
     
     if (rootDir === 'games' && parts.length >= 2) {
@@ -3944,8 +3947,8 @@ class StorageExplorer {
     if (rootDir === 'Save' && parts.length >= 2) {
       // Find the correct dbName from existing entries if possible, otherwise fallback
       const existing = this.allEntries.find(e => e.groupType === 'save' && e.path.startsWith(`Save/${parts[1]}/`));
-      const groupId = existing ? existing.groupId : `/customgame/Save/${parts[1]}`;
-      return { groupType: 'save', groupId, groupPathLen: 2 };
+      const groupId = existing ? existing.groupId : `/customgame/Save`;
+      return { groupType: 'save', groupId, groupPathLen: 1 };
     }
     if (rootDir === 'Soundfont') {
       return { groupType: 'asset', groupId: 'soundfont', groupPathLen: 1 };
@@ -4008,43 +4011,65 @@ class StorageExplorer {
       } else if (groupType === 'save' || groupType === 'config') {
         // IDBFS データベース (groupIdに格納された dbName) の "FILE_DATA" に追加
         await new Promise((resolve, reject) => {
-          const req = indexedDB.open(groupId, 21);
-          req.onsuccess = () => {
-            const db = req.result;
-            const tx = db.transaction(['FILE_DATA'], 'readwrite');
-            const store = tx.objectStore('FILE_DATA');
-            
-            let key;
-            if (groupType === 'config') {
-              if (relativePath === 'config.ini' && window.EASYRPG_ACTUAL_CONFIG_PATH) {
-                key = window.EASYRPG_ACTUAL_CONFIG_PATH;
-              } else {
-                key = '/' + relativePath; // For Soundfont, Fonts, or fallback
+          const doOpen = () => {
+            const req = indexedDB.open(groupId, 21);
+            req.onupgradeneeded = (e) => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains('FILE_DATA')) {
+                db.createObjectStore('FILE_DATA');
               }
-            } else {
-              key = groupId + '/' + relativePath;
-            }
+            };
+            req.onsuccess = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains('FILE_DATA')) {
+                db.close();
+                console.warn(`Database ${groupId} missing FILE_DATA. Recreating...`);
+                setTimeout(() => {
+                  const delReq = indexedDB.deleteDatabase(groupId);
+                  delReq.onblocked = () => {
+                    console.warn(`deleteDatabase for ${groupId} was blocked! Cannot recreate database.`);
+                    reject(new Error("データベースが使用中のため初期化できませんでした。一度ゲーム画面を閉じるかリロードしてください。"));
+                  };
+                  delReq.onsuccess = delReq.onerror = () => doOpen();
+                }, 50);
+                return;
+              }
+              const tx = db.transaction(['FILE_DATA'], 'readwrite');
+              const store = tx.objectStore('FILE_DATA');
             
-            const entry = {
-              timestamp: new Date(),
-              mode: 33206, // Regular file with 0666 permissions
-              contents: data
+              let key;
+              if (groupType === 'config') {
+                if (relativePath === 'config.ini' && window.EASYRPG_ACTUAL_CONFIG_PATH) {
+                  key = window.EASYRPG_ACTUAL_CONFIG_PATH;
+                } else {
+                  key = '/' + relativePath; // For Soundfont, Fonts, or fallback
+                }
+              } else {
+                key = groupId + '/' + relativePath;
+              }
+            
+              const entry = {
+                timestamp: new Date(),
+                mode: 33206, // Regular file with 0666 permissions
+                contents: data
+              };
+              const putReq = store.put(entry, key);
+              putReq.onsuccess = () => {
+                db.close();
+                resolve();
+              };
+              putReq.onerror = () => {
+                db.close();
+                reject(putReq.error);
+              };
+              tx.onerror = () => {
+                db.close();
+                reject(tx.error);
+              };
             };
-            const putReq = store.put(entry, key);
-            putReq.onsuccess = () => {
-              db.close();
-              resolve();
-            };
-            putReq.onerror = () => {
-              db.close();
-              reject(putReq.error);
-            };
-            tx.onerror = () => {
-              db.close();
-              reject(tx.error);
-            };
+            req.onerror = () => reject(req.error);
           };
-          req.onerror = () => reject(req.error);
+          doOpen();
         });
       } else if (groupType === 'asset') {
         // エクスプローラー上でのアップロードや貼り付けに対応
@@ -4075,40 +4100,62 @@ class StorageExplorer {
       } else if (groupType === 'save' || groupType === 'config' || groupType === 'screenshot') {
         // IDBFS データベース (groupIdに格納された dbName) の "FILE_DATA" から削除
         await new Promise((resolve, reject) => {
-          const req = indexedDB.open(groupId, 21);
-          req.onsuccess = () => {
-            const db = req.result;
-            const tx = db.transaction(['FILE_DATA'], 'readwrite');
-            const store = tx.objectStore('FILE_DATA');
-            
-            let key;
-            if (originalKey) {
-              key = originalKey;
-            } else if (groupType === 'config') {
-              if (relativePath === 'config.ini' && window.EASYRPG_ACTUAL_CONFIG_PATH) {
-                key = window.EASYRPG_ACTUAL_CONFIG_PATH;
-              } else {
-                key = '/' + relativePath; // For Soundfont, Fonts, or fallback
+          const doOpen = () => {
+            const req = indexedDB.open(groupId, 21);
+            req.onupgradeneeded = (e) => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains('FILE_DATA')) {
+                db.createObjectStore('FILE_DATA');
               }
-            } else {
-              key = groupId + '/' + relativePath;
-            }
-            
-            const delReq = store.delete(key);
-            delReq.onsuccess = () => {
-              db.close();
-              resolve();
             };
-            delReq.onerror = () => {
-              db.close();
-              reject(delReq.error);
+            req.onsuccess = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains('FILE_DATA')) {
+                db.close();
+                console.warn(`Database ${groupId} missing FILE_DATA. Recreating...`);
+                setTimeout(() => {
+                  const delReq = indexedDB.deleteDatabase(groupId);
+                  delReq.onblocked = () => {
+                    console.warn(`deleteDatabase for ${groupId} was blocked! Cannot recreate database.`);
+                    reject(new Error("データベースが使用中のため初期化できませんでした。一度ゲーム画面を閉じるかリロードしてください。"));
+                  };
+                  delReq.onsuccess = delReq.onerror = () => doOpen();
+                }, 50);
+                return;
+              }
+              const tx = db.transaction(['FILE_DATA'], 'readwrite');
+              const store = tx.objectStore('FILE_DATA');
+              
+              let key;
+              if (originalKey) {
+                key = originalKey;
+              } else if (groupType === 'config') {
+                if (relativePath === 'config.ini' && window.EASYRPG_ACTUAL_CONFIG_PATH) {
+                  key = window.EASYRPG_ACTUAL_CONFIG_PATH;
+                } else {
+                  key = '/' + relativePath; // For Soundfont, Fonts, or fallback
+                }
+              } else {
+                key = groupId + '/' + relativePath;
+              }
+              
+              const delReq = store.delete(key);
+              delReq.onsuccess = () => {
+                db.close();
+                resolve();
+              };
+              delReq.onerror = () => {
+                db.close();
+                reject(delReq.error);
+              };
+              tx.onerror = () => {
+                db.close();
+                reject(tx.error);
+              };
             };
-            tx.onerror = () => {
-              db.close();
-              reject(tx.error);
-            };
+            req.onerror = () => reject(req.error);
           };
-          req.onerror = () => reject(req.error);
+          doOpen();
         });
       } else if (groupType === 'asset') {
         // エクスプローラー上での削除に対応
@@ -4312,8 +4359,125 @@ class StorageExplorer {
     if (!fileList || fileList.length === 0) return;
 
     const parts = this.currentPath.split('/').filter(s => s);
+    
+    // ZIPファイルが含まれているかチェック
+    const isZipSelected = Array.from(fileList).some(f => f.name.toLowerCase().endsWith('.zip'));
+    let extractZip = false;
+    
+    if (isZipSelected && window.JSZip) {
+      extractZip = confirm('ZIPファイルが選択されました。自動的に展開してアップロードしますか？\n（キャンセルを選ぶとZIPファイルのままアップロードします）');
+    }
 
     for (const file of fileList) {
+      const isZip = file.name.toLowerCase().endsWith('.zip');
+      
+      if (isZip && extractZip && window.JSZip) {
+        // 展開中のUI表示
+        const uploadBtn = document.getElementById('sexplorer-btn-upload');
+        const originalText = uploadBtn ? uploadBtn.textContent : '';
+        if (uploadBtn) {
+          uploadBtn.textContent = 'ZIP展開中...';
+          uploadBtn.disabled = true;
+        }
+        document.body.style.cursor = 'wait';
+        
+        // ブラウザに描画させるために少し待つ
+        await new Promise(r => setTimeout(r, 50));
+        
+        try {
+          const zip = new JSZip();
+          const zipContent = await zip.loadAsync(file);
+          const zipBaseName = file.name.replace(/\.zip$/i, '');
+          
+          // ZIPが単一のルートディレクトリを持っているか（バラバラのファイル群でないか）チェック
+          let singleRootDir = null;
+          let hasMultipleRoots = false;
+          for (const filename of Object.keys(zipContent.files)) {
+            const topDir = filename.split('/')[0];
+            if (singleRootDir === null) {
+              singleRootDir = topDir;
+            } else if (singleRootDir !== topDir) {
+              hasMultipleRoots = true;
+              break;
+            }
+          }
+          
+          // games直下に展開する場合、バラバラのファイルならZIP名でフォルダを作成する
+          const prefix = (parts.length === 1 && parts[0] === 'games' && hasMultipleRoots) ? zipBaseName + '/' : '';
+
+          // バッチ処理用にグループごとのファイルをまとめる
+          const batchFiles = {};
+          let extractedCount = 0;
+
+          for (const [filename, zipEntry] of Object.entries(zipContent.files)) {
+            if (zipEntry.dir) continue;
+            const data = await zipEntry.async("uint8array");
+            const adjustedFilename = prefix + filename;
+            const fullParts = parts.concat(adjustedFilename.split('/').filter(s => s));
+            const groupInfo = this._resolveGroupAtParts(fullParts);
+            
+            if (!groupInfo) continue; // 無効なパスはスキップ
+            
+            const relativePath = fullParts.slice(groupInfo.groupPathLen).join('/');
+            
+            // save/config/assetなどは個別保存のままで問題ないが、gameとrtpはまとめて保存しないとブラウザがフリーズする
+            if (groupInfo.groupType === 'game' || groupInfo.groupType === 'rtp') {
+              const key = `${groupInfo.groupType}:${groupInfo.groupId}`;
+              if (!batchFiles[key]) batchFiles[key] = [];
+              batchFiles[key].push({ path: relativePath, data: data });
+              extractedCount++;
+            } else {
+              // それ以外は個別に追加
+              await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, data);
+              extractedCount++;
+            }
+          }
+
+          // バッチ保存の実行
+          for (const key of Object.keys(batchFiles)) {
+            const [groupType, groupId] = key.split(':');
+            const filesToAdd = batchFiles[key];
+            
+            if (groupType === 'game') {
+              let gameData = await storageManager.getGame(groupId);
+              if (!gameData) gameData = { name: groupId, files: [] };
+              const existingFiles = gameData.files || [];
+              
+              for (const newFile of filesToAdd) {
+                const existingIndex = existingFiles.findIndex(f => f.path === newFile.path);
+                if (existingIndex !== -1) existingFiles[existingIndex].data = newFile.data;
+                else existingFiles.push(newFile);
+              }
+              await storageManager.saveGame(groupId, gameData.name, existingFiles);
+            } else if (groupType === 'rtp') {
+              let rtpData = await storageManager.getRTP(groupId);
+              if (!rtpData) rtpData = { name: groupId, files: [] };
+              const existingFiles = rtpData.files || [];
+              
+              for (const newFile of filesToAdd) {
+                const existingIndex = existingFiles.findIndex(f => f.path === newFile.path);
+                if (existingIndex !== -1) existingFiles[existingIndex].data = newFile.data;
+                else existingFiles.push(newFile);
+              }
+              await storageManager.saveRTP(groupId, rtpData.name, existingFiles);
+            }
+          }
+          alert(`ZIPの展開が完了しました！（${extractedCount}ファイル）`);
+        } catch (e) {
+          console.error('ZIP extraction failed:', e);
+          alert(`ZIPファイル(${file.name})の展開に失敗しました: ` + e.message);
+        } finally {
+          document.body.style.cursor = 'default';
+          const uploadBtn = document.getElementById('sexplorer-btn-upload');
+          if (uploadBtn) {
+            uploadBtn.textContent = 'アップロード';
+            uploadBtn.disabled = false;
+          }
+        }
+        continue;
+      }
+
+      // 通常ファイルのアップロード処理
       const arrayBuffer = await file.arrayBuffer();
       const data = new Uint8Array(arrayBuffer);
       
@@ -4337,6 +4501,9 @@ class StorageExplorer {
     this._treeCache = null;
     await this.loadAll();
     this.render();
+    if (typeof loadSavedGamesList === 'function') {
+      await loadSavedGamesList();
+    }
   }
 
   // --- 新規フォルダ ---
@@ -4348,16 +4515,17 @@ class StorageExplorer {
 
     if (parts.length === 1 && parts[0] === 'games') {
       // gamesディレクトリ直下でのフォルダ作成＝新しいゲームの作成として扱う
-      await this._addFileToGroup('games', name.trim(), '.keep', new Uint8Array(0));
+      await this._addFileToGroup('game', name.trim(), '.keep', new Uint8Array(0));
     } else {
       // フォルダは空にできないので、.keepファイルを作成
-      const groupInfo = this._resolveGroupAtParts(parts);
+      const newParts = parts.concat(name.trim());
+      const groupInfo = this._resolveGroupAtParts(newParts);
       if (!groupInfo) {
         alert('フォルダの作成先が特定できません。');
         return;
       }
 
-      const relativePath = parts.slice(groupInfo.groupPathLen).concat(name.trim(), '.keep').join('/');
+      const relativePath = newParts.slice(groupInfo.groupPathLen).concat('.keep').join('/');
       await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, new Uint8Array(0));
     }
 
@@ -5149,7 +5317,7 @@ async function loadSavedGamesList() {
       return;
     }
     
-    const games = await storageManager.getAllGames();
+    const games = (await storageManager.getAllGames()).filter(g => g.id !== '__root__');
     const listDiv = document.getElementById('saved-games-list');
     const containerDiv = document.getElementById('saved-games-container');
     
@@ -6235,7 +6403,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     // ゲームタイトルを使用してセーブパスを修正
     if (window.EASYRPG_GAME_TITLE) {
       const gameTitle = window.EASYRPG_GAME_TITLE;
-      const savePath = `/Save/${gameTitle}`;
+      const savePath = `Save/${gameTitle}`;
       
       // --save-path 引数のインデックスを探す
       const argIndex = Module.arguments.indexOf('--save-path');
@@ -6990,8 +7158,8 @@ Module.preRun.push(function() {
     const gameTitle = window.EASYRPG_GAME_TITLE;
     const argIndex = Module.arguments.indexOf('--save-path');
     if (argIndex !== -1 && argIndex + 1 < Module.arguments.length) {
-      Module.arguments[argIndex + 1] = `/Save/${gameTitle}`;
-      console.log(`[Module.preRun] Updated save path to: /Save/${gameTitle}`);
+      Module.arguments[argIndex + 1] = `Save/${gameTitle}`;
+      console.log(`[Module.preRun] Updated save path to: Save/${gameTitle}`);
     }
     
     // Inject --font-path Fonts argument
