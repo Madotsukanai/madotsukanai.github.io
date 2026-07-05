@@ -1226,6 +1226,7 @@
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-up" title="上へ (Alt+↑)" disabled>⬆</button>
             <div class="sexplorer-toolbar-sep"></div>
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-upload" title="ファイルをアップロード">アップロード</button>
+            <button class="sexplorer-toolbar-btn" id="sexplorer-btn-upload-folder" title="フォルダをアップロード">フォルダアップロード</button>
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-newfolder" title="新しいフォルダ">新規フォルダ</button>
             <div class="sexplorer-toolbar-sep"></div>
             <button class="sexplorer-toolbar-btn" id="sexplorer-btn-cut" title="切り取り (Ctrl+X)" disabled>切り取り</button>
@@ -1271,6 +1272,7 @@
 
           <!-- 隠しファイル入力 -->
           <input type="file" id="sexplorer-file-upload" multiple>
+          <input type="file" id="sexplorer-folder-upload" webkitdirectory directory multiple style="display:none;">
         </div>
       </div>
 
@@ -2133,7 +2135,7 @@ function mergeSettingsIntoIni(iniText, updates) {
 class GameStorageManager {
   constructor() {
     this.dbName = 'EasyRPG_GameLibrary';
-    this.dbVersion = 3;
+    this.dbVersion = 4;
     this.db = null;
   }
   
@@ -2157,9 +2159,15 @@ class GameStorageManager {
           gamesStore.createIndex('name', 'name', { unique: false });
         }
         
-        // ゲームファイルストア（大容量データ用）
+        // ゲームファイルストア（旧・大容量データ用）
         if (!db.objectStoreNames.contains('gameFiles')) {
           db.createObjectStore('gameFiles', { keyPath: 'gameId' });
+        }
+        // ゲームファイルストアV2（個別ファイル保存用・メモリクラッシュ対策）
+        if (!db.objectStoreNames.contains('gameFilesV2')) {
+          const gameFilesV2 = db.createObjectStore('gameFilesV2', { autoIncrement: true });
+          gameFilesV2.createIndex('gameId', 'gameId', { unique: false });
+          gameFilesV2.createIndex('gameId_path', ['gameId', 'path'], { unique: true });
         }
         
         // RTPデータストア
@@ -2168,9 +2176,15 @@ class GameStorageManager {
           rtpStore.createIndex('name', 'name', { unique: false });
         }
         
-        // RTPファイルストア
+        // RTPファイルストア（旧）
         if (!db.objectStoreNames.contains('rtpFiles')) {
           db.createObjectStore('rtpFiles', { keyPath: 'rtpId' });
+        }
+        // RTPファイルストアV2
+        if (!db.objectStoreNames.contains('rtpFilesV2')) {
+          const rtpFilesV2 = db.createObjectStore('rtpFilesV2', { autoIncrement: true });
+          rtpFilesV2.createIndex('rtpId', 'rtpId', { unique: false });
+          rtpFilesV2.createIndex('rtpId_path', ['rtpId', 'path'], { unique: true });
         }
 
         if (!db.objectStoreNames.contains('assets')) {
@@ -2231,14 +2245,84 @@ class GameStorageManager {
       transaction.onerror = () => reject(transaction.error);
     });
   }
+
+  // 大容量ファイルをV2ストアにストリーミング保存するためのメソッド
+  async appendGameFiles(gameId, gameName, newFiles) {
+    const transaction = this.db.transaction(['games', 'gameFilesV2'], 'readwrite');
+    const gamesStore = transaction.objectStore('games');
+    const fileStore = transaction.objectStore('gameFilesV2');
+    
+    // 1. ファイルを個別に保存または更新
+    let totalSizeAdded = 0;
+    const addedFilesMeta = [];
+
+    for (const f of newFiles) {
+      let path = f.path;
+      if (gameId !== '__root__') {
+        const prefix = `games/${gameId}/`;
+        if (!path.startsWith('games/')) {
+          path = prefix + path.replace(/^\/+/, '');
+        }
+      }
+      
+      const dataSize = f.data ? f.data.length || f.data.byteLength : 0;
+      totalSizeAdded += dataSize;
+      
+      addedFilesMeta.push({
+        path: path,
+        size: dataSize
+      });
+      
+      fileStore.put({
+        gameId: gameId,
+        path: path,
+        data: f.data
+      });
+    }
+    
+    // 2. メタデータを更新
+    const gameDataReq = await new Promise((resolve, reject) => {
+      const req = gamesStore.get(gameId);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    
+    if (gameDataReq) {
+      // 既存のメタデータに追加
+      const existingList = gameDataReq.fileList || [];
+      const newList = existingList.filter(oldFile => !addedFilesMeta.some(newFile => newFile.path === oldFile.path)).concat(addedFilesMeta);
+      
+      gameDataReq.fileCount = newList.length;
+      gameDataReq.totalSize = newList.reduce((sum, f) => sum + f.size, 0);
+      gameDataReq.fileList = newList;
+      gameDataReq.lastPlayed = new Date().toISOString();
+      gamesStore.put(gameDataReq);
+    } else {
+      // 新規作成
+      gamesStore.put({
+        id: gameId,
+        name: gameName,
+        lastPlayed: new Date().toISOString(),
+        fileCount: addedFilesMeta.length,
+        totalSize: totalSizeAdded,
+        fileList: addedFilesMeta
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
   
   async renameGameId(oldGameId, newGameId) {
     if (oldGameId === newGameId) return;
     
     console.log(`[StorageManager] Renaming game database key from "${oldGameId}" to "${newGameId}"...`);
-    const transaction = this.db.transaction(['games', 'gameFiles'], 'readwrite');
+    const transaction = this.db.transaction(['games', 'gameFiles', 'gameFilesV2'], 'readwrite');
     const gamesStore = transaction.objectStore('games');
     const filesStore = transaction.objectStore('gameFiles');
+    const v2Store = transaction.objectStore('gameFilesV2');
     
     // 1. Get old records
     const oldGameData = await new Promise((resolve, reject) => {
@@ -2278,7 +2362,7 @@ class GameStorageManager {
     await gamesStore.put(newGameData);
     await gamesStore.delete(oldGameId);
     
-    // 3. Update gameFiles paths and keys
+    // 3. Update gameFiles paths and keys (V1)
     if (oldFilesData && oldFilesData.files) {
       const oldPrefix = `games/${oldGameId}/`;
       const newPrefix = `games/${newGameId}/`;
@@ -2302,6 +2386,28 @@ class GameStorageManager {
       await filesStore.delete(oldGameId);
     }
     
+    // 4. Update V2 store
+    const v2Index = v2Store.index('gameId');
+    const v2CursorReq = v2Index.openCursor(IDBKeyRange.only(oldGameId));
+    v2CursorReq.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        const record = cursor.value;
+        const oldPrefix = `games/${oldGameId}/`;
+        const newPrefix = `games/${newGameId}/`;
+        let newPath = record.path;
+        if (record.path.startsWith(oldPrefix)) {
+          newPath = newPrefix + record.path.substring(oldPrefix.length);
+        }
+        
+        record.gameId = newGameId;
+        record.path = newPath;
+        v2Store.put(record);
+        cursor.delete();
+        cursor.continue();
+      }
+    };
+    
     return new Promise((resolve, reject) => {
       transaction.oncomplete = () => {
         console.log(`[StorageManager] Database rename completed successfully: "${oldGameId}" -> "${newGameId}"`);
@@ -2311,8 +2417,8 @@ class GameStorageManager {
     });
   }
   
-  async getGame(gameId) {
-    const transaction = this.db.transaction(['games', 'gameFiles'], 'readonly');
+  async getGame(gameId, loadData = true) {
+    const transaction = this.db.transaction(['games', 'gameFiles', 'gameFilesV2'], 'readonly');
     
     const gameData = await new Promise((resolve, reject) => {
       const request = transaction.objectStore('games').get(gameId);
@@ -2324,15 +2430,53 @@ class GameStorageManager {
       return null;
     }
     
-    const fileData = await new Promise((resolve, reject) => {
+    if (!loadData && gameData.fileList) {
+      // Lazy load mode: return metadata only without fetching Uint8Arrays
+      gameData.files = gameData.fileList.map(f => ({
+        path: f.path,
+        size: f.size,
+        data: null,
+        lazy: true,
+        gameId: gameId
+      }));
+      return gameData;
+    }
+
+    // 1. 旧V1ストアから読み込み
+    const fileDataV1 = await new Promise((resolve, reject) => {
       const request = transaction.objectStore('gameFiles').get(gameId);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
     
+    let allFiles = fileDataV1 ? fileDataV1.files || [] : [];
+    
+    // 2. 新V2ストアから読み込み
+    const fileDataV2 = await new Promise((resolve, reject) => {
+      const store = transaction.objectStore('gameFilesV2');
+      const index = store.index('gameId');
+      const request = index.getAll(gameId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    
+    if (fileDataV2 && fileDataV2.length > 0) {
+      // V2のデータが存在する場合、V1データに上書き・結合する
+      const v2Files = fileDataV2.map(record => ({
+        path: record.path,
+        data: record.data
+      }));
+      
+      const fileMap = new Map();
+      allFiles.forEach(f => fileMap.set(f.path, f));
+      v2Files.forEach(f => fileMap.set(f.path, f));
+      
+      allFiles = Array.from(fileMap.values());
+    }
+    
     return {
       ...gameData,
-      files: fileData ? fileData.files : []
+      files: allFiles
     };
   }
   
@@ -2360,10 +2504,22 @@ class GameStorageManager {
   }
   
   async deleteGame(gameId) {
-    const transaction = this.db.transaction(['games', 'gameFiles'], 'readwrite');
+    const transaction = this.db.transaction(['games', 'gameFiles', 'gameFilesV2'], 'readwrite');
     
     await transaction.objectStore('games').delete(gameId);
     await transaction.objectStore('gameFiles').delete(gameId);
+    
+    // V2ストアからはgameIdに一致する全レコードを削除
+    const v2Store = transaction.objectStore('gameFilesV2');
+    const index = v2Store.index('gameId');
+    const cursorReq = index.openCursor(IDBKeyRange.only(gameId));
+    cursorReq.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        cursor.delete();
+        cursor.continue();
+      }
+    };
     
     return new Promise((resolve, reject) => {
       transaction.oncomplete = () => resolve();
@@ -2395,7 +2551,81 @@ class GameStorageManager {
     });
   }
   
-  // RTP管理メソッド
+  async getGameFile(gameId, path) {
+    const transaction = this.db.transaction(['gameFiles', 'gameFilesV2'], 'readonly');
+    
+    // データベース内では path に games/gameId/ が付与されている場合があるため、両方で検索できるようにする
+    const prefixedPath = path.startsWith('games/') ? path : `games/${gameId}/${path.replace(/^\/+/, '')}`;
+    
+    // First try V2
+    let v2Data = await new Promise((resolve) => {
+      const store = transaction.objectStore('gameFilesV2');
+      const index = store.index('gameId_path');
+      const request = index.get([gameId, path]);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+    
+    // フォールバック: prefixedPath で再検索
+    if (!v2Data && path !== prefixedPath) {
+      v2Data = await new Promise((resolve) => {
+        const store = transaction.objectStore('gameFilesV2');
+        const index = store.index('gameId_path');
+        const request = index.get([gameId, prefixedPath]);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+      });
+    }
+    
+    if (v2Data) {
+      return v2Data.data;
+    }
+    
+    // Fallback to V1
+    const v1Data = await new Promise((resolve) => {
+      const request = transaction.objectStore('gameFiles').get(gameId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+    
+    if (v1Data && v1Data.files) {
+      const file = v1Data.files.find(f => f.path === path || f.path === prefixedPath);
+      if (file) return file.data;
+    }
+    return null;
+  }
+
+  // --- RTP管理 ---
+  async getRTPFile(rtpId, path) {
+    const transaction = this.db.transaction(['rtpFiles', 'rtpFilesV2'], 'readonly');
+    
+    // First try V2
+    const v2Data = await new Promise((resolve) => {
+      const store = transaction.objectStore('rtpFilesV2');
+      const index = store.index('rtpId_path');
+      const request = index.get([rtpId, path]);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+    
+    if (v2Data) {
+      return v2Data.data;
+    }
+    
+    // Fallback to V1
+    const v1Data = await new Promise((resolve) => {
+      const request = transaction.objectStore('rtpFiles').get(rtpId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+    
+    if (v1Data && v1Data.files) {
+      const file = v1Data.files.find(f => f.path === path);
+      if (file) return file.data;
+    }
+    return null;
+  }
+
   async saveRTP(rtpId, rtpName, files) {
     const transaction = this.db.transaction(['rtp', 'rtpFiles'], 'readwrite');
     
@@ -2667,6 +2897,7 @@ let storageManager = null;
     const realSend = real.send.bind(real);
 
     real.open = function(method, url, ...rest) {
+      console.log('[PatchedXHR] real.open called:', method, url);
       interceptData = null;
       if (window.EASYRPG_FILE_MAP && typeof url === 'string') {
         let path = null;
@@ -2707,29 +2938,71 @@ let storageManager = null;
 
     real.send = function(...args) {
       if (interceptData !== null) {
-        const data = interceptData;
-        const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-        try {
-          Object.defineProperty(real, 'status', { value: 200, configurable: true });
-          Object.defineProperty(real, 'statusText', { value: 'OK', configurable: true });
-          Object.defineProperty(real, 'readyState', { value: 4, configurable: true });
-          Object.defineProperty(real, 'response', { value: buffer, configurable: true });
-          Object.defineProperty(real, 'responseText', { value: new TextDecoder().decode(data), configurable: true });
-        } catch (e) {
-          console.warn('Failed to shim XHR response for intercepted asset:', e);
+        const finishIntercept = (data) => {
+          const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+          try {
+            Object.defineProperty(real, 'status', { value: 200, configurable: true });
+            Object.defineProperty(real, 'statusText', { value: 'OK', configurable: true });
+            Object.defineProperty(real, 'readyState', { value: 4, configurable: true });
+            Object.defineProperty(real, 'response', { value: buffer, configurable: true });
+            Object.defineProperty(real, 'responseText', { value: new TextDecoder().decode(data), configurable: true });
+          } catch (e) {
+            console.warn('Failed to shim XHR response for intercepted asset:', e);
+          }
+          // emscripten側のコールバック登録が完了してから発火させるため非同期にする
+          setTimeout(() => {
+            if (typeof real.onreadystatechange === 'function') {
+              try { real.onreadystatechange(new Event('readystatechange')); } catch (e) { console.error(e); }
+            }
+            if (typeof real.onload === 'function') {
+              try { real.onload(new ProgressEvent('load')); } catch (e) { console.error(e); }
+            }
+            if (typeof real.onloadend === 'function') {
+              try { real.onloadend(new ProgressEvent('loadend')); } catch (e) { console.error(e); }
+            }
+          }, 0);
+        };
+
+        if (interceptData.lazy) {
+          // Lazy load: fetch directly from IndexedDB
+          (async () => {
+            try {
+              let data = null;
+              if (interceptData.rtpId) {
+                console.log('[LazyLoad] Fetching RTP file from IndexedDB:', interceptData.rtpId, interceptData.path);
+                data = await storageManager.getRTPFile(interceptData.rtpId, interceptData.path);
+              } else if (interceptData.gameId) {
+                console.log('[LazyLoad] Fetching Game file from IndexedDB:', interceptData.gameId, interceptData.path);
+                data = await storageManager.getGameFile(interceptData.gameId, interceptData.path);
+              }
+              
+              if (data) {
+                console.log('[LazyLoad] Successfully loaded from IndexedDB:', interceptData.path);
+                finishIntercept(data);
+              } else {
+                console.warn('[LazyLoad] File not found in DB! gameId:', interceptData.gameId, 'path:', interceptData.path);
+                // File not found in DB
+                Object.defineProperty(real, 'status', { value: 404, configurable: true });
+                Object.defineProperty(real, 'readyState', { value: 4, configurable: true });
+                setTimeout(() => {
+                  if (typeof real.onreadystatechange === 'function') {
+                    try { real.onreadystatechange(new Event('readystatechange')); } catch (e) {}
+                  }
+                  if (typeof real.onerror === 'function') {
+                    try { real.onerror(new ProgressEvent('error')); } catch (e) {}
+                  }
+                  if (typeof real.onloadend === 'function') {
+                    try { real.onloadend(new ProgressEvent('loadend')); } catch (e) {}
+                  }
+                }, 0);
+              }
+            } catch (e) {
+              console.error('Lazy load error:', e);
+            }
+          })();
+        } else {
+          finishIntercept(interceptData);
         }
-        // emscripten側のコールバック登録が完了してから発火させるため非同期にする
-        setTimeout(() => {
-          if (typeof real.onreadystatechange === 'function') {
-            try { real.onreadystatechange(new Event('readystatechange')); } catch (e) { console.error(e); }
-          }
-          if (typeof real.onload === 'function') {
-            try { real.onload(new ProgressEvent('load')); } catch (e) { console.error(e); }
-          }
-          if (typeof real.onloadend === 'function') {
-            try { real.onloadend(new ProgressEvent('loadend')); } catch (e) { console.error(e); }
-          }
-        }, 0);
         return;
       }
       return realSend(...args);
@@ -3836,15 +4109,20 @@ class StorageExplorer {
 
     const mode = this.clipboard.mode;
     const items = this.clipboard.items;
+    
+    console.log(`[StorageExplorer] Starting ${mode} for ${items.length} items...`);
 
     for (const item of items) {
       if (item.isDir) {
         // ディレクトリの場合: 中のファイルを全部コピー/移動
+        console.log(`[StorageExplorer] ${mode === 'cut' ? 'Moving' : 'Copying'} directory: ${item.name}...`);
         await this._pasteDir(item, mode);
       } else {
+        console.log(`[StorageExplorer] ${mode === 'cut' ? 'Moving' : 'Copying'} file: ${item.name}...`);
         await this._pasteFile(item, mode);
       }
     }
+    console.log(`[StorageExplorer] ${mode} complete.`);
 
     if (mode === 'cut') {
       this.clipboard = { items: [], mode: null };
@@ -4183,20 +4461,31 @@ class StorageExplorer {
         const parts = item.fullPath.split('/');
         if (parts.length === 2 && parts[0] === 'games') {
           const gameId = parts[1];
+          console.log(`[StorageExplorer] Deleting game: ${gameId}...`);
           await storageManager.deleteGame(gameId);
+          console.log(`[StorageExplorer] Game deleted: ${gameId}`);
           continue; // このゲームの配下ファイルは deleteGame で消えるためスキップ
         }
 
         // ディレクトリ配下の全ファイルを削除
         const dirEntries = this.allEntries.filter(e => e.path.startsWith(item.fullPath + '/'));
+        console.log(`[StorageExplorer] Deleting directory: ${item.fullPath} (${dirEntries.length} files)...`);
+        let count = 0;
         for (const entry of dirEntries) {
           if (entry.groupType) {
             await this._removeFileFromGroup(entry.groupType, entry.groupId, entry.path, entry.originalKey);
+            count++;
+            if (count % 500 === 0) {
+              console.log(`[StorageExplorer] Deleted ${count} files from directory...`);
+            }
           }
         }
+        console.log(`[StorageExplorer] Directory deletion complete: ${item.fullPath}`);
       } else {
         if (item.groupType) {
+          console.log(`[StorageExplorer] Deleting file: ${item.fullPath}...`);
           await this._removeFileFromGroup(item.groupType, item.groupId, item.fullPath, item.originalKey);
+          console.log(`[StorageExplorer] File deleted: ${item.fullPath}`);
         }
       }
     }
@@ -4368,6 +4657,16 @@ class StorageExplorer {
       extractZip = confirm('ZIPファイルが選択されました。自動的に展開してアップロードしますか？\n（キャンセルを選ぶとZIPファイルのままアップロードします）');
     }
 
+    let totalZipSize = 0;
+    for (const file of fileList) {
+      totalZipSize += file.size;
+    }
+    
+    if (totalZipSize > 1.5 * 1024 * 1024 * 1024) {
+      const confirmLarge = confirm(`選択されたファイルの合計サイズが ${(totalZipSize / 1024 / 1024 / 1024).toFixed(2)} GB あります。\n\nブラウザ版の仕様上、ゲームデータはすべてメモリ上に展開されるため、2GB前後を超える特大サイズのゲームはブラウザのタブがクラッシュして遊べない可能性が非常に高いです。\n\nこのままアップロードを続行しますか？`);
+      if (!confirmLarge) return;
+    }
+
     for (const file of fileList) {
       const isZip = file.name.toLowerCase().endsWith('.zip');
       
@@ -4408,6 +4707,7 @@ class StorageExplorer {
           // バッチ処理用にグループごとのファイルをまとめる
           const batchFiles = {};
           let extractedCount = 0;
+          let processedBytes = 0;
 
           for (const [filename, zipEntry] of Object.entries(zipContent.files)) {
             if (zipEntry.dir) continue;
@@ -4419,41 +4719,62 @@ class StorageExplorer {
             if (!groupInfo) continue; // 無効なパスはスキップ
             
             const relativePath = fullParts.slice(groupInfo.groupPathLen).join('/');
+            processedBytes += data.length;
             
             // save/config/assetなどは個別保存のままで問題ないが、gameとrtpはまとめて保存しないとブラウザがフリーズする
             if (groupInfo.groupType === 'game' || groupInfo.groupType === 'rtp') {
               const key = `${groupInfo.groupType}:${groupInfo.groupId}`;
-              if (!batchFiles[key]) batchFiles[key] = [];
-              batchFiles[key].push({ path: relativePath, data: data });
+              if (!batchFiles[key]) batchFiles[key] = { files: [], size: 0 };
+              
+              batchFiles[key].files.push({ path: relativePath, data: data });
+              batchFiles[key].size += data.length;
               extractedCount++;
+              
+              if (extractedCount % 500 === 0) {
+                console.log(`[StorageExplorer] ZIP Processed ${extractedCount} files... (${(processedBytes / 1024 / 1024).toFixed(2)} MB)`);
+              }
+              
+              // メモリを解放するために、50MBごとにデータベースへ保存する
+              if (batchFiles[key].size > 50 * 1024 * 1024) {
+                console.log(`[StorageExplorer] ZIP Saving chunk to DB: ${batchFiles[key].files.length} files (${(batchFiles[key].size / 1024 / 1024).toFixed(2)} MB) to ${key}...`);
+                if (groupInfo.groupType === 'game') {
+                  await storageManager.appendGameFiles(groupInfo.groupId, groupInfo.groupId, batchFiles[key].files);
+                } else if (groupInfo.groupType === 'rtp') {
+                  let rtpData = await storageManager.getRTP(groupInfo.groupId);
+                  if (!rtpData) rtpData = { name: groupInfo.groupId, files: [] };
+                  const existingFiles = rtpData.files || [];
+                  for (const newFile of batchFiles[key].files) {
+                    const existingIndex = existingFiles.findIndex(f => f.path === newFile.path);
+                    if (existingIndex !== -1) existingFiles[existingIndex].data = newFile.data;
+                    else existingFiles.push(newFile);
+                  }
+                  await storageManager.saveRTP(groupInfo.groupId, rtpData.name, existingFiles);
+                }
+                batchFiles[key].files = [];
+                batchFiles[key].size = 0;
+              }
             } else {
               // それ以外は個別に追加
               await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, data);
               extractedCount++;
+              if (extractedCount % 500 === 0) {
+                console.log(`[StorageExplorer] ZIP Processed ${extractedCount} files... (${(processedBytes / 1024 / 1024).toFixed(2)} MB)`);
+              }
             }
           }
 
-          // バッチ保存の実行
+          // 残りのバッチ保存の実行
           for (const key of Object.keys(batchFiles)) {
             const [groupType, groupId] = key.split(':');
-            const filesToAdd = batchFiles[key];
+            const filesToAdd = batchFiles[key].files;
+            if (filesToAdd.length === 0) continue;
             
             if (groupType === 'game') {
-              let gameData = await storageManager.getGame(groupId);
-              if (!gameData) gameData = { name: groupId, files: [] };
-              const existingFiles = gameData.files || [];
-              
-              for (const newFile of filesToAdd) {
-                const existingIndex = existingFiles.findIndex(f => f.path === newFile.path);
-                if (existingIndex !== -1) existingFiles[existingIndex].data = newFile.data;
-                else existingFiles.push(newFile);
-              }
-              await storageManager.saveGame(groupId, gameData.name, existingFiles);
+              await storageManager.appendGameFiles(groupId, groupId, filesToAdd);
             } else if (groupType === 'rtp') {
               let rtpData = await storageManager.getRTP(groupId);
               if (!rtpData) rtpData = { name: groupId, files: [] };
               const existingFiles = rtpData.files || [];
-              
               for (const newFile of filesToAdd) {
                 const existingIndex = existingFiles.findIndex(f => f.path === newFile.path);
                 if (existingIndex !== -1) existingFiles[existingIndex].data = newFile.data;
@@ -4506,12 +4827,148 @@ class StorageExplorer {
     }
   }
 
+  // --- フォルダアップロード (バッチ処理付き) ---
+  async uploadFolder(fileList) {
+    if (!fileList || fileList.length === 0) return;
+
+    document.body.style.cursor = 'wait';
+    const uploadFolderBtn = document.getElementById('sexplorer-btn-upload-folder');
+    const originalText = uploadFolderBtn ? uploadFolderBtn.textContent : '';
+    if (uploadFolderBtn) {
+      uploadFolderBtn.textContent = 'アップロード中...';
+      uploadFolderBtn.disabled = true;
+    }
+    await new Promise(r => setTimeout(r, 50));
+
+    try {
+      const parts = this.currentPath.split('/').filter(s => s);
+      const batchFiles = {};
+      let extractedCount = 0;
+      let totalSize = 0;
+
+      // 最初に合計サイズを計算してメモリ限界をチェック
+      for (const file of fileList) {
+        if (file.webkitRelativePath) {
+          totalSize += file.size;
+        }
+      }
+      
+      // 1.5GB (1536MB) を超える場合は警告
+      if (totalSize > 1.5 * 1024 * 1024 * 1024) {
+        const confirmLarge = confirm(`選択されたフォルダの合計サイズが ${(totalSize / 1024 / 1024 / 1024).toFixed(2)} GB あります。\n\nブラウザ版の仕様上、ゲームデータはすべてメモリ上に展開されるため、2GB前後を超える特大サイズのゲームはブラウザのタブがクラッシュして遊べない可能性が非常に高いです。\n\nこのままアップロードを続行しますか？`);
+        if (!confirmLarge) {
+          document.body.style.cursor = 'default';
+          if (uploadFolderBtn) {
+            uploadFolderBtn.textContent = originalText;
+            uploadFolderBtn.disabled = false;
+          }
+          return;
+        }
+      }
+
+      let processedBytes = 0;
+
+      for (const file of fileList) {
+        if (!file.webkitRelativePath) continue;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+        const fullParts = parts.concat(file.webkitRelativePath.split('/').filter(s => s));
+        const groupInfo = this._resolveGroupAtParts(fullParts);
+
+        if (!groupInfo) continue;
+
+        const relativePath = fullParts.slice(groupInfo.groupPathLen).join('/');
+        processedBytes += data.length;
+
+        if (groupInfo.groupType === 'game' || groupInfo.groupType === 'rtp') {
+          const key = `${groupInfo.groupType}:${groupInfo.groupId}`;
+          if (!batchFiles[key]) batchFiles[key] = { files: [], size: 0 };
+          
+          batchFiles[key].files.push({ path: relativePath, data: data });
+          batchFiles[key].size += data.length;
+          extractedCount++;
+          
+          if (extractedCount % 500 === 0) {
+            console.log(`[StorageExplorer] Processed ${extractedCount} files... (${(processedBytes / 1024 / 1024).toFixed(2)} MB)`);
+          }
+          
+          // メモリを解放するために、50MBごとにデータベースへ保存する (クラッシュ対策)
+          if (batchFiles[key].size > 50 * 1024 * 1024) {
+            console.log(`[StorageExplorer] Saving chunk to DB: ${batchFiles[key].files.length} files (${(batchFiles[key].size / 1024 / 1024).toFixed(2)} MB) to ${key}...`);
+            if (groupInfo.groupType === 'game') {
+              await storageManager.appendGameFiles(groupInfo.groupId, groupInfo.groupId, batchFiles[key].files);
+            } else if (groupInfo.groupType === 'rtp') {
+              let rtpData = await storageManager.getRTP(groupInfo.groupId);
+              if (!rtpData) rtpData = { name: groupInfo.groupId, files: [] };
+              const existingFiles = rtpData.files || [];
+              for (const newFile of batchFiles[key].files) {
+                const existingIndex = existingFiles.findIndex(f => f.path === newFile.path);
+                if (existingIndex !== -1) existingFiles[existingIndex].data = newFile.data;
+                else existingFiles.push(newFile);
+              }
+              await storageManager.saveRTP(groupInfo.groupId, rtpData.name, existingFiles);
+            }
+            batchFiles[key].files = [];
+            batchFiles[key].size = 0;
+          }
+        } else {
+          await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, data);
+          extractedCount++;
+          if (extractedCount % 500 === 0) {
+            console.log(`[StorageExplorer] Processed ${extractedCount} files... (${(processedBytes / 1024 / 1024).toFixed(2)} MB)`);
+          }
+        }
+      }
+
+      // 残りのバッチ保存の実行
+      for (const key of Object.keys(batchFiles)) {
+        const [groupType, groupId] = key.split(':');
+        const filesToAdd = batchFiles[key].files;
+        if (filesToAdd.length === 0) continue;
+
+        if (groupType === 'game') {
+          await storageManager.appendGameFiles(groupId, groupId, filesToAdd);
+        } else if (groupType === 'rtp') {
+          let rtpData = await storageManager.getRTP(groupId);
+          if (!rtpData) rtpData = { name: groupId, files: [] };
+          const existingFiles = rtpData.files || [];
+          for (const newFile of filesToAdd) {
+            const existingIndex = existingFiles.findIndex(f => f.path === newFile.path);
+            if (existingIndex !== -1) existingFiles[existingIndex].data = newFile.data;
+            else existingFiles.push(newFile);
+          }
+          await storageManager.saveRTP(groupId, rtpData.name, existingFiles);
+        }
+      }
+      alert(`フォルダのアップロードが完了しました！（${extractedCount}ファイル）`);
+    } catch (e) {
+      console.error('Folder upload failed:', e);
+      alert(`フォルダのアップロードに失敗しました: ` + e.message);
+    } finally {
+      document.body.style.cursor = 'default';
+      if (uploadFolderBtn) {
+        uploadFolderBtn.textContent = originalText;
+        uploadFolderBtn.disabled = false;
+      }
+    }
+
+    this._treeCache = null;
+    await this.loadAll();
+    this.render();
+    if (typeof loadSavedGamesList === 'function') {
+      await loadSavedGamesList();
+    }
+  }
+
   // --- 新規フォルダ ---
   async createNewFolder() {
     const parts = this.currentPath.split('/').filter(s => s);
 
     const name = prompt('新しいフォルダの名前を入力してください:', '新しいフォルダ');
     if (!name || !name.trim()) return;
+
+    console.log(`[StorageExplorer] Creating new folder: ${name.trim()} at ${this.currentPath}...`);
 
     if (parts.length === 1 && parts[0] === 'games') {
       // gamesディレクトリ直下でのフォルダ作成＝新しいゲームの作成として扱う
@@ -4529,6 +4986,7 @@ class StorageExplorer {
       await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, new Uint8Array(0));
     }
 
+    console.log(`[StorageExplorer] Folder created.`);
     this._treeCache = null;
     await this.loadAll();
     this.render();
@@ -5103,11 +5561,19 @@ function _initExplorerEvents() {
   document.getElementById('sexplorer-btn-upload')?.addEventListener('click', () => {
     document.getElementById('sexplorer-file-upload').click();
   });
+  document.getElementById('sexplorer-btn-upload-folder')?.addEventListener('click', () => {
+    document.getElementById('sexplorer-folder-upload').click();
+  });
   document.getElementById('sexplorer-btn-newfolder')?.addEventListener('click', () => se.createNewFolder());
 
   // ファイルアップロード
   document.getElementById('sexplorer-file-upload')?.addEventListener('change', async (e) => {
     await se.uploadFiles(e.target.files);
+    e.target.value = '';
+  });
+  // フォルダアップロード
+  document.getElementById('sexplorer-folder-upload')?.addEventListener('change', async (e) => {
+    await se.uploadFolder(e.target.files);
     e.target.value = '';
   });
 
@@ -5457,7 +5923,21 @@ async function loadSavedGame(gameId) {
   try {
     document.getElementById('status').textContent = 'ゲームを読み込み中...';
     
-    const gameData = await storageManager.getGame(gameId);
+    // ゲームの合計サイズを計算し、300MBを超える場合はデータを読み込まずに遅延読み込み（Lazy Load）モードにする
+    const tx = storageManager.db.transaction('games', 'readonly');
+    const meta = await new Promise(r => {
+      const req = tx.objectStore('games').get(gameId);
+      req.onsuccess = () => r(req.result);
+      req.onerror = () => r(null);
+    });
+    const totalSize = meta && meta.fileList ? meta.fileList.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
+    const loadData = totalSize < 300 * 1024 * 1024; // 300MB未満ならオンメモリロード
+    
+    if (!loadData) {
+      console.log(`[LazyLoad] Game size is ${(totalSize / 1024 / 1024).toFixed(2)} MB (>300MB). Enabling lazy loading to prevent crash.`);
+    }
+
+    const gameData = await storageManager.getGame(gameId, loadData);
     
     if (!gameData || !gameData.files || gameData.files.length === 0) {
       alert('ゲームデータが見つかりません。');
@@ -6132,7 +6612,10 @@ async function saveGameToLibrary(files, gameName) {
   // プレフィックス(games/ゲームID/)を一時的に除去
   const cleanFiles = files.map(f => ({
     path: f.path.replace(/^games\/[^/]+\//i, ''),
-    data: f.data
+    data: f.data,
+    lazy: f.lazy,
+    gameId: f.gameId,
+    size: f.size
   }));
   
   const gameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
@@ -6204,7 +6687,10 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   // プレフィックス(games/ゲームID/)を一時的に除去してハッシュ生成やマージを行う
   const cleanFiles = files.map(f => ({
     path: f.path.replace(/^games\/[^/]+\//i, ''),
-    data: f.data
+    data: f.data,
+    lazy: f.lazy,
+    gameId: f.gameId,
+    size: f.size
   }));
   
   let gameId = existingGameId;
@@ -6225,25 +6711,23 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
       console.log('Generated Game ID:', gameId);
     }
   }
-  
-  // IndexedDBへのゲームデータ保存（ライブラリ一覧に表示するためのもので、
-  // 今回の起動処理自体には不要）はバックグラウンドで実行し、完了を待たずに
-  // 起動処理を先に進める。
-  (async () => {
-    try {
-      await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
-      console.log('Game saved to IndexedDB');
-      
-      // ゲームリストを更新
-      await loadSavedGamesList();
-    } catch (e) {
-      console.warn('Failed to save game to IndexedDB:', e);
-      if (e.name === 'QuotaExceededError') {
-        alert('ストレージの容量が不足しています。他のゲームを削除してください。');
+
+  // 既存のゲームを起動する場合、再度保存して上書きするのを防ぐ（特にLazyLoad時にデータが消えるのを防ぐため）
+  if (!existingGameId) {
+    (async () => {
+      try {
+        await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
+        console.log('Game saved to IndexedDB');
+        await loadSavedGamesList();
+      } catch (e) {
+        console.warn('Failed to save game to IndexedDB:', e);
+        if (e.name === 'QuotaExceededError') {
+          alert('ストレージの容量が不足しています。他のゲームを削除してください。');
+        }
       }
-    }
-  })();
-  
+    })();
+  }
+
   // RTPファイルをIndexedDBから読み込んでゲームファイルにマージ
   // EasyRPGのEmscriptenビルドではRTPが無効化されているため、
   // ゲームファイルに直接統合する
@@ -6337,7 +6821,9 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   
   // window.EASYRPG_GAME_TITLEにファイルを設定
   // ビルド済みのindex.jsのonPreRun関数がこれをチェックします
-  window.EASYRPG_CUSTOM_FILES = mergedFiles;
+  // Lazy Load対応: dataが存在しないファイル（lazy: true）は除外する。
+  // （除外しないとindex.jsがFS.writeFileで書き込もうとしてErrno 33でクラッシュするため）
+  window.EASYRPG_CUSTOM_FILES = mergedFiles.filter(f => !f.lazy);
   window.EASYRPG_GAME_ID = gameId; // ゲームIDも渡す（互換性のため保持。セーブ領域の分離には使用しない）
   // セーブデータの分離キーには、内部生成のハッシュIDではなく、
   // サイト側で管理している（ユーザーが編集できる）ゲームタイトルを使う。
@@ -6350,7 +6836,11 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   // IndexedDBから読み込んだデータをその場で返せるようにする
   const fileMap = new Map();
   for (const f of mergedFiles) {
-    fileMap.set(normalizeGameAssetPath(f.path), f.data);
+    if (f.data) {
+      fileMap.set(normalizeGameAssetPath(f.path), f.data);
+    } else if (f.lazy) {
+      fileMap.set(normalizeGameAssetPath(f.path), { lazy: true, gameId: f.gameId, rtpId: f.rtpId, path: f.path });
+    }
   }
   window.EASYRPG_FILE_MAP = fileMap;
   
