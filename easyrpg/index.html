@@ -871,6 +871,8 @@
       left: 50%;
       width: 100%;
       height: 100%;
+      transform: translate(-50%, -50%) translateZ(0);
+      will-change: transform;
       border: 0;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
@@ -2137,8 +2139,47 @@ class GameStorageManager {
     this.dbName = 'EasyRPG_GameLibrary';
     this.dbVersion = 4;
     this.db = null;
+    
+    // LRU Cache for fast access (Max 50MB)
+    this.lruCache = new Map();
+    this.lruCacheSize = 0;
+    this.MAX_CACHE_SIZE = 50 * 1024 * 1024; // 50MB
   }
   
+  _getCachedFile(key) {
+    if (this.lruCache.has(key)) {
+      const entry = this.lruCache.get(key);
+      // Move to most recently used
+      this.lruCache.delete(key);
+      this.lruCache.set(key, entry);
+      return entry.data;
+    }
+    return null;
+  }
+
+  _setCachedFile(key, data) {
+    if (!data) return;
+    const size = data.length || data.byteLength || 0;
+    
+    // Avoid caching huge files (e.g. video files > 10MB)
+    if (size > 10 * 1024 * 1024) return;
+
+    if (this.lruCache.has(key)) {
+      this.lruCacheSize -= this.lruCache.get(key).size;
+      this.lruCache.delete(key);
+    }
+
+    this.lruCache.set(key, { data, size });
+    this.lruCacheSize += size;
+
+    while (this.lruCacheSize > this.MAX_CACHE_SIZE && this.lruCache.size > 0) {
+      const firstKey = this.lruCache.keys().next().value;
+      const firstEntry = this.lruCache.get(firstKey);
+      this.lruCacheSize -= firstEntry.size;
+      this.lruCache.delete(firstKey);
+    }
+  }
+
   async init() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
@@ -2552,6 +2593,10 @@ class GameStorageManager {
   }
   
   async getGameFile(gameId, path) {
+    const cacheKey = `game:${gameId}:${path}`;
+    const cached = this._getCachedFile(cacheKey);
+    if (cached) return cached;
+
     const transaction = this.db.transaction(['gameFiles', 'gameFilesV2'], 'readonly');
     
     // データベース内では path に games/gameId/ が付与されている場合があるため、両方で検索できるようにする
@@ -2577,7 +2622,8 @@ class GameStorageManager {
       });
     }
     
-    if (v2Data) {
+    if (v2Data && v2Data.data) {
+      this._setCachedFile(cacheKey, v2Data.data);
       return v2Data.data;
     }
     
@@ -2590,13 +2636,20 @@ class GameStorageManager {
     
     if (v1Data && v1Data.files) {
       const file = v1Data.files.find(f => f.path === path || f.path === prefixedPath);
-      if (file) return file.data;
+      if (file && file.data) {
+        this._setCachedFile(cacheKey, file.data);
+        return file.data;
+      }
     }
     return null;
   }
 
   // --- RTP管理 ---
   async getRTPFile(rtpId, path) {
+    const cacheKey = `rtp:${rtpId}:${path}`;
+    const cached = this._getCachedFile(cacheKey);
+    if (cached) return cached;
+
     const transaction = this.db.transaction(['rtpFiles', 'rtpFilesV2'], 'readonly');
     
     // First try V2
@@ -2608,7 +2661,8 @@ class GameStorageManager {
       request.onerror = () => resolve(null);
     });
     
-    if (v2Data) {
+    if (v2Data && v2Data.data) {
+      this._setCachedFile(cacheKey, v2Data.data);
       return v2Data.data;
     }
     
@@ -2621,7 +2675,10 @@ class GameStorageManager {
     
     if (v1Data && v1Data.files) {
       const file = v1Data.files.find(f => f.path === path);
-      if (file) return file.data;
+      if (file && file.data) {
+        this._setCachedFile(cacheKey, file.data);
+        return file.data;
+      }
     }
     return null;
   }
@@ -5811,6 +5868,24 @@ async function loadSavedGamesList() {
         minute: '2-digit'
       });
       
+      const formatPlayTime = (seconds) => {
+        if (!seconds) return '未プレイ';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        if (h > 0) return `${h}時間${m}分`;
+        if (m > 0) return `${m}分`;
+        return `${s}秒`;
+      };
+      
+      // localStorageのバッファを確認（1秒単位の高頻度記録用）
+      const bufferedPlayTime = parseInt(localStorage.getItem(`playtime_${game.id}`), 10);
+      if (!isNaN(bufferedPlayTime) && bufferedPlayTime > (game.playTimeSeconds || 0)) {
+        game.playTimeSeconds = bufferedPlayTime;
+        // 非同期でDBに書き戻す
+        storageManager.updateGameMetadata(game.id, { playTimeSeconds: bufferedPlayTime }).catch(e => {});
+      }
+      
       gameDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="flex: 1;" onclick="loadSavedGame('${game.id}')">
@@ -5824,6 +5899,7 @@ async function loadSavedGamesList() {
               </button>
             </div>
             <div style="font-size: 0.85rem; color: #aaa;">
+              プレイ時間: ${formatPlayTime(game.playTimeSeconds || 0)}<br>
               最終プレイ: ${lastPlayed}
             </div>
             <div style="font-size: 0.8rem; color: #888;">
@@ -5950,6 +6026,19 @@ async function loadSavedGame(gameId) {
     await storageManager.updateGameMetadata(gameId, {
       lastPlayed: new Date().toISOString()
     });
+    
+    // プレイ時間記録タイマーの開始（1秒ごとにlocalStorageに記録）
+    if (window.playTimeInterval) clearInterval(window.playTimeInterval);
+    
+    // DBの現在の値か、ローカルストレージの最新値のどちらか大きい方を取得
+    const dbPlayTime = gameData.playTimeSeconds || 0;
+    const localPlayTime = parseInt(localStorage.getItem(`playtime_${gameId}`), 10) || 0;
+    let currentPlayTime = Math.max(dbPlayTime, localPlayTime);
+    
+    window.playTimeInterval = setInterval(() => {
+      currentPlayTime += 1;
+      localStorage.setItem(`playtime_${gameId}`, currentPlayTime);
+    }, 1000);
     
     console.log(`Loading saved game: ${gameData.name} (${gameData.files.length} files)`);
     document.getElementById('startup-dialog').style.display = 'none';
@@ -6997,6 +7086,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   });
 }
 
+// Helper to hook FS.syncfs and FS.writeFile to detect in-game config changes and sync back to indexedDB settings
 // ページロード時の処理
 window.addEventListener('load', () => {
   const fileInput = document.getElementById('game-file-input');
@@ -7639,6 +7729,24 @@ function hookSyncfs(activeModule) {
   } else if (targetFS && targetFS.syncfs && targetFS.syncfs.__patched) {
     console.log('[hookSyncfs] FS.syncfs already patched. Skipping.');
   }
+
+  // Hook FS.close to instantly detect when C++ fclose() is called on ini files
+  if (targetFS && targetFS.close && !targetFS.close.__patched) {
+    const originalClose = targetFS.close;
+    targetFS.close = function(stream) {
+      const result = originalClose.apply(this, arguments);
+      if (stream && stream.path && typeof stream.path === 'string') {
+        if (stream.path.endsWith('config.ini') || stream.path.endsWith('easyrpg.ini')) {
+          console.log(`[hookSyncfs] Intercepted stream close for ${stream.path}. Triggering syncConfigIniToSettings...`);
+          // Use setTimeout to allow any internal flushes to finish
+          setTimeout(() => syncConfigIniToSettings(targetFS, stream.path), 100);
+        }
+      }
+      return result;
+    };
+    targetFS.close.__patched = true;
+    console.log('[hookSyncfs] FS.close successfully patched for instant settings sync');
+  }
 }
 
 // Hook to modify arguments before the game runs
@@ -7676,25 +7784,28 @@ if (typeof Module.onRuntimeInitialized === 'function') {
 }
 
 // Function to read config.ini and sync its values back to indexedDB settings
-async function syncConfigIniToSettings(targetFS) {
-  console.log('[syncConfigIniToSettings] Executing sync check for config.ini...');
+async function syncConfigIniToSettings(targetFS, explicitPath = null) {
+  console.log('[syncConfigIniToSettings] Executing sync check for config.ini / easyrpg.ini...', explicitPath);
   const fsObj = targetFS || window.EASYRPG_FS || (typeof FS !== 'undefined' ? FS : (typeof Module !== 'undefined' && Module.FS ? Module.FS : null));
   try {
     if (!fsObj) {
       console.warn('[syncConfigIniToSettings] fsObj is missing. Cannot proceed.');
       return;
     }
-    try {
-      if (!fsObj.analyzePath('/home/web_user/.config/EasyRPG/Player/config.ini').exists) {
-        console.log('[syncConfigIniToSettings] config.ini does not exist on filesystem at /home/web_user/.config/EasyRPG/Player/config.ini.');
+    
+    let pathToRead = explicitPath;
+    if (!pathToRead || !fsObj.analyzePath(pathToRead).exists) {
+      if (fsObj.analyzePath('/home/web_user/.config/EasyRPG/Player/config.ini').exists) {
+        pathToRead = '/home/web_user/.config/EasyRPG/Player/config.ini';
+      } else if (fsObj.analyzePath('easyrpg.ini').exists) {
+        pathToRead = 'easyrpg.ini';
+      } else {
+        console.log('[syncConfigIniToSettings] No settings ini file found on filesystem.');
         return;
       }
-    } catch (e) {
-      console.warn('[syncConfigIniToSettings] Failed to analyze config.ini path:', e);
-      return; // Path does not exist or error
     }
     
-    const content = fsObj.readFile('/home/web_user/.config/EasyRPG/Player/config.ini', { encoding: 'utf8' });
+    const content = fsObj.readFile(pathToRead, { encoding: 'utf8' });
     
     // config.ini simple parser
     let soundfont = null;
