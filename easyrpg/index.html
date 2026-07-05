@@ -7,16 +7,39 @@
 
   <script>
     // スクリーンショット撮影（canvas.toDataURL）時に画面が真っ白/真っ黒になるのを防ぐため、
-    // 描画バッファを保持するオプションを強制適用する。
+    // 描画バッファを保持するオプションを強制適用しつつ、
+    // 極限まで軽量化するためのWebGLオプションを追加する。
     (function() {
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function(type, attributes) {
         if (type === 'webgl' || type === 'experimental-webgl' || type === 'webgl2') {
           attributes = attributes || {};
-          attributes.preserveDrawingBuffer = true;
+          attributes.preserveDrawingBuffer = true; // スクリーンショット用
+          attributes.alpha = false;                  // 背景透過を無効化（合成コスト削減）
+          attributes.antialias = false;              // ドット絵にアンチエイリアスは不要（GPU負荷軽減）
+          attributes.powerPreference = 'high-performance'; // 最大パフォーマンス要求
+          attributes.desynchronized = true;          // コンポジタと非同期化して低遅延化
         }
         return originalGetContext.call(this, type, attributes);
       };
+    })();
+
+    // エンジンのオーディオ処理を極限まで軽量化するため、
+    // AudioContextの初期化時にCPU負荷の低いplaybackモードを強制する
+    (function() {
+      const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+      if (OriginalAudioContext) {
+        const PatchedAudioContext = function(options) {
+          options = options || {};
+          if (!options.latencyHint) {
+            options.latencyHint = 'playback'; // レイテンシよりもCPU負荷低減と音飛び防止を優先
+          }
+          return new OriginalAudioContext(options);
+        };
+        PatchedAudioContext.prototype = OriginalAudioContext.prototype;
+        window.AudioContext = PatchedAudioContext;
+        if (window.webkitAudioContext) window.webkitAudioContext = PatchedAudioContext;
+      }
     })();
 
     // モバイル端末ではアドレスバーの表示/非表示でCSSの100vh/100dvhが
@@ -832,6 +855,8 @@
       object-fit: contain;
       object-position: 50% 0%;
       transform: translate(-50%, -50%);
+      will-change: transform, filter;
+      backface-visibility: hidden;
     }
     
     #canvas.crt-mode {
@@ -2143,10 +2168,12 @@ class GameStorageManager {
     
     // ゲームファイルの保存パスプレフィックス付与用の正規化配列を作成
     const mappedFiles = files.map(f => {
-      const prefix = `games/${gameId}/`;
       let path = f.path;
-      if (!path.startsWith('games/')) {
-        path = prefix + path.replace(/^\/+/, '');
+      if (gameId !== '__root__') {
+        const prefix = `games/${gameId}/`;
+        if (!path.startsWith('games/')) {
+          path = prefix + path.replace(/^\/+/, '');
+        }
       }
       return {
         path: path,
@@ -3233,6 +3260,22 @@ class StorageExplorer {
           }
 
           if (fileList) {
+            if (game.id === '__root__') {
+              for (const f of fileList) {
+                this.allEntries.push({
+                  groupType: 'game',
+                  groupId: '__root__',
+                  groupName: 'ルート',
+                  groupPath: '',
+                  path: f.path,
+                  name: this._basename(f.path),
+                  size: f.size,
+                  data: null,
+                  date: game.lastPlayed || null
+                });
+              }
+              continue;
+            }
             const gameGroupPath = `games/${game.id}`;
             for (const f of fileList) {
               const cleanPath = f.path.replace(/^games\/[^/]+\//i, '');
@@ -3891,8 +3934,17 @@ class StorageExplorer {
     if (parts[0] === 'config.ini') {
       return { groupType: 'config', groupId: '/home/web_user/.config', groupPathLen: 0 };
     }
+    if (rootDir === 'RTP') {
+      const rtpId = parts[1] === '2000' ? 'rtp2000' : 'rtp2003';
+      return { groupType: 'rtp', groupId: rtpId, groupPathLen: 2 };
+    }
+    if (rootDir === 'games' || rootDir === 'game') {
+      if (parts.length < 2) return null; // ルートのgamesディレクトリそのものを指している場合はグループ未確定
+      return { groupType: 'game', groupId: parts[1], groupPathLen: 2 };
+    }
     
-    return null;
+    // それ以外はすべてルート直下のカスタムファイルとして扱う
+    return { groupType: 'game', groupId: '__root__', groupPathLen: 0 };
   }
 
   // パス → {groupType, groupId, relativePath} のマッピング
@@ -3910,13 +3962,20 @@ class StorageExplorer {
 
   async _addFileToGroup(groupType, groupId, relativePath, data) {
     try {
-      if (groupType === 'game') {
-        const gameData = await storageManager.getGame(groupId);
-        if (gameData) {
-          const files = gameData.files || [];
-          files.push({ path: relativePath, data: data });
-          await storageManager.saveGame(groupId, gameData.name, files);
+      if (groupType === 'game' || groupType === 'games') {
+        let gameData = await storageManager.getGame(groupId);
+        if (!gameData) {
+          gameData = { name: groupId, files: [] };
         }
+        const files = gameData.files || [];
+        // Check if file already exists
+        const existingIndex = files.findIndex(f => f.path === relativePath);
+        if (existingIndex !== -1) {
+          files[existingIndex].data = data;
+        } else {
+          files.push({ path: relativePath, data: data });
+        }
+        await storageManager.saveGame(groupId, gameData.name, files);
       } else if (groupType === 'rtp') {
         const rtpData = await storageManager.getRTP(groupId);
         if (rtpData) {
@@ -4228,33 +4287,20 @@ class StorageExplorer {
       const arrayBuffer = await file.arrayBuffer();
       const data = new Uint8Array(arrayBuffer);
       
-      let groupInfo = null;
-      let relativePath = '';
-
-      if (parts.length === 0) {
-        // ルートへの直接アップロード
-        if (file.name === 'config.ini') {
-          groupInfo = { groupType: 'config', groupId: '/home/web_user/.config', groupPathLen: 0 };
-          relativePath = 'config.ini';
-        } else if (file.name.toLowerCase().endsWith('.sf2')) {
-          groupInfo = { groupType: 'asset', groupId: 'soundfont', groupPathLen: 1 };
-          relativePath = file.name;
-        } else if (file.name.toLowerCase().endsWith('.ttf') || file.name.toLowerCase().endsWith('.otf')) {
-          groupInfo = { groupType: 'asset', groupId: 'font1', groupPathLen: 1 };
-          relativePath = file.name;
-        } else {
-          alert(`ルートディレクトリへのアップロードは config.ini、サウンドフォント(.sf2)、フォント(.ttf/.otf)のみ対応しています: ${file.name}`);
-          continue;
-        }
-      } else {
-        groupInfo = this._resolveGroupAtParts(parts);
-        if (!groupInfo) {
-          alert('アップロード先のグループが特定できません: ' + file.name);
-          continue;
-        }
-        relativePath = parts.slice(groupInfo.groupPathLen).concat(file.name).join('/');
+      if (parts.length === 1 && parts[0] === 'games' && !file.webkitRelativePath) {
+        alert(`gamesディレクトリに個別ファイル (${file.name}) を直接アップロードすることはできません。ゲームフォルダごとドラッグ＆ドロップするか、新規ゲームフォルダを作成してその中にアップロードしてください。`);
+        return;
       }
 
+      const fullParts = parts.concat(file.webkitRelativePath ? file.webkitRelativePath.split('/').filter(s => s) : [file.name]);
+      const groupInfo = this._resolveGroupAtParts(fullParts);
+      
+      if (!groupInfo) {
+        alert('アップロード先のグループが特定できません: ' + file.name);
+        continue;
+      }
+      
+      const relativePath = fullParts.slice(groupInfo.groupPathLen).join('/');
       await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, data);
     }
 
@@ -4266,23 +4312,24 @@ class StorageExplorer {
   // --- 新規フォルダ ---
   async createNewFolder() {
     const parts = this.currentPath.split('/').filter(s => s);
-    if (parts.length === 0) {
-      alert('ルートディレクトリには新しいフォルダを作成できません。ゲーム、RTP、またはセーブデータのフォルダ内に移動してください。');
-      return;
-    }
 
     const name = prompt('新しいフォルダの名前を入力してください:', '新しいフォルダ');
     if (!name || !name.trim()) return;
 
-    // フォルダは空にできないので、.keepファイルを作成
-    const groupInfo = this._resolveGroupAtParts(parts);
-    if (!groupInfo) {
-      alert('フォルダの作成先が特定できません。');
-      return;
-    }
+    if (parts.length === 1 && parts[0] === 'games') {
+      // gamesディレクトリ直下でのフォルダ作成＝新しいゲームの作成として扱う
+      await this._addFileToGroup('games', name.trim(), '.keep', new Uint8Array(0));
+    } else {
+      // フォルダは空にできないので、.keepファイルを作成
+      const groupInfo = this._resolveGroupAtParts(parts);
+      if (!groupInfo) {
+        alert('フォルダの作成先が特定できません。');
+        return;
+      }
 
-    const relativePath = parts.slice(groupInfo.groupPathLen).concat(name.trim(), '.keep').join('/');
-    await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, new Uint8Array(0));
+      const relativePath = parts.slice(groupInfo.groupPathLen).concat(name.trim(), '.keep').join('/');
+      await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, relativePath, new Uint8Array(0));
+    }
 
     this._treeCache = null;
     await this.loadAll();
@@ -4455,8 +4502,8 @@ class StorageExplorer {
     addItem('✏', '名前の変更', 'F2', () => this.startRename(), !singleSelection);
     addItem('🗑', '削除', 'Del', () => this.deleteSelected(), !hasSelection);
     addSep();
-    addItem('📁+', '新しいフォルダ', '', () => this.createNewFolder(), !inGroup);
-    addItem('📤', 'アップロード', '', () => document.getElementById('sexplorer-file-upload').click(), !inGroup);
+    addItem('📁+', '新しいフォルダ', '', () => this.createNewFolder(), false);
+    addItem('📤', 'アップロード', '', () => document.getElementById('sexplorer-file-upload').click(), false);
     addSep();
     addItem('🔄', '更新', 'F5', () => this.refresh());
     addItem('✅', 'すべて選択', 'Ctrl+A', () => this.selectAll());
@@ -4777,8 +4824,8 @@ class StorageExplorer {
     btn('sexplorer-btn-rename', singleSelection);
     btn('sexplorer-btn-delete', hasSelection);
     btn('sexplorer-btn-download', hasSelection);
-    btn('sexplorer-btn-upload', inGroup);
-    btn('sexplorer-btn-newfolder', inGroup);
+    btn('sexplorer-btn-upload', true);
+    btn('sexplorer-btn-newfolder', true);
 
     let canEdit = false;
     if (singleSelection) {
