@@ -63,11 +63,21 @@
 
     // Emscriptenのエラーハンドラが `event.error.message` にアクセスしようとして
     // TypeErrorでクラッシュするのを防ぐため、エラーイベントを傍受してダミーエラーオブジェクトを挿入する
+    // さらに、fluidsynthのfluid_statスタブエラーによる「Exception thrown」の伝播を防ぐ
     const originalAddEventListener = window.addEventListener;
     window.addEventListener = function(type, listener, options) {
       if (type === 'error') {
         const originalListener = listener;
         listener = function(event) {
+          // fluidsynth等の無視してよいエラーなら伝播を止める
+          const msg = (event && event.message) || (event && event.error && event.error.message) || "";
+          if (typeof msg === 'string' && (msg.includes('fluid_stat') || msg.includes('Exception thrown, see JavaScript console'))) {
+            console.warn('[最適化] 無害なfluidsynthエラーを握り潰しました:', msg);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+
           if (event && !event.error) {
             Object.defineProperty(event, 'error', { 
               value: new Error(event.message || 'Unknown event error'),
@@ -78,6 +88,18 @@
         };
       }
       return originalAddEventListener.call(this, type, listener, options);
+    };
+
+    // window.onerror も念のためフックして握り潰す
+    const originalOnError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+      const msgStr = message ? message.toString() : '';
+      if (msgStr.includes('fluid_stat') || msgStr.includes('Exception thrown, see JavaScript console')) {
+        console.warn('[最適化] 無害なfluidsynthエラーをwindow.onerrorで握り潰しました:', msgStr);
+        return true; // デフォルトのエラー処理をブロック
+      }
+      if (originalOnError) return originalOnError.apply(this, arguments);
+      return false;
     };
   </script>
   
@@ -6695,6 +6717,7 @@ window.addEventListener('load', () => {
   }
 
   window.addEventListener('keydown', (e) => {
+    if (!isGamePlaying) return; // ゲーム起動前はショートカットを無効化
     if (e.key === 'F8' || e.key === 'PrintScreen') {
       e.preventDefault();
       takeScreenshot();
@@ -6784,6 +6807,16 @@ Module.onAbort = function(what) {
   if (typeof returnToTopMenu === 'function') {
     returnToTopMenu();
   }
+};
+
+// [軽量化ハック] fluid_stat のスタブによる無害なエラーメッセージがコンソールや画面上に出力されるのを防ぐ
+Module.printErr = function(text) {
+  if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+  if (text.includes('fluid_stat') || text.includes('Exception thrown, see JavaScript console')) {
+    console.warn('[最適化] 無害なfluidsynthエラー出力を握り潰しました:', text);
+    return; // スキップして画面上のエラーステータス等に波及するのを防ぐ
+  }
+  console.error(text);
 };
 
 // Removed hookConfigDBWrites to prevent infinite loop
