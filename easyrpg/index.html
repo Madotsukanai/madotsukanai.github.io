@@ -2066,13 +2066,13 @@ function mergeSettingsIntoIni(iniText, updates) {
   
   const targetUpdates = {};
   if (updates.soundfont !== undefined) {
-    targetUpdates['audio:soundfont'] = updates.soundfont ? `Soundfont=/Soundfont/${escapeIniValue(updates.soundfont)}` : 'Soundfont=';
+    targetUpdates['audio:soundfont'] = updates.soundfont ? `Soundfont=Soundfont/${escapeIniValue(updates.soundfont)}` : 'Soundfont=';
   }
   if (updates.font1 !== undefined) {
-    targetUpdates['player:font1'] = updates.font1 ? `Font1=/Fonts/${escapeIniValue(updates.font1)}` : 'Font1=';
+    targetUpdates['player:font1'] = updates.font1 ? `Font1=Font/${escapeIniValue(updates.font1)}` : 'Font1=';
   }
   if (updates.font2 !== undefined) {
-    targetUpdates['player:font2'] = updates.font2 ? `Font2=/Fonts/${escapeIniValue(updates.font2)}` : 'Font2=';
+    targetUpdates['player:font2'] = updates.font2 ? `Font2=Font/${escapeIniValue(updates.font2)}` : 'Font2=';
   }
   
   for (const line of lines) {
@@ -2959,7 +2959,7 @@ class GameStorageManager {
         const tx = db.transaction(['FILE_DATA'], 'readwrite');
         const fileStore = tx.objectStore('FILE_DATA');
         
-        const configPath = window.EASYRPG_ACTUAL_CONFIG_PATH || '/EasyRPG/Player/config.ini';
+        const configPath = window.EASYRPG_ACTUAL_CONFIG_PATH || '/home/web_user/.config/EasyRPG/Player/config.ini';
         const getReq = fileStore.get(configPath);
         getReq.onsuccess = () => {
           let existingContent = '';
@@ -2976,8 +2976,32 @@ class GameStorageManager {
           }, configPath);
           
           // Make sure parent directories exist in FILE_DATA
-          fileStore.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG');
-          fileStore.put({ timestamp: new Date(), mode: 16895 }, '/EasyRPG/Player');
+          fileStore.put({ timestamp: new Date(), mode: 16895 }, '/home/web_user/.config');
+          fileStore.put({ timestamp: new Date(), mode: 16895 }, '/home/web_user/.config/EasyRPG');
+          fileStore.put({ timestamp: new Date(), mode: 16895 }, '/home/web_user/.config/EasyRPG/Player');
+          
+          // もしゲームが実行中であれば、MEMFSのファイルも直接更新する（終了時の同期で上書きされるのを防ぐため）
+          const fsObj = window.EASYRPG_FS || (typeof FS !== 'undefined' ? FS : (typeof Module !== 'undefined' && Module.FS ? Module.FS : null));
+          if (fsObj && typeof fsObj.readFile === 'function' && typeof fsObj.writeFile === 'function') {
+            try {
+              const pathsToUpdate = [
+                '/home/web_user/.config/EasyRPG/Player/config.ini',
+                '/customgame/easyrpg.ini',
+                '/games/default/easyrpg.ini'
+              ];
+              for (const p of pathsToUpdate) {
+                if (fsObj.analyzePath && fsObj.analyzePath(p).exists) {
+                  let memContent = '';
+                  try { memContent = new TextDecoder().decode(fsObj.readFile(p)); } catch(e) {}
+                  const newMemContent = mergeSettingsIntoIni(memContent, updates);
+                  // 同期ループを防ぐためのフラグなどを立てる必要はない（中身が変わらなければsyncConfigIniToSettingsはスキップする）
+                  fsObj.writeFile(p, newMemContent);
+                }
+              }
+            } catch (e) {
+              console.warn('[StorageManager] Failed to update running game config:', e);
+            }
+          }
         };
         
         tx.oncomplete = () => {
@@ -3580,6 +3604,30 @@ async function appendManagedConfigFiles(files) {
       });
     }
   }
+
+  // Check if easyrpg.ini already exists in files
+  const existingIniIndex = files.findIndex(f => f.path.toLowerCase() === 'easyrpg.ini');
+  let iniContent = '';
+  
+  if (existingIniIndex !== -1 && files[existingIniIndex].data) {
+    iniContent = new TextDecoder().decode(files[existingIniIndex].data);
+  }
+  
+  const newIniContent = mergeSettingsIntoIni(iniContent, settings);
+  
+  if (existingIniIndex !== -1) {
+    // Replace the existing one
+    files[existingIniIndex].data = new TextEncoder().encode(newIniContent);
+  } else {
+    // Add a new one
+    configFiles.push({
+      path: 'easyrpg.ini',
+      data: new TextEncoder().encode(newIniContent)
+    });
+  }
+
+  // Export settings globally so Module.preRun can pass them as arguments
+  window.EASYRPG_ACTIVE_SETTINGS = settings;
 
   return [...files, ...configFiles];
 }
@@ -5507,24 +5555,8 @@ class StorageExplorer {
         <div class="row-date">${dateText}</div>
       `;
 
-      // イベント
-      row.addEventListener('click', (e) => {
-        container.focus();
-        if (e.target.type === 'checkbox') {
-          // チェックボックスクリック
-          if (e.target.checked) {
-            this.selectedPaths.add(item.selectionKey);
-          } else {
-            this.selectedPaths.delete(item.selectionKey);
-          }
-          this.lastClickedPath = item.selectionKey;
-          this._syncSelectionState();
-          return;
-        }
-        this.toggleSelect(item, e);
-      });
-
-      row.addEventListener('dblclick', async (e) => {
+      // ダブルクリック時（またはスマホでのダブルタップ時）のアクション
+      const handleAction = async () => {
         if (item.isDir) {
           this.navigateTo(item.fullPath);
         } else {
@@ -5542,6 +5574,39 @@ class StorageExplorer {
             }
           }
         }
+      };
+
+      // イベント
+      row.addEventListener('click', (e) => {
+        container.focus();
+        if (e.target.type === 'checkbox') {
+          // チェックボックスクリック
+          if (e.target.checked) {
+            this.selectedPaths.add(item.selectionKey);
+          } else {
+            this.selectedPaths.delete(item.selectionKey);
+          }
+          this.lastClickedPath = item.selectionKey;
+          this._syncSelectionState();
+          return;
+        }
+
+        // スマホ向けダブルタップ判定
+        const now = Date.now();
+        if (row._lastTap && (now - row._lastTap) < 400) {
+          row._lastTap = 0;
+          e.preventDefault();
+          handleAction();
+          return;
+        }
+        row._lastTap = now;
+
+        this.toggleSelect(item, e);
+      });
+
+      row.addEventListener('dblclick', async (e) => {
+        e.preventDefault();
+        handleAction();
       });
 
       row.addEventListener('contextmenu', (e) => {
@@ -6505,9 +6570,9 @@ function generateIndexJson(files) {
     return pos === -1 ? name : name.substring(0, pos);
   }
 
-  // keep_extension: .ini / .po はそのまま拡張子を残す
+  // keep_extension: .ini / .po / .sf2 / .ttf はそのまま拡張子を残す
   function keepExtension(nameLower) {
-    return nameLower.endsWith('.ini') || nameLower.endsWith('.po');
+    return nameLower.endsWith('.ini') || nameLower.endsWith('.po') || nameLower.endsWith('.sf2') || nameLower.endsWith('.ttf');
   }
 
   // Unicode対応の小文字化 + NFKC正規化（ICU の toLower(Locale::getRoot()) +
@@ -7091,6 +7156,12 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
       }
     }
     
+    try {
+      mergedFiles = await appendManagedConfigFiles(mergedFiles);
+    } catch (e) {
+      console.warn('Failed to apply managed font/soundfont settings:', e);
+    }
+
     // index.jsonが存在しない、またはRTPがマージされた場合は再生成する
     const hasIndexJson = mergedFiles.some(f => f.path.toLowerCase() === 'index.json');
     if (!hasIndexJson || totalRtpMergeCount > 0) {
@@ -7113,11 +7184,6 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     // RTPの読み込みに失敗しても、ゲーム自体は起動を試みる
   }
 
-  try {
-    mergedFiles = await appendManagedConfigFiles(mergedFiles);
-  } catch (e) {
-    console.warn('Failed to apply managed font/soundfont settings:', e);
-  }
   
   // window.EASYRPG_GAME_TITLEにファイルを設定
   // ビルド済みのindex.jsのonPreRun関数がこれをチェックします
@@ -7602,8 +7668,34 @@ window.addEventListener('load', () => {
       tempCanvas.width = sw;
       tempCanvas.height = sh;
       const ctx = tempCanvas.getContext('2d');
+      
+      // にじみ（CRTぼかし）エフェクトの適用
+      if (canvas.classList.contains('crt-mode')) {
+        const blurStr = document.documentElement.style.getPropertyValue('--crt-blur') || '0.6px';
+        ctx.filter = `blur(${blurStr}) contrast(1.1) brightness(1.05)`;
+      }
+      
       // 画像をクロップして描画
       ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+      
+      // スキャンラインの描画
+      ctx.filter = 'none';
+      const scanlinesOverlay = document.getElementById('scanline-overlay');
+      if (scanlinesOverlay && scanlinesOverlay.classList.contains('active')) {
+        const opacityStr = document.documentElement.style.getPropertyValue('--scanline-opacity') || '0.15';
+        const opacity = parseFloat(opacityStr);
+        ctx.fillStyle = `rgba(0,0,0,${opacity})`;
+        
+        // 画面の内部解像度(sh)に応じてスキャンラインの太さを計算
+        // EasyRPGの基準縦解像度は240px
+        const scale = sh / 240;
+        const step = Math.max(2, Math.round(scale * 2));
+        const darkHeight = Math.max(1, step / 2);
+        
+        for (let y = 0; y < sh; y += step) {
+          ctx.fillRect(0, y + step - darkHeight, sw, darkHeight);
+        }
+      }
       
       const dataUrl = tempCanvas.toDataURL('image/png');
       const title = window.EASYRPG_GAME_TITLE || 'easyrpg';
@@ -7953,9 +8045,23 @@ function hookSyncfs(activeModule) {
       const result = originalClose.apply(this, arguments);
       if (stream && stream.path && typeof stream.path === 'string') {
         if (stream.path.endsWith('config.ini') || stream.path.endsWith('easyrpg.ini')) {
-          console.log(`[hookSyncfs] Intercepted stream close for ${stream.path}. Triggering syncConfigIniToSettings...`);
-          // Use setTimeout to allow any internal flushes to finish
-          setTimeout(() => syncConfigIniToSettings(targetFS, stream.path), 100);
+          // Prevent infinite loop by checking if it was opened for writing.
+          // O_RDONLY is 0. If (stream.flags & 3) === 0, it's read-only.
+          const isWrite = stream.flags === undefined || (stream.flags & 3) !== 0 || (stream.flags & 64) !== 0 || (stream.flags & 1024) !== 0;
+          if (isWrite && !window.__IS_SYNCING_CONFIG) {
+            console.log(`[hookSyncfs] Intercepted stream write/close for ${stream.path}. Triggering FS.syncfs(false) to persist settings...`);
+            // Use setTimeout to allow any internal flushes to finish
+            setTimeout(() => {
+              if (targetFS.syncfs) {
+                targetFS.syncfs(false, (err) => {
+                  if (err) console.error('[hookSyncfs] FS.syncfs(false) failed:', err);
+                  else syncConfigIniToSettings(targetFS, stream.path);
+                });
+              } else {
+                syncConfigIniToSettings(targetFS, stream.path);
+              }
+            }, 100);
+          }
         }
       }
       return result;
@@ -8011,17 +8117,25 @@ async function syncConfigIniToSettings(targetFS, explicitPath = null) {
     
     let pathToRead = explicitPath;
     if (!pathToRead || !fsObj.analyzePath(pathToRead).exists) {
-      if (fsObj.analyzePath('/home/web_user/.config/EasyRPG/Player/config.ini').exists) {
-        pathToRead = '/home/web_user/.config/EasyRPG/Player/config.ini';
+      if (fsObj.analyzePath('/games/default/easyrpg.ini').exists) {
+        pathToRead = '/games/default/easyrpg.ini';
       } else if (fsObj.analyzePath('easyrpg.ini').exists) {
         pathToRead = 'easyrpg.ini';
+      } else if (fsObj.analyzePath('/home/web_user/.config/EasyRPG/Player/config.ini').exists) {
+        pathToRead = '/home/web_user/.config/EasyRPG/Player/config.ini';
       } else {
         console.log('[syncConfigIniToSettings] No settings ini file found on filesystem.');
         return;
       }
     }
     
-    const content = fsObj.readFile(pathToRead, { encoding: 'utf8' });
+    let content = '';
+    try {
+      window.__IS_SYNCING_CONFIG = true;
+      content = fsObj.readFile(pathToRead, { encoding: 'utf8' });
+    } finally {
+      window.__IS_SYNCING_CONFIG = false;
+    }
     
     // config.ini simple parser
     let soundfont = null;
