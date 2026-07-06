@@ -132,6 +132,13 @@
       background: black;
       height: var(--app-height, 100vh);
       overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    input, textarea {
+      user-select: auto;
+      -webkit-user-select: auto;
     }
 
     /* 起動時のダイアログ用CSS */
@@ -388,6 +395,8 @@
       flex-direction: column;
       height: 60vh;
       min-height: 300px;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     /* ツールバー */
@@ -466,6 +475,8 @@
       width: 110px;
       outline: none;
       font-family: inherit;
+      user-select: auto;
+      -webkit-user-select: auto;
     }
 
     .sexplorer-search input::placeholder {
@@ -3960,12 +3971,19 @@ class StorageExplorer {
               // 先頭のシステムパスを除去して、エクスプローラー上で "Save/勇者と異常者/Save01.lsd" に統一する
               const match1 = cleanPath.match(/\/customgame\/([^/]+)\/Save\/(.*)/);
               const match2 = cleanPath.match(/\/customgame\/Save\/([^/]+)\/(.*)/); // 互換性用
+              const sfMatch = cleanPath.match(/(?:\/|^)(Soundfont|soundfont)\/(.*)/i);
+              
               if (match1) {
                 cleanPath = `Save/${match1[1]}/${match1[2]}`;
               } else if (match2) {
                 cleanPath = `Save/${match2[1]}/${match2[2]}`;
               } else if (cleanPath.startsWith('Save/') || cleanPath.startsWith('/Save/')) {
                 cleanPath = cleanPath.replace(/^\//, '');
+              } else if (sfMatch) {
+                groupType = 'soundfont';
+                groupName = 'サウンドフォント';
+                groupPath = 'Soundfont';
+                cleanPath = `Soundfont/${sfMatch[2]}`;
               } else {
                 // システムパスなどのイレギュラーデータは除外
                 continue;
@@ -4302,6 +4320,7 @@ class StorageExplorer {
       mode: 'copy'
     };
     this._updateToolbarState();
+    this._updateCutVisual();
   }
 
   async pasteItems() {
@@ -5516,7 +5535,6 @@ class StorageExplorer {
       empty.innerHTML = `<div class="sexplorer-empty-icon">📂</div>`
         + `<div>${this.filterText ? 'フィルター条件に一致する項目がありません' : 'このフォルダは空です'}</div>`;
       container.appendChild(empty);
-      return;
     }
 
     for (const item of items) {
@@ -5555,18 +5573,28 @@ class StorageExplorer {
         <div class="row-date">${dateText}</div>
       `;
 
-      // ダブルクリック時（またはスマホでのダブルタップ時）のアクション
+      let actionLock = false;
       const handleAction = async () => {
+        if (actionLock) return;
+        actionLock = true;
+        setTimeout(() => actionLock = false, 500);
+
         if (item.isDir) {
           this.navigateTo(item.fullPath);
         } else {
           const ext = this._getExtension(item.name);
           const isText = ['txt', 'ini', 'json', 'xml', 'keep'].includes(ext);
           const isImage = ['png', 'jpg', 'jpeg', 'bmp', 'gif'].includes(ext);
+          const isAudio = ['wav', 'mp3', 'ogg', 'flac'].includes(ext);
+          const isMidi = ['mid', 'midi'].includes(ext);
           if (isText) {
             await this.editTextSelected(item);
           } else if (isImage) {
             await this.viewImageSelected(item);
+          } else if (isAudio) {
+            await this.playAudioSelected(item);
+          } else if (isMidi) {
+            await this.playMidiSelected(item);
           } else {
             const data = await this._fetchFileData(item);
             if (data) {
@@ -5591,7 +5619,7 @@ class StorageExplorer {
           return;
         }
 
-        // スマホ向けダブルタップ判定
+        // スマホ向けダブルタップ判定およびPC向けダブルクリック処理
         const now = Date.now();
         if (row._lastTap && (now - row._lastTap) < 400) {
           row._lastTap = 0;
@@ -5602,11 +5630,6 @@ class StorageExplorer {
         row._lastTap = now;
 
         this.toggleSelect(item, e);
-      });
-
-      row.addEventListener('dblclick', async (e) => {
-        e.preventDefault();
-        handleAction();
       });
 
       row.addEventListener('contextmenu', (e) => {
@@ -5639,14 +5662,344 @@ class StorageExplorer {
     const closeBtn = document.getElementById('image-viewer-close');
     closeBtn.onclick = () => {
       modal.style.display = 'none';
+      img.src = '';
       URL.revokeObjectURL(url);
     };
+  }
+
+  async playAudioSelected(item) {
+    const data = await this._fetchFileData(item);
+    if (!data) return;
+    
+    const blob = new Blob([data], { type: this._getMimeType(item.name) });
+    const url = URL.createObjectURL(blob);
+    
+    const modal = document.getElementById('audio-player-modal');
+    const audio = document.getElementById('audio-player-elem');
+    const title = document.getElementById('audio-player-title');
+    if (!modal || !audio || !title) return;
+    
+    title.textContent = item.name;
+    audio.style.display = 'block';
+    audio.src = url;
+    modal.style.display = 'flex';
+    
+    // 自動再生
+    audio.play().catch(e => console.warn('Auto-play prevented:', e));
+    
+    const closeBtn = document.getElementById('audio-player-close');
+    closeBtn.onclick = () => {
+      audio.pause();
+      audio.src = '';
+      modal.style.display = 'none';
+      URL.revokeObjectURL(url);
+    };
+  }
+
+  _loadScript(url) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  async playMidiSelected(item) {
+    const data = await this._fetchFileData(item);
+    if (!data) return;
+
+    let sf2Name = '';
+    if (typeof storageManager !== 'undefined') {
+      const settings = await storageManager.getSettings();
+      sf2Name = settings.soundfont || '';
+      if (sf2Name) sf2Name = sf2Name.split('/').pop() || '';
+    }
+    
+    if (!sf2Name) {
+      const configItem = this.allEntries.find(e => e.path.toLowerCase() === 'config.ini');
+      if (configItem) {
+         const configData = await this._fetchFileData(configItem);
+         const text = new TextDecoder().decode(configData);
+         const match = text.match(/^SoundFont\s*=\s*(.+)$/im);
+         if (match) {
+           sf2Name = match[1].trim().split('/').pop() || '';
+         }
+      }
+    }
+
+    if (!sf2Name) {
+      alert("MIDIを再生するには、設定画面からサウンドフォント(.sf2)を選択してください。");
+      return;
+    }
+
+    const sf2Item = this.allEntries.find(e => e.path.toLowerCase() === `soundfont/${sf2Name.toLowerCase()}`);
+    if (!sf2Item) {
+      alert(`サウンドフォント '${sf2Name}' が見つかりません。`);
+      return;
+    }
+    const sf2Data = await this._fetchFileData(sf2Item);
+
+    document.body.style.cursor = 'wait';
+
+    try {
+      if (typeof window.JSSynth === 'undefined') {
+        await this._loadScript("https://cdn.jsdelivr.net/npm/js-synthesizer@1.13.0/externals/libfluidsynth-2.4.6.js");
+        await this._loadScript("https://cdn.jsdelivr.net/npm/js-synthesizer@1.13.0/dist/js-synthesizer.js");
+        await window.JSSynth.waitForReady();
+      }
+
+      const actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') await actx.resume();
+
+      const synth = new window.JSSynth.Synthesizer();
+      synth.init(actx.sampleRate);
+      const node = synth.createAudioNode(actx, 8192);
+      
+      const gainNode = actx.createGain();
+      gainNode.gain.value = 1.0;
+      node.connect(gainNode);
+      gainNode.connect(actx.destination);
+
+      await synth.loadSFont(sf2Data.buffer);
+      await synth.addSMFDataToPlayer(data.buffer);
+
+      const modal = document.getElementById('audio-player-modal');
+      const title = document.getElementById('audio-player-title');
+      const audioElem = document.getElementById('audio-player-elem');
+      const midiControls = document.getElementById('midi-player-controls');
+      const seekbar = document.getElementById('midi-player-seekbar');
+      const timeElem = document.getElementById('midi-player-time');
+      const totalElem = document.getElementById('midi-player-total');
+      const volumeBar = document.getElementById('midi-player-volume');
+      
+      if (volumeBar) {
+        volumeBar.value = 100;
+        volumeBar.oninput = () => {
+          gainNode.gain.value = parseInt(volumeBar.value, 10) / 100.0;
+        };
+      }
+      if (timeElem) timeElem.textContent = '00:00';
+      if (totalElem) totalElem.textContent = '00:00';
+      
+      title.textContent = `[MIDI] ${item.name}`;
+      audioElem.style.display = 'none';
+      if (midiControls) midiControls.style.display = 'flex';
+      modal.style.display = 'flex';
+
+      await synth.playPlayer();
+
+      const formatTime = (seconds) => {
+         if (isNaN(seconds) || !isFinite(seconds) || seconds < 0) return "00:00";
+         const m = Math.floor(seconds / 60);
+         const s = Math.floor(seconds % 60);
+         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      };
+
+      // JSでMIDIファイル(SMF)を解析し、全テンポチェンジイベントと最大Tickを取得する関数
+      const parseMidiForTime = (buffer) => {
+        try {
+          const view = new DataView(buffer);
+          let offset = 0;
+          if (view.getUint32(offset) !== 0x4D546864) return null;
+          offset += 4;
+          const headerLength = view.getUint32(offset);
+          offset += 4;
+          const format = view.getUint16(offset);
+          const numTracks = view.getUint16(offset + 2);
+          const division = view.getUint16(offset + 4);
+          offset += headerLength;
+          let ppqn = 480;
+          if ((division & 0x8000) === 0) ppqn = division;
+          else return null;
+          
+          const tempoChanges = [{ tick: 0, usPerQuarter: 500000 }];
+          let maxTick = 0;
+          const readVarInt = (view, getOffset) => {
+            let result = 0, b;
+            do {
+              if (getOffset.val >= view.byteLength) break;
+              b = view.getUint8(getOffset.val++);
+              result = (result << 7) | (b & 0x7F);
+            } while (b & 0x80);
+            return result;
+          };
+          
+          for (let i = 0; i < numTracks; i++) {
+            if (offset >= view.byteLength) break;
+            const chunkType = view.getUint32(offset);
+            offset += 4;
+            const chunkLength = view.getUint32(offset);
+            offset += 4;
+            if (chunkType === 0x4D54726B) {
+              let trackOffset = { val: offset };
+              const trackEnd = offset + chunkLength;
+              let absoluteTick = 0, lastStatus = 0;
+              while (trackOffset.val < trackEnd) {
+                const delta = readVarInt(view, trackOffset);
+                absoluteTick += delta;
+                if (trackOffset.val >= trackEnd) break;
+                let status = view.getUint8(trackOffset.val);
+                if (status < 0x80) status = lastStatus;
+                else { lastStatus = status; trackOffset.val++; }
+                const type = status & 0xF0;
+                if (status === 0xFF) {
+                  const metaType = view.getUint8(trackOffset.val++);
+                  const metaLen = readVarInt(view, trackOffset);
+                  if (metaType === 0x51 && metaLen === 3) {
+                    const b1 = view.getUint8(trackOffset.val);
+                    const b2 = view.getUint8(trackOffset.val + 1);
+                    const b3 = view.getUint8(trackOffset.val + 2);
+                    tempoChanges.push({ tick: absoluteTick, usPerQuarter: (b1 << 16) | (b2 << 8) | b3 });
+                  }
+                  trackOffset.val += metaLen;
+                } else if (status === 0xF0 || status === 0xF7) {
+                  const sysLen = readVarInt(view, trackOffset);
+                  trackOffset.val += sysLen;
+                } else {
+                  if (type === 0xC0 || type === 0xD0) trackOffset.val += 1;
+                  else trackOffset.val += 2;
+                }
+              }
+              if (absoluteTick > maxTick) maxTick = absoluteTick;
+            }
+            offset += chunkLength;
+          }
+          tempoChanges.sort((a, b) => a.tick - b.tick);
+          return { maxTick, tempoChanges, ppqn };
+        } catch (e) {
+          console.warn("MIDI parse error", e);
+          return null;
+        }
+      };
+
+      const calculateTimeAtTick = (tick, parsedMidi) => {
+        if (!parsedMidi) return 0;
+        let time = 0;
+        let currentTick = 0;
+        let currentTempo = 500000;
+        
+        for (let i = 0; i < parsedMidi.tempoChanges.length; i++) {
+          const tc = parsedMidi.tempoChanges[i];
+          if (tc.tick >= tick) break;
+          if (tc.tick > currentTick) {
+            const ticks = tc.tick - currentTick;
+            time += (ticks / parsedMidi.ppqn) * (currentTempo / 1000000);
+            currentTick = tc.tick;
+          }
+          currentTempo = tc.usPerQuarter;
+        }
+        if (tick > currentTick) {
+          const ticks = tick - currentTick;
+          time += (ticks / parsedMidi.ppqn) * (currentTempo / 1000000);
+        }
+        return time;
+      };
+
+      const parsedMidi = parseMidiForTime(data.buffer);
+      const totalExactSeconds = parsedMidi ? calculateTimeAtTick(parsedMidi.maxTick, parsedMidi) : 0;
+      if (totalElem && totalExactSeconds > 0) {
+         totalElem.textContent = formatTime(totalExactSeconds);
+      }
+
+      let updateInterval = null;
+      if (seekbar) {
+        // 解析に成功していればmaxを最初から正確なTickに設定する
+        seekbar.max = parsedMidi && parsedMidi.maxTick > 0 ? parsedMidi.maxTick : 10000;
+        seekbar.value = 0;
+        
+        let isDragging = false;
+        let seekDebounce = null;
+        
+        const doSeek = () => {
+          isDragging = true;
+          if (seekDebounce) clearTimeout(seekDebounce);
+          seekDebounce = setTimeout(() => {
+            try {
+              const val = parseInt(seekbar.value, 10);
+              // maxが仮の値(10000)のままであれば、極端なシークを防ぐ
+              if (seekbar.max == 10000 && val > 9000) return;
+              synth.seekPlayer(val);
+            } catch(e) {
+              console.warn('Seek error:', e);
+            }
+            // 少し待ってからUI更新を再開（シークの反映待ち）
+            setTimeout(() => { isDragging = false; }, 400);
+          }, 50);
+        };
+
+        seekbar.oninput = doSeek;
+        seekbar.onchange = doSeek;
+
+        updateInterval = setInterval(async () => {
+          if (!isDragging) {
+             const currentTick = await synth.retrievePlayerCurrentTick();
+             const totalTicks = await synth.retrievePlayerTotalTicks();
+             
+             // parsedMidiがない場合のフォールバック
+             if (!parsedMidi) {
+                 let bpm = await synth.retrievePlayerBpm();
+                 if (!bpm || bpm <= 0) bpm = 120;
+                 const ticksPerSecond = (bpm * 480) / 60; // fallback ppqn 480
+                 if (totalTicks > 0) {
+                     seekbar.max = totalTicks;
+                     if (totalElem) totalElem.textContent = formatTime(totalTicks / ticksPerSecond);
+                 } else if (seekbar.max == 10000 && currentTick > 9000) {
+                     seekbar.max = currentTick + 5000;
+                 }
+                 seekbar.value = currentTick;
+                 if (timeElem) timeElem.textContent = formatTime(currentTick / ticksPerSecond);
+             } else {
+                 // parsedMidiがある場合は正確な時間を表示
+                 if (totalTicks > parsedMidi.maxTick) {
+                    seekbar.max = totalTicks;
+                 }
+                 seekbar.value = currentTick;
+                 if (timeElem) timeElem.textContent = formatTime(calculateTimeAtTick(currentTick, parsedMidi));
+             }
+          }
+        }, 200);
+      }
+
+      const closeBtn = document.getElementById('audio-player-close');
+      const cleanup = () => {
+        if (updateInterval) clearInterval(updateInterval);
+        if (midiControls) midiControls.style.display = 'none';
+        if (seekbar) {
+           seekbar.oninput = null;
+           seekbar.onchange = null;
+        }
+        if (volumeBar) volumeBar.oninput = null;
+        synth.close();
+        gainNode.disconnect();
+        node.disconnect();
+        actx.close();
+        modal.style.display = 'none';
+        closeBtn.onclick = null;
+      };
+      
+      closeBtn.onclick = cleanup;
+      
+      synth.waitForPlayerStopped().then(() => {
+         if (modal.style.display === 'flex') {
+             cleanup();
+         }
+      }).catch(e => console.warn(e));
+
+    } catch (err) {
+      console.error("MIDI Playback Error:", err);
+      alert("MIDIの再生に失敗しました。");
+    } finally {
+      document.body.style.cursor = '';
+    }
   }
 
   _getMimeType(name) {
     const ext = this._getExtension(name);
     const map = {
-      png: 'image/png', bmp: 'image/bmp', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif'
+      png: 'image/png', bmp: 'image/bmp', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+      wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg', flac: 'audio/flac'
     };
     return map[ext] || 'application/octet-stream';
   }
@@ -5878,10 +6231,17 @@ function _initExplorerEvents() {
   const fileList = document.getElementById('sexplorer-file-list');
   const explorerRoot = document.getElementById('sexplorer-root');
 
-  explorerRoot?.addEventListener('keydown', (e) => {
+  window.addEventListener('keydown', (e) => {
+    // ストレージタブが開かれている時のみ有効化
+    const storageTab = document.getElementById('tab-storage');
+    if (!storageTab || !storageTab.classList.contains('active')) return;
+
     if (se._renaming) return; // リネーム中はスキップ
-    // 検索ボックスにフォーカスがある場合はショートカットを無効化
-    if (document.activeElement?.id === 'sexplorer-search-input') return;
+    
+    // input/textareaにフォーカスがある場合はショートカットを無効化
+    const activeEl = document.activeElement;
+    const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+    if (isInput) return;
 
     const ctrlOrMeta = e.ctrlKey || e.metaKey;
 
@@ -5958,6 +6318,11 @@ function _initExplorerEvents() {
     } else if (e.key === 'Escape') {
       se.deselectAll();
       se.hideContextMenu();
+      if (se.clipboard.mode === 'cut') {
+        se.clipboard = { items: [], mode: null };
+        se._updateCutVisual();
+        se._updateToolbarState();
+      }
     }
   });
 
@@ -8223,6 +8588,30 @@ async function syncConfigIniToSettings(targetFS, explicitPath = null) {
     </div>
     <div style="display:flex; justify-content: flex-end; flex-shrink: 0;">
       <button id="image-viewer-close" style="background:#007acc; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#008be6'" onmouseout="this.style.background='#007acc'">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- オーディオプレーヤー用モーダル -->
+<div id="audio-player-modal" style="display:none; z-index: 10000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+  <div style="background: #202020; color: #fff; max-width: 90vw; width: 500px; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.5); border: 1px solid #333;">
+    <h3 id="audio-player-title" style="margin-top:0; font-weight: 500; font-size: 1.25rem; border-bottom: 1px solid #333; padding-bottom: 10px; flex-shrink: 0; word-break: break-all;">音声再生</h3>
+    <div style="flex: 1; margin: 25px 0; display: flex; align-items: center; justify-content: center; flex-direction: column; width: 100%;">
+      <audio id="audio-player-elem" controls style="width: 100%; outline: none;"></audio>
+      <div id="midi-player-controls" style="display: none; width: 100%; flex-direction: column; gap: 8px;">
+        <input type="range" id="midi-player-seekbar" min="0" max="100" value="0" style="width: 100%; cursor: pointer;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #ccc;">
+          <span id="midi-player-time">00:00</span>
+          <span id="midi-player-total">00:00</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 5px;">
+          <span style="font-size: 0.85rem; color: #ccc;">音量</span>
+          <input type="range" id="midi-player-volume" min="0" max="100" value="100" style="width: 100px; cursor: pointer;">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; justify-content: flex-end; flex-shrink: 0;">
+      <button id="audio-player-close" style="background:#007acc; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500; transition: background 0.2s;" onmouseover="this.style.background='#008be6'" onmouseout="this.style.background='#007acc'">閉じる</button>
     </div>
   </div>
 </div>
