@@ -6208,11 +6208,18 @@ class StorageExplorer {
                        const currentSeconds = calculateTimeAtTick(displayTick, parsedMidi);
                        timeElem.textContent = formatTime(currentSeconds);
                    }
+               } else {
+                   if (timeElem && parsedMidi) {
+                       const val = parseInt(seekbar.value, 10);
+                       const currentSeconds = calculateTimeAtTick(val, parsedMidi);
+                       timeElem.textContent = formatTime(currentSeconds);
+                   }
                }
             } else {
-               if (!isDragging) {
-                 seekbar.value = 0;
-                 if (timeElem) timeElem.textContent = '00:00';
+               if (isDragging && timeElem && parsedMidi) {
+                   const val = parseInt(seekbar.value, 10);
+                   const currentSeconds = calculateTimeAtTick(val, parsedMidi);
+                   timeElem.textContent = formatTime(currentSeconds);
                }
             }
           } catch(e) {}
