@@ -961,8 +961,7 @@
     
     #canvas.crt-mode {
       image-rendering: auto; /* ドットの滲み（バイリニア補間） */
-      filter: blur(var(--crt-blur, 0.6px)) contrast(1.1) brightness(1.05); /* CRT特有の滲みとコントラスト強調 */
-    }
+      }
 
     #scanline-overlay {
       position: absolute;
@@ -970,18 +969,14 @@
       left: 50%;
       width: 100%;
       height: 100%;
-      transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%) translateZ(0); /* ハードウェアアクセラレーション */
+      will-change: opacity;
+      contain: strict;
       pointer-events: none;
       z-index: 10;
-      background: linear-gradient(
-        to bottom,
-        rgba(255,255,255,0),
-        rgba(255,255,255,0) 50%,
-        rgba(0,0,0,var(--scanline-opacity, 0.15)) 50%,
-        rgba(0,0,0,var(--scanline-opacity, 0.15))
-      );
-      background-size: 100% 4px;
+      opacity: var(--scanline-opacity, 0.15);
       display: none;
+      image-rendering: pixelated; /* Crisp scanlines */
     }
     
     #scanline-overlay.active {
@@ -1139,6 +1134,7 @@
   </style>
 </head>
 <body>
+  
   <!-- 起動時のダイアログ -->
   <div id="startup-dialog">
     <div class="dialog-box">
@@ -2088,7 +2084,7 @@ Public License instead of this License.  But first, please read
 
   <div id="viewport">
     <canvas id="canvas" tabindex="-1" class="unselectable"></canvas>
-    <div id="scanline-overlay"></div>
+    <canvas id="scanline-overlay"></canvas>
 
     <div id="dpad" class="unselectable">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">
@@ -3550,7 +3546,7 @@ async function loadAssetSettings() {
     scanlinesCheckbox.checked = hasScanlines;
   }
   if (scanlinesOverlay) {
-    scanlinesOverlay.classList.toggle('active', hasScanlines);
+    scanlinesOverlay.classList.toggle("active", hasScanlines);
   }
   if (canvas) {
     canvas.classList.toggle('crt-mode', hasScanlines);
@@ -3567,6 +3563,7 @@ async function loadAssetSettings() {
     crtBlurSlider.value = initialBlur;
     crtBlurValue.textContent = initialBlur.toFixed(1) + 'px';
     document.documentElement.style.setProperty('--crt-blur', initialBlur + 'px');
+
     crtBlurContainer.style.opacity = hasScanlines ? '1' : '0.5';
     crtBlurContainer.style.pointerEvents = hasScanlines ? 'auto' : 'none';
   }
@@ -3579,6 +3576,7 @@ async function loadAssetSettings() {
     scanlineOpacitySlider.value = initialOpacity;
     scanlineOpacityValue.textContent = initialOpacity + '%';
     document.documentElement.style.setProperty('--scanline-opacity', (initialOpacity / 100).toString());
+
     scanlineOpacityContainer.style.opacity = hasScanlines ? '1' : '0.5';
     scanlineOpacityContainer.style.pointerEvents = hasScanlines ? 'auto' : 'none';
   }
@@ -8031,6 +8029,223 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
 
 // Helper to hook FS.syncfs and FS.writeFile to detect in-game config changes and sync back to indexedDB settings
 // ページロード時の処理
+
+
+
+
+// ----------------------------------------------------
+// WebGL Post-Processing Pipeline for CRT/Scanlines
+// ----------------------------------------------------
+(function() {
+  let gl = null;
+  let program = null;
+  let texture = null;
+  let positionBuffer = null;
+  let texCoordBuffer = null;
+  let rafId = null;
+
+  let uResolutionLoc = null;
+  let uBlurLoc = null;
+  let uScanlineLoc = null;
+  
+  const targetWidth = 320;
+  const targetHeight = 240;
+
+  function initWebGL() {
+    const srcCanvas = document.getElementById('canvas');
+    if (!srcCanvas) return;
+    
+    // Create the post-process canvas
+    let dstCanvas = document.getElementById('webgl-post-process');
+    if (!dstCanvas) {
+      dstCanvas = document.createElement('canvas');
+      dstCanvas.id = 'webgl-post-process';
+      dstCanvas.style.position = 'absolute';
+      dstCanvas.style.top = '50%';
+      dstCanvas.style.left = '50%';
+      dstCanvas.style.transform = 'translate(-50%, -50%)';
+      dstCanvas.style.pointerEvents = 'none';
+      dstCanvas.style.zIndex = '5';
+      dstCanvas.style.imageRendering = 'pixelated';
+      srcCanvas.parentNode.insertBefore(dstCanvas, srcCanvas.nextSibling);
+    }
+    
+    gl = dstCanvas.getContext('webgl', { antialias: false, depth: false, alpha: false });
+    if (!gl) {
+      console.warn("WebGL not supported for post-processing.");
+      return;
+    }
+
+    const vsSource = `
+      attribute vec2 aPosition;
+      attribute vec2 aTexCoord;
+      varying vec2 vTexCoord;
+      void main() {
+        gl_Position = vec4(aPosition, 0.0, 1.0);
+        vTexCoord = aTexCoord;
+        vTexCoord.y = 1.0 - vTexCoord.y; // Flip Y for WebGL texture
+      }
+    `;
+
+    // Fast single-pass CRT shader
+    const fsSource = `
+      precision mediump float;
+      varying vec2 vTexCoord;
+      uniform sampler2D uSampler;
+      uniform vec2 uResolution;
+      uniform float uBlur;
+      uniform float uScanline;
+
+      void main() {
+        vec2 uv = vTexCoord;
+        vec4 color = texture2D(uSampler, uv);
+
+        if (uBlur > 0.0) {
+          // Extremely cheap 4-tap blur (bilinear sampling relies on GPU)
+          // Since uBlur is small (e.g. 0.6), we offset by a fraction of a pixel
+          vec2 offset = vec2(uBlur) / uResolution;
+          vec4 c1 = texture2D(uSampler, uv + vec2(offset.x, 0.0));
+          vec4 c2 = texture2D(uSampler, uv - vec2(offset.x, 0.0));
+          vec4 c3 = texture2D(uSampler, uv + vec2(0.0, offset.y));
+          vec4 c4 = texture2D(uSampler, uv - vec2(0.0, offset.y));
+          color = (color * 2.0 + c1 + c2 + c3 + c4) / 6.0;
+
+          // Contrast and Brightness (1.1 contrast, 1.05 brightness)
+          color.rgb = (color.rgb - 0.5) * 1.1 + 0.5;
+          color.rgb *= 1.05;
+        }
+
+        if (uScanline > 0.0) {
+          // Screen-space Y coordinate (dstCanvas pixel Y)
+          // We assume dstCanvas height is scaled. Let's base scanlines on the target resolution (240p)
+          float pixelY = floor(uv.y * 240.0 * 2.0); // 2x scaled for 480 lines (2px per scanline)
+          float m = mod(pixelY, 2.0);
+          if (m < 1.0) {
+            color.rgb *= (1.0 - uScanline);
+          }
+        }
+
+        gl_FragColor = vec4(color.rgb, 1.0);
+      }
+    `;
+
+    function compileShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    }
+
+    const vertexShader = compileShader(gl.VERTEX_SHADER, vsSource);
+    const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fsSource);
+
+    program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1.0, -1.0,  1.0, -1.0,  -1.0,  1.0,
+      -1.0,  1.0,  1.0, -1.0,   1.0,  1.0
+    ]), gl.STATIC_DRAW);
+
+    texCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      0.0, 0.0,  1.0, 0.0,  0.0, 1.0,
+      0.0, 1.0,  1.0, 0.0,  1.0, 1.0
+    ]), gl.STATIC_DRAW);
+
+    texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // Linear interpolation for free blur when scaled
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    uResolutionLoc = gl.getUniformLocation(program, "uResolution");
+    uBlurLoc = gl.getUniformLocation(program, "uBlur");
+    uScanlineLoc = gl.getUniformLocation(program, "uScanline");
+  }
+
+  function renderLoop() {
+    rafId = requestAnimationFrame(renderLoop);
+
+    const srcCanvas = document.getElementById('canvas');
+    const dstCanvas = document.getElementById('webgl-post-process');
+    if (!srcCanvas || !dstCanvas || !gl || !program) return;
+
+    const isCrt = srcCanvas.classList.contains('crt-mode');
+    const isScanlines = document.getElementById('scanline-overlay') && document.getElementById('scanline-overlay').classList.contains('active');
+
+    if (!isCrt && !isScanlines) {
+      srcCanvas.style.opacity = '1';
+      dstCanvas.style.display = 'none';
+      return;
+    }
+
+    // Hide original, show post-process
+    srcCanvas.style.opacity = '0.001';
+    dstCanvas.style.display = 'block';
+
+    // Sync dimensions (match physical pixels to CSS pixels of srcCanvas)
+    const rect = srcCanvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    
+    if (dstCanvas.width !== rect.width || dstCanvas.height !== rect.height) {
+      dstCanvas.width = rect.width;
+      dstCanvas.height = rect.height;
+      dstCanvas.style.width = rect.width + 'px';
+      dstCanvas.style.height = rect.height + 'px';
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    }
+
+    gl.useProgram(program);
+
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas);
+
+    const aPosition = gl.getAttribLocation(program, "aPosition");
+    gl.enableVertexAttribArray(aPosition);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+    const aTexCoord = gl.getAttribLocation(program, "aTexCoord");
+    gl.enableVertexAttribArray(aTexCoord);
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 0, 0);
+
+    gl.uniform2f(uResolutionLoc, srcCanvas.width, srcCanvas.height);
+    
+    let blurVal = 0.0;
+    if (isCrt) {
+      blurVal = parseFloat(document.documentElement.style.getPropertyValue('--crt-blur')) || 0.6;
+    }
+    gl.uniform1f(uBlurLoc, blurVal);
+
+    let scanlineVal = 0.0;
+    if (isScanlines) {
+      scanlineVal = parseFloat(document.documentElement.style.getPropertyValue('--scanline-opacity')) || 0.15;
+    }
+    gl.uniform1f(uScanlineLoc, scanlineVal);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  window.addEventListener('load', () => {
+    initWebGL();
+    renderLoop();
+  });
+})();
+
 window.addEventListener('load', () => {
   const fileInput = document.getElementById('game-file-input');
   const rtp2000FileInput = document.getElementById('rtp2000-file-input');
@@ -8128,7 +8343,7 @@ window.addEventListener('load', () => {
         const crtBlurContainer = document.getElementById('crt-blur-container');
         if (overlay) overlay.classList.toggle('active', event.target.checked);
         if (canvas) canvas.classList.toggle('crt-mode', event.target.checked);
-        if (btn) btn.style.opacity = event.target.checked ? '1' : '0.5';
+if (btn) btn.style.opacity = event.target.checked ? '1' : '0.5';
         if (crtBlurContainer) {
           crtBlurContainer.style.opacity = event.target.checked ? '1' : '0.5';
           crtBlurContainer.style.pointerEvents = event.target.checked ? 'auto' : 'none';
@@ -8156,7 +8371,7 @@ window.addEventListener('load', () => {
       
       if (overlay) overlay.classList.toggle('active', newState);
       if (canvas) canvas.classList.toggle('crt-mode', newState);
-      if (checkbox) checkbox.checked = newState;
+if (checkbox) checkbox.checked = newState;
       if (scanlinesBtn) scanlinesBtn.style.opacity = newState ? '1' : '0.5';
       if (crtBlurContainer) {
         crtBlurContainer.style.opacity = newState ? '1' : '0.5';
@@ -8182,6 +8397,7 @@ window.addEventListener('load', () => {
     crtBlurSlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       document.documentElement.style.setProperty('--crt-blur', val + 'px');
+
       document.getElementById('crt-blur-value').textContent = val.toFixed(1) + 'px';
     });
     crtBlurSlider.addEventListener('change', async (e) => {
@@ -8198,6 +8414,7 @@ window.addEventListener('load', () => {
     scanlineOpacitySlider.addEventListener('input', (e) => {
       const val = parseInt(e.target.value, 10);
       document.documentElement.style.setProperty('--scanline-opacity', (val / 100).toString());
+
       document.getElementById('scanline-opacity-value').textContent = val + '%';
     });
     scanlineOpacitySlider.addEventListener('change', async (e) => {
