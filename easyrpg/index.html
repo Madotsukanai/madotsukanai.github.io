@@ -5774,6 +5774,14 @@ class StorageExplorer {
       };
     }
     
+    const savedAudioVol = localStorage.getItem('audioPlayerVolume');
+    if (savedAudioVol !== null) {
+      audio.volume = parseFloat(savedAudioVol);
+    }
+    audio.onvolumechange = () => {
+      localStorage.setItem('audioPlayerVolume', audio.volume.toString());
+    };
+    
     // 自動再生
     audio.play().catch(e => console.warn('Auto-play prevented:', e));
     
@@ -5908,10 +5916,13 @@ class StorageExplorer {
                 if (status < 0x80) status = lastStatus;
                 else { lastStatus = status; trackOffset.val++; }
                 const type = status & 0xF0;
+                let isReal = true;
                 if (status === 0xFF) {
                   trackOffset.val++;
+                  const metaType = view.getUint8(trackOffset.val - 1);
                   const metaLen = readVarInt(view, trackOffset);
                   trackOffset.val += metaLen;
+                  if (metaType === 0x2F) isReal = false;
                 } else if (status === 0xF0 || status === 0xF7) {
                   const sysLen = readVarInt(view, trackOffset);
                   trackOffset.val += sysLen;
@@ -5925,8 +5936,8 @@ class StorageExplorer {
                   if (type === 0xC0 || type === 0xD0) trackOffset.val += 1;
                   else trackOffset.val += 2;
                 }
+                if (isReal && absoluteTick > maxTick) maxTick = absoluteTick;
               }
-              if (absoluteTick > maxTick) maxTick = absoluteTick;
             }
             offset += chunkLength;
           }
@@ -6070,9 +6081,17 @@ class StorageExplorer {
       const loopCheck = document.getElementById('audio-player-loop');
       
       if (volumeBar) {
-        volumeBar.value = 100;
+        const savedVol = localStorage.getItem('midiPlayerVolume');
+        if (savedVol !== null) {
+            volumeBar.value = savedVol;
+            gainNode.gain.value = parseInt(savedVol, 10) / 100.0;
+        } else {
+            volumeBar.value = 100;
+            gainNode.gain.value = 1.0;
+        }
         volumeBar.oninput = () => {
           gainNode.gain.value = parseInt(volumeBar.value, 10) / 100.0;
+          localStorage.setItem('midiPlayerVolume', volumeBar.value);
         };
       }
       
@@ -6124,7 +6143,7 @@ class StorageExplorer {
       let updateInterval = null;
       let targetStopTick = -1;
       if (seekbar) {
-        seekbar.max = parsedMidi && parsedMidi.maxTick > 0 ? parsedMidi.maxTick : 10000;
+        seekbar.max = parsedMidi && parsedMidi.maxTick > 0 ? parsedMidi.maxTick.toString() : '10000';
         seekbar.value = 0;
         
         let isDragging = false;
@@ -6197,6 +6216,9 @@ class StorageExplorer {
                    const isUnrolled = parsedMidi && parsedMidi.loopStart !== -1 && (totalTicks > parsedMidi.maxTick + 1000);
                    const loopLength = parsedMidi ? parsedMidi.maxTick - parsedMidi.loopStart : 0;
                    let displayTick = currentTick;
+                   if (parsedMidi && parsedMidi.maxTick > 0 && seekbar.max !== parsedMidi.maxTick.toString()) {
+                       seekbar.max = parsedMidi.maxTick.toString();
+                   }
                    
                    if (isUnrolled && parsedMidi.loopStart !== -1 && currentTick >= parsedMidi.loopStart) {
                        displayTick = parsedMidi.loopStart + ((currentTick - parsedMidi.loopStart) % loopLength);
