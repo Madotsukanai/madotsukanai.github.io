@@ -71,7 +71,8 @@
         listener = function(event) {
           // fluidsynth等の無視してよいエラーなら伝播を止める
           const msg = (event && event.message) || (event && event.error && event.error.message) || "";
-          if (typeof msg === 'string' && (msg.includes('fluid_stat') || msg.includes('fluid_file_test') || msg.includes('Exception thrown, see JavaScript console'))) {
+          if (typeof msg === 'string' && (msg.includes('fluid_stat') || msg.includes('Exception thrown, see JavaScript console'))) {
+            console.warn('[最適化] 無害なfluidsynthエラーを握り潰しました:', msg);
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -93,7 +94,8 @@
     const originalOnError = window.onerror;
     window.onerror = function(message, source, lineno, colno, error) {
       const msgStr = message ? message.toString() : '';
-      if (msgStr.includes('fluid_stat') || msgStr.includes('fluid_file_test') || msgStr.includes('Exception thrown, see JavaScript console')) {
+      if (msgStr.includes('fluid_stat') || msgStr.includes('Exception thrown, see JavaScript console')) {
+        console.warn('[最適化] 無害なfluidsynthエラーをwindow.onerrorで握り潰しました:', msgStr);
         return true; // デフォルトのエラー処理をブロック
       }
       if (originalOnError) return originalOnError.apply(this, arguments);
@@ -867,73 +869,28 @@
       position: fixed;
       inset: 0;
       /* --app-height is kept in sync with the real visible height by JS (see script near 
-
 <script>
-  (function() {
-    const getModals = () => [
-      { id: 'image-viewer-modal', closeId: 'image-viewer-close' },
-      { id: 'audio-player-modal', closeId: 'audio-player-close' },
-      { id: 'file-viewer-modal', closeId: 'file-viewer-close' },
-      { id: 'text-editor-modal', closeId: 'text-editor-close' },
-      { id: 'controls-help-modal', closeId: 'controls-help-close' },
-      { id: 'setup-modal', closeId: 'start-btn' },
-      { id: 'download-modal', closeId: 'download-close-btn' }
-    ];
-
-    document.addEventListener('keydown', (e) => {
-      // Allow default space behavior in text areas or inputs
-      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
-      
-      if (e.key === ' ' && !isInput) {
-        const audioModal = document.getElementById('audio-player-modal');
-        if (audioModal && window.getComputedStyle(audioModal).display !== 'none') {
-          e.preventDefault(); // Prevent page scroll
-          
-          const audioElem = document.getElementById('audio-player-elem');
-          const midiControls = document.getElementById('midi-player-controls');
-          
-          if (midiControls && window.getComputedStyle(midiControls).display !== 'none') {
-             const playBtn = document.getElementById('midi-player-playpause');
-             if (playBtn) playBtn.click();
-          } else if (audioElem) {
-             if (audioElem.paused) {
-                 audioElem.play();
-             } else {
-                 audioElem.pause();
-             }
-          }
-        }
-      }
-
-      if (e.key === 'Escape') {
-        const modals = getModals();
-        for (const m of modals) {
-          const el = document.getElementById(m.id);
-          if (el && window.getComputedStyle(el).display !== 'none') {
-             const btn = document.getElementById(m.closeId);
-             if (btn) btn.click();
-             break;
-          }
-        }
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      const modals = getModals();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const modals = [
+        { id: 'image-viewer-modal', closeId: 'image-viewer-close' },
+        { id: 'audio-player-modal', closeId: 'audio-player-close' },
+        { id: 'file-viewer-modal', closeId: 'file-viewer-close' },
+        { id: 'setup-modal', closeId: 'start-btn' },
+        { id: 'download-modal', closeId: 'download-close-btn' }
+      ];
       for (const m of modals) {
         const el = document.getElementById(m.id);
         if (el && window.getComputedStyle(el).display !== 'none') {
-           if (e.target === el) {
-             const btn = document.getElementById(m.closeId);
-             if (btn) btn.click();
-           }
+           const btn = document.getElementById(m.closeId);
+           if (btn) btn.click();
+           break;
         }
       }
-    });
-  })();
+    }
+  });
 </script>
-</body>
-).
+</body>).
          100dvh/100vh are just a fallback for the brief moment before that JS runs. */
       height: 100vh;
       height: 100dvh;
@@ -1264,7 +1221,7 @@
             <div class="settings-inline" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
               <label style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer;">
                 <input type="checkbox" id="scanlines-checkbox" style="width: auto; height: 1.2rem;">
-                スキャンライン（ブラウン管フィルター）を有効にする<br>ツクール2000初期のゲーム等で発表当時の環境を再現できる可能性があります。
+                スキャンライン（ブラウン管フィルター）を有効にする
               </label>
               
               <div id="crt-blur-container" style="display: flex; flex-direction: column; gap: 0.5rem; width: 100%; max-width: 300px; padding-left: 1.5rem; opacity: 0.5; pointer-events: none;">
@@ -4429,17 +4386,6 @@ class StorageExplorer {
       } else {
         const data = await this._fetchFileData(item);
         if (data) {
-
-
-
-
-      const parsedMidi = parseMidiForTime(data);
-      console.log("[MIDI PARSER] Result:", parsedMidi);
-      
-      const totalExactSeconds = parsedMidi ? calculateTimeAtTick(parsedMidi.maxTick, parsedMidi) : 0;
-      if (totalElem && totalExactSeconds > 0) {
-         totalElem.textContent = formatTime(totalExactSeconds);
-      }
           let finalName = item.name;
           const node = this._getNode(this.currentPath);
           if (node) {
@@ -5760,20 +5706,6 @@ class StorageExplorer {
     audio.src = url;
     modal.style.display = 'flex';
     
-    const midiControls = document.getElementById('midi-player-controls');
-    const midiVolume = document.getElementById('midi-volume-container');
-    const loopCheck = document.getElementById('audio-player-loop');
-    
-    if (midiControls) midiControls.style.display = 'none';
-    if (midiVolume) midiVolume.style.display = 'none';
-    
-    if (loopCheck) {
-      audio.loop = loopCheck.checked;
-      loopCheck.onchange = () => {
-        audio.loop = loopCheck.checked;
-      };
-    }
-    
     // 自動再生
     audio.play().catch(e => console.warn('Auto-play prevented:', e));
     
@@ -5781,7 +5713,6 @@ class StorageExplorer {
     closeBtn.onclick = () => {
       audio.pause();
       audio.src = '';
-      if (loopCheck) loopCheck.onchange = null;
       modal.style.display = 'none';
       URL.revokeObjectURL(url);
     };
@@ -5850,7 +5781,6 @@ class StorageExplorer {
       
       const gainNode = actx.createGain();
       gainNode.gain.value = 1.0;
-      
       node.connect(gainNode);
       gainNode.connect(actx.destination);
 
@@ -5861,9 +5791,10 @@ class StorageExplorer {
          return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
       };
 
-      const parseMidiForTime = (dataArray) => {
+      // JSでMIDIファイル(SMF)を解析し、全テンポチェンジイベントと最大Tickを取得する関数
+      const parseMidiForTime = (buffer) => {
         try {
-          const view = new DataView(dataArray.buffer || dataArray, dataArray.byteOffset || 0, dataArray.byteLength);
+          const view = new DataView(buffer);
           let offset = 0;
           if (view.getUint32(offset) !== 0x4D546864) return null;
           offset += 4;
@@ -5879,15 +5810,14 @@ class StorageExplorer {
           
           const tempoChanges = [{ tick: 0, usPerQuarter: 500000 }];
           let maxTick = 0;
-          let loopStart = -1;
-          const readVarInt = (v, ptr) => {
-            let res = 0, b;
+          const readVarInt = (view, getOffset) => {
+            let result = 0, b;
             do {
-              if (ptr.val >= v.byteLength) break;
-              b = v.getUint8(ptr.val++);
-              res = (res << 7) | (b & 0x7F);
+              if (getOffset.val >= view.byteLength) break;
+              b = view.getUint8(getOffset.val++);
+              result = (result << 7) | (b & 0x7F);
             } while (b & 0x80);
-            return res;
+            return result;
           };
           
           for (let i = 0; i < numTracks; i++) {
@@ -5909,19 +5839,19 @@ class StorageExplorer {
                 else { lastStatus = status; trackOffset.val++; }
                 const type = status & 0xF0;
                 if (status === 0xFF) {
-                  trackOffset.val++;
+                  const metaType = view.getUint8(trackOffset.val++);
                   const metaLen = readVarInt(view, trackOffset);
+                  if (metaType === 0x51 && metaLen === 3) {
+                    const b1 = view.getUint8(trackOffset.val);
+                    const b2 = view.getUint8(trackOffset.val + 1);
+                    const b3 = view.getUint8(trackOffset.val + 2);
+                    tempoChanges.push({ tick: absoluteTick, usPerQuarter: (b1 << 16) | (b2 << 8) | b3 });
+                  }
                   trackOffset.val += metaLen;
                 } else if (status === 0xF0 || status === 0xF7) {
                   const sysLen = readVarInt(view, trackOffset);
                   trackOffset.val += sysLen;
                 } else {
-                  if (type === 0xB0) {
-                     const cc = view.getUint8(trackOffset.val);
-                     if (cc === 111 && (loopStart === -1 || absoluteTick < loopStart)) {
-                         loopStart = absoluteTick;
-                     }
-                  }
                   if (type === 0xC0 || type === 0xD0) trackOffset.val += 1;
                   else trackOffset.val += 2;
                 }
@@ -5931,97 +5861,11 @@ class StorageExplorer {
             offset += chunkLength;
           }
           tempoChanges.sort((a, b) => a.tick - b.tick);
-          return { maxTick, tempoChanges, ppqn, loopStart };
+          return { maxTick, tempoChanges, ppqn };
         } catch (e) {
           console.warn("MIDI parse error", e);
           return null;
         }
-      };
-
-      const unrollMidi = (buffer, loopStart, maxTick, loopCount) => {
-        try {
-          if (loopStart === -1 || maxTick <= loopStart) return buffer;
-          const view = new DataView(buffer.buffer || buffer, buffer.byteOffset || 0, buffer.byteLength);
-          let offset = 0;
-          if (view.getUint32(offset) !== 0x4D546864) return buffer;
-          offset += 4; const headerLength = view.getUint32(offset); offset += 4;
-          const format = view.getUint16(offset);
-          const numTracks = view.getUint16(offset + 2);
-          const division = view.getUint16(offset + 4);
-          offset += headerLength;
-          const readVarInt = (v, ptr) => {
-            let res = 0, b;
-            do { b = v.getUint8(ptr.val++); res = (res << 7) | (b & 0x7F); } while (b & 0x80);
-            return res;
-          };
-          const writeVarInt = (val) => {
-              let buf = []; val = Math.floor(val); buf.push(val & 0x7F); val >>= 7;
-              while (val > 0) { buf.unshift((val & 0x7F) | 0x80); val >>= 7; }
-              return buf;
-          };
-          const tracks = [];
-          for (let i = 0; i < numTracks; i++) {
-            if (offset >= view.byteLength) break;
-            const chunkType = view.getUint32(offset); offset += 4;
-            const chunkLength = view.getUint32(offset); offset += 4;
-            if (chunkType === 0x4D54726B) {
-              let ptr = { val: offset }, tEnd = offset + chunkLength, absTick = 0, lastSt = 0, evs = [];
-              try {
-                while (ptr.val < tEnd) {
-                  const delta = readVarInt(view, ptr); absTick += delta;
-                  if (ptr.val >= tEnd) break;
-                  const eStart = ptr.val; let st = view.getUint8(ptr.val), run = false;
-                  if (st < 0x80) { st = lastSt; run = true; } else { lastSt = st; ptr.val++; }
-                  const ty = st & 0xF0;
-                  if (st === 0xFF) { ptr.val++; const len = readVarInt(view, ptr); ptr.val += len; }
-                  else if (st === 0xF0 || st === 0xF7) { const len = readVarInt(view, ptr); ptr.val += len; }
-                  else ptr.val += (ty === 0xC0 || ty === 0xD0) ? 1 : 2;
-                  let dLen = ptr.val - eStart, eData;
-                  if (run) { eData = new Uint8Array(dLen + 1); eData[0] = st; for(let j=0; j<dLen; j++) eData[j+1] = view.getUint8(eStart + j); }
-                  else { eData = new Uint8Array(dLen); for(let j=0; j<dLen; j++) eData[j] = view.getUint8(eStart + j); }
-                  evs.push({ t: absTick, d: eData, eot: (st === 0xFF && eData[1] === 0x2F) });
-                }
-              } catch(e) { console.warn("Track parse err", e); }
-              tracks.push(evs);
-            }
-            offset += chunkLength;
-          }
-          const outTrks = [], lLen = maxTick - loopStart;
-          for (let evs of tracks) {
-              const ne = [], pr = [], ls = [], po = [];
-              for (let e of evs) {
-                  if (e.eot) po.push(e); else if (e.t < loopStart) pr.push(e); else if (e.t < maxTick) ls.push(e);
-              }
-              ne.push(...pr);
-              for (let c = 0; c < loopCount; c++) {
-                  const off = c * lLen;
-                  for (let e of ls) ne.push({ t: e.t + off, d: e.d, eot: false });
-              }
-              const fOff = loopCount > 0 ? (loopCount - 1) * lLen : 0;
-              for (let e of po) ne.push({ t: Math.max(e.t, maxTick) + fOff, d: e.d, eot: true });
-              ne.sort((a, b) => a.t - b.t); outTrks.push(ne);
-          }
-          let totSz = 14; const trkBufs = [];
-          for (let ne of outTrks) {
-              const td = []; let lt = 0;
-              for (let e of ne) {
-                  const dBytes = writeVarInt(e.t - lt);
-                  for (let b of dBytes) td.push(b);
-                  for (let b of e.d) td.push(b);
-                  lt = e.t;
-              }
-              trkBufs.push(td); totSz += 8 + td.length;
-          }
-          const out = new Uint8Array(totSz), ov = new DataView(out.buffer);
-          ov.setUint32(0, 0x4D546864); ov.setUint32(4, 6); ov.setUint16(8, format);
-          ov.setUint16(10, outTrks.length); ov.setUint16(12, division);
-          let p = 14;
-          for (let td of trkBufs) {
-              ov.setUint32(p, 0x4D54726B); p += 4; ov.setUint32(p, td.length); p += 4;
-              for (let b of td) out[p++] = b;
-          }
-          return out;
-        } catch(e) { console.warn("Unroll error", e); return buffer; }
       };
 
       const calculateTimeAtTick = (tick, parsedMidi) => {
@@ -6066,8 +5910,6 @@ class StorageExplorer {
       const timeElem = document.getElementById('midi-player-time');
       const totalElem = document.getElementById('midi-player-total');
       const volumeBar = document.getElementById('midi-player-volume');
-      const midiVolume = document.getElementById('midi-volume-container');
-      const loopCheck = document.getElementById('audio-player-loop');
       
       if (volumeBar) {
         volumeBar.value = 100;
@@ -6075,55 +5917,25 @@ class StorageExplorer {
           gainNode.gain.value = parseInt(volumeBar.value, 10) / 100.0;
         };
       }
+      if (timeElem) timeElem.textContent = '00:00';
+      if (totalElem) totalElem.textContent = '00:00';
       
       const totalExactSeconds = parsedMidi ? calculateTimeAtTick(parsedMidi.maxTick, parsedMidi) : 0;
       if (totalElem && totalExactSeconds > 0) {
          totalElem.textContent = formatTime(totalExactSeconds);
-      } else if (totalElem) {
-         totalElem.textContent = '00:00';
       }
-      if (timeElem) timeElem.textContent = '00:00';
-      
       title.textContent = `[MIDI] ${item.name}`;
       audioElem.style.display = 'none';
       if (midiControls) midiControls.style.display = 'flex';
-      if (midiVolume) midiVolume.style.display = 'flex';
       modal.style.display = 'flex';
 
       await synth.playPlayer();
 
-      
-      const playPauseBtn = document.getElementById('midi-player-playpause');
-      const iconPlay = document.getElementById('midi-icon-play');
-      const iconPause = document.getElementById('midi-icon-pause');
-      const updatePlayBtn = (playing) => {
-         if(iconPlay) iconPlay.style.display = playing ? 'none' : 'block';
-         if(iconPause) iconPause.style.display = playing ? 'block' : 'none';
-      };
-      if (playPauseBtn) {
-        updatePlayBtn(true);
-        playPauseBtn.onclick = async () => {
-          if (synth.isPlaying()) {
-            try { synth.stopPlayer(); } catch(e){}
-            updatePlayBtn(false);
-          } else {
-            try {
-              const currentTick = await synth.retrievePlayerCurrentTick();
-              // If it's at the end, restart from 0
-              if ((parsedMidi && currentTick >= parsedMidi.maxTick) || (targetStopTick !== -1 && currentTick >= targetStopTick)) {
-                  synth.seekPlayer(0);
-                  targetStopTick = -1; // Reset stop tick so it can play
-              }
-              synth.playPlayer();
-            } catch(e){}
-            updatePlayBtn(true);
-          }
-        };
-      }
-      
+
+      const parsedMidi = parseMidiForTime(data.buffer);
       let updateInterval = null;
-      let targetStopTick = -1;
       if (seekbar) {
+        // 解析に成功していればmaxを最初から正確なTickに設定する
         seekbar.max = parsedMidi && parsedMidi.maxTick > 0 ? parsedMidi.maxTick : 10000;
         seekbar.value = 0;
         
@@ -6136,134 +5948,80 @@ class StorageExplorer {
           seekDebounce = setTimeout(() => {
             try {
               const val = parseInt(seekbar.value, 10);
+              // maxが仮の値(10000)のままであれば、極端なシークを防ぐ
               if (seekbar.max == 10000 && val > 9000) return;
               synth.seekPlayer(val);
             } catch(e) {
               console.warn('Seek error:', e);
             }
+            // 少し待ってからUI更新を再開（シークの反映待ち）
             setTimeout(() => { isDragging = false; }, 400);
           }, 50);
         };
 
         seekbar.oninput = doSeek;
         seekbar.onchange = doSeek;
-        
-        const applySynthLoop = () => {
-           try {
-              let shouldNativeLoop = (loopCheck && loopCheck.checked);
-              if (parsedMidi && parsedMidi.loopStart !== -1) shouldNativeLoop = false;
-              if (synth.setPlayerLoop) synth.setPlayerLoop(shouldNativeLoop ? -1 : 0);
-           } catch(e){}
-        };
-        
-        if (loopCheck) {
-          applySynthLoop();
-          loopCheck.onchange = applySynthLoop;
-        }
 
         updateInterval = setInterval(async () => {
-          try {
-            if (synth.isPlaying()) {
-               const currentTick = await synth.retrievePlayerCurrentTick();
-               const totalTicks = await synth.retrievePlayerTotalTicks();
-               
-               if (parsedMidi && parsedMidi.loopStart !== -1) {
-                   const isUnrolled = (totalTicks > parsedMidi.maxTick + 1000);
-                   const loopLength = parsedMidi.maxTick - parsedMidi.loopStart;
-                   const actualEndTick = isUnrolled ? (parsedMidi.loopStart + 10 * loopLength) : parsedMidi.maxTick;
-                   
-                   if (loopCheck && loopCheck.checked) {
-                        targetStopTick = -1;
-                        if (currentTick >= actualEndTick - 10) {
-                            synth.seekPlayer(parsedMidi.loopStart);
-                            try { synth.playPlayer(); } catch(e) {}
-                        }
-                    } else if (loopCheck && !loopCheck.checked) {
-                        if (targetStopTick === -1) {
-                            if (currentTick < parsedMidi.maxTick) {
-                                targetStopTick = parsedMidi.maxTick;
-                            } else {
-                                const currentIterationPos = (currentTick - parsedMidi.loopStart) % loopLength;
-                                targetStopTick = currentTick - currentIterationPos + loopLength;
-                            }
-                        }
-                        if (currentTick >= targetStopTick) {
-                            try { synth.stopPlayer(); } catch(e) {}
-                        }
-                    }
-               }
-
-               if (!isDragging) {
-                   const isUnrolled = parsedMidi && parsedMidi.loopStart !== -1 && (totalTicks > parsedMidi.maxTick + 1000);
-                   const loopLength = parsedMidi ? parsedMidi.maxTick - parsedMidi.loopStart : 0;
-                   let displayTick = currentTick;
-                   
-                   if (isUnrolled && parsedMidi.loopStart !== -1 && currentTick >= parsedMidi.loopStart) {
-                       displayTick = parsedMidi.loopStart + ((currentTick - parsedMidi.loopStart) % loopLength);
-                   }
-                   
-                   seekbar.value = Math.min(displayTick, seekbar.max);
-                   
-                   if (timeElem && parsedMidi) {
-                       const currentSeconds = calculateTimeAtTick(displayTick, parsedMidi);
-                       timeElem.textContent = formatTime(currentSeconds);
-                   }
-               }
-            } else {
-               if (!isDragging) {
-                 seekbar.value = 0;
-                 if (timeElem) timeElem.textContent = '00:00';
-               }
-            }
-          } catch(e) {}
-        }, 100);
+          if (!isDragging) {
+             const currentTick = await synth.retrievePlayerCurrentTick();
+             const totalTicks = await synth.retrievePlayerTotalTicks();
+             
+             // parsedMidiがない場合のフォールバック
+             if (!parsedMidi) {
+                 let bpm = await synth.retrievePlayerBpm();
+                 if (!bpm || bpm <= 0) bpm = 120;
+                 const ticksPerSecond = (bpm * 480) / 60; // fallback ppqn 480
+                 if (totalTicks > 0) {
+                     seekbar.max = totalTicks;
+                     if (totalElem) totalElem.textContent = formatTime(totalTicks / ticksPerSecond);
+                 } else if (seekbar.max == 10000 && currentTick > 9000) {
+                     seekbar.max = currentTick + 5000;
+                 }
+                 seekbar.value = currentTick;
+                 if (timeElem) timeElem.textContent = formatTime(currentTick / ticksPerSecond);
+             } else {
+                 // parsedMidiがある場合は正確な時間を表示
+                 if (totalTicks > parsedMidi.maxTick) {
+                    seekbar.max = totalTicks;
+                 }
+                 seekbar.value = currentTick;
+                 if (timeElem) timeElem.textContent = formatTime(calculateTimeAtTick(currentTick, parsedMidi));
+             }
+          }
+        }, 200);
       }
 
       const closeBtn = document.getElementById('audio-player-close');
       const cleanup = () => {
-        try {
-          if (updateInterval) clearInterval(updateInterval);
-          if (midiControls) midiControls.style.display = 'none';
-          if (midiVolume) midiVolume.style.display = 'none';
-          if (seekbar) { seekbar.oninput = null; seekbar.onchange = null; }
-          if (volumeBar) volumeBar.oninput = null;
-          if (loopCheck) loopCheck.onchange = null;
-          synth.stopPlayer();
-          synth.close();
-          node.disconnect();
-          gainNode.disconnect();
-        } catch(e) {
-          console.warn('Synth cleanup error:', e);
+        if (updateInterval) clearInterval(updateInterval);
+        if (midiControls) midiControls.style.display = 'none';
+        if (seekbar) {
+           seekbar.oninput = null;
+           seekbar.onchange = null;
         }
+        if (volumeBar) volumeBar.oninput = null;
+        synth.close();
+        gainNode.disconnect();
+        node.disconnect();
+        actx.close();
         modal.style.display = 'none';
-        document.body.style.cursor = 'default';
         closeBtn.onclick = null;
       };
       
       closeBtn.onclick = cleanup;
       
-      const setupStopHandler = () => {
-          synth.waitForPlayerStopped().then(() => {
-             if (modal.style.display === 'flex') {
-                 if (loopCheck && loopCheck.checked) {
-                     const startTick = (parsedMidi && parsedMidi.loopStart !== -1) ? parsedMidi.loopStart : 0;
-                     try { synth.stopPlayer(); } catch(e) {}
-                     synth.seekPlayer(startTick);
-                     try { synth.playPlayer(); } catch(e) {}
-                     setupStopHandler();
-                 } else {
-                     updatePlayBtn(false); // Finished naturally
-                 }
-             }
-          }).catch(e => console.warn(e));
-      };
-      setupStopHandler();
+      synth.waitForPlayerStopped().then(() => {
+         if (modal.style.display === 'flex') {
+             cleanup();
+         }
+      }).catch(e => console.warn(e));
 
-      document.body.style.cursor = 'default';
     } catch (err) {
-      document.body.style.cursor = 'default';
-      console.error(err);
-      alert("MIDI再生エラー: " + err.message);
+      console.error("MIDI Playback Error:", err);
+      alert("MIDIの再生に失敗しました。");
+    } finally {
+      document.body.style.cursor = '';
     }
   }
 
@@ -8513,7 +8271,8 @@ Module.onAbort = function(what) {
 // [軽量化ハック] fluid_stat のスタブによる無害なエラーメッセージがコンソールや画面上に出力されるのを防ぐ
 Module.printErr = function(text) {
   if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
-  if (text.includes('fluid_stat') || text.includes('fluid_file_test') || text.includes('Exception thrown, see JavaScript console')) {
+  if (text.includes('fluid_stat') || text.includes('Exception thrown, see JavaScript console')) {
+    console.warn('[最適化] 無害なfluidsynthエラー出力を握り潰しました:', text);
     return; // スキップして画面上のエラーステータス等に波及するのを防ぐ
   }
   console.error(text);
@@ -8869,23 +8628,16 @@ async function syncConfigIniToSettings(targetFS, explicitPath = null) {
     <h3 id="audio-player-title" style="margin-top:0; font-weight: 500; font-size: 1.25rem; border-bottom: 1px solid #333; padding-bottom: 10px; flex-shrink: 0; word-break: break-all;">音声再生</h3>
     <div style="flex: 1; margin: 25px 0; display: flex; align-items: center; justify-content: center; flex-direction: column; width: 100%;">
       <audio id="audio-player-elem" controls style="width: 100%; outline: none;"></audio>
-      <div id="midi-player-controls" style="display: none; width: 100%; flex-direction: row; align-items: center; background: #f1f3f4; border-radius: 30px; padding: 5px 15px; box-sizing: border-box; height: 54px; gap: 10px;">
-        <button id="midi-player-playpause" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; color: #202124; padding: 0;" onmouseover="this.style.background='rgba(0,0,0,0.08)'" onmouseout="this.style.background='none'">
-          <svg id="midi-icon-pause" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-          <svg id="midi-icon-play" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M8 5v14l11-7z"/></svg>
-        </button>
-        <span id="midi-player-time" style="font-family: Roboto, Arial, sans-serif; font-size: 13px; color: #5f6368; min-width: 35px; text-align: center;">00:00</span>
-        <input type="range" id="midi-player-seekbar" min="0" max="100" value="0" style="flex: 1; cursor: pointer; accent-color: #1a73e8; height: 4px; margin: 0 10px;">
-        <span id="midi-player-total" style="font-family: Roboto, Arial, sans-serif; font-size: 13px; color: #5f6368; min-width: 35px; text-align: center;">00:00</span>
-        <div style="display: flex; align-items: center; gap: 5px; margin-left: 5px;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#5f6368"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-          <input type="range" id="midi-player-volume" min="0" max="100" value="100" style="width: 60px; cursor: pointer; accent-color: #1a73e8; height: 4px;">
+      <div id="midi-player-controls" style="display: none; width: 100%; flex-direction: column; gap: 8px;">
+        <input type="range" id="midi-player-seekbar" min="0" max="100" value="0" style="width: 100%; cursor: pointer;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #ccc;">
+          <span id="midi-player-time">00:00</span>
+          <span id="midi-player-total">00:00</span>
         </div>
-      </div>
-      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 15px; margin-top: 15px; width: 100%;">
-        <label style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; color: #ccc; cursor: pointer;">
-          <input type="checkbox" id="audio-player-loop" checked style="cursor: pointer;"> ループ再生
-        </label>
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 5px;">
+          <span style="font-size: 0.85rem; color: #ccc;">音量</span>
+          <input type="range" id="midi-player-volume" min="0" max="100" value="100" style="width: 100px; cursor: pointer;">
+        </div>
       </div>
     </div>
     <div style="display:flex; justify-content: flex-end; flex-shrink: 0;">
@@ -8916,71 +8668,5 @@ async function syncConfigIniToSettings(targetFS, explicitPath = null) {
   </div>
 </div>
 
-
-<script>
-  (function() {
-    const getModals = () => [
-      { id: 'image-viewer-modal', closeId: 'image-viewer-close' },
-      { id: 'audio-player-modal', closeId: 'audio-player-close' },
-      { id: 'file-viewer-modal', closeId: 'file-viewer-close' },
-      { id: 'text-editor-modal', closeId: 'text-editor-close' },
-      { id: 'controls-help-modal', closeId: 'controls-help-close' },
-      { id: 'setup-modal', closeId: 'start-btn' },
-      { id: 'download-modal', closeId: 'download-close-btn' }
-    ];
-
-    document.addEventListener('keydown', (e) => {
-      // Allow default space behavior in text areas or inputs
-      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
-      
-      if (e.key === ' ' && !isInput) {
-        const audioModal = document.getElementById('audio-player-modal');
-        if (audioModal && window.getComputedStyle(audioModal).display !== 'none') {
-          e.preventDefault(); // Prevent page scroll
-          
-          const audioElem = document.getElementById('audio-player-elem');
-          const midiControls = document.getElementById('midi-player-controls');
-          
-          if (midiControls && window.getComputedStyle(midiControls).display !== 'none') {
-             const playBtn = document.getElementById('midi-player-playpause');
-             if (playBtn) playBtn.click();
-          } else if (audioElem) {
-             if (audioElem.paused) {
-                 audioElem.play();
-             } else {
-                 audioElem.pause();
-             }
-          }
-        }
-      }
-
-      if (e.key === 'Escape') {
-        const modals = getModals();
-        for (const m of modals) {
-          const el = document.getElementById(m.id);
-          if (el && window.getComputedStyle(el).display !== 'none') {
-             const btn = document.getElementById(m.closeId);
-             if (btn) btn.click();
-             break;
-          }
-        }
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      const modals = getModals();
-      for (const m of modals) {
-        const el = document.getElementById(m.id);
-        if (el && window.getComputedStyle(el).display !== 'none') {
-           if (e.target === el) {
-             const btn = document.getElementById(m.closeId);
-             if (btn) btn.click();
-           }
-        }
-      }
-    });
-  })();
-</script>
 </body>
-
 </html>
