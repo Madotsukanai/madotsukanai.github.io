@@ -1,0 +1,11 @@
+div[role="presentation"].r-cpa5s6:not(.r-16y2uox):not(:has(svg)) {
+    width: 280px !important;
+    flex-shrink: 0 !important;
+    flex-basis: 280px !important;
+}
+
+div[data-testid="ScrollSnap-List"] {
+    display: flex !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+}
