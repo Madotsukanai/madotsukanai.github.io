@@ -126,7 +126,7 @@ img { max-width: 100%; display: block; }
    Hero
    ========================================================== */
 .hero {
-  padding: 32px 0 96px;
+  padding: 32px 0 48px;
 }
 
 .eyebrow {
@@ -157,15 +157,8 @@ img { max-width: 100%; display: block; }
 .hero-lead {
   color: black;
   font-size: 1.08rem;
-  margin: 0 0 40px;
+  margin: 0;
   white-space: nowrap;
-}
-
-.hero-actions {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 56px;
-  flex-wrap: wrap;
 }
 
 .btn {
@@ -245,7 +238,38 @@ img { max-width: 100%; display: block; }
   color: var(--muted);
   max-width: 58ch;
   font-size: 1.02rem;
-  margin: -20px 0 44px;
+  margin: 0 0 20px;
+}
+
+.about-lead:last-child {
+  margin-bottom: 0;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.about-media {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 12px 28px rgba(20,22,26,0.08);
+}
+
+.about-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+@media (max-width: 760px) {
+  .about-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
 }
 
 /* ==========================================================
