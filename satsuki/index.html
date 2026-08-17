@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>皐月電創会</title>
+<meta name="description" content="皐月電創会はゲーム制作サークルです。作品情報・開発ログ・メンバー紹介を掲載しています。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/main.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a href="#top" class="logo">
+      <img src="img/logo.png" alt="" class="logo-img">
+      <span class="logo-text">皐月電創会</span>
+    </a>
+    <nav class="main-nav" id="main-nav">
+      <a href="#works">作品</a>
+      <a href="#news">開発ログ</a>
+      <a href="#about">サークルについて</a>
+      <a href="#contact">連絡先</a>
+    </nav>
+    <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="メニューを開く">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-inner">
+      <img src="img/logo.png" alt="" class="hero-logo">
+      <h1 class="hero-title">皐月電創会の公式サイトへようこそ</h1>
+      <p class="hero-lead">
+        皐月電創会は、東京科学大学附属科学技術高等学校の生徒を中心に構成されている非公式ゲーム制作サークルです。
+      </p>
+      <div class="hero-actions">
+        <a href="#works" class="btn btn-primary">作品を見る</a>
+        <a href="#contact" class="btn btn-ghost">連絡する</a>
+      </div>
+    </div>
+  </section>
+  <section id="works" class="section">
+    <div class="wrap">
+      <h2 class="section-title">作品</h2>
+      <div class="build-grid">
+        <article class="build-card reveal">
+          <div class="build-thumb build-thumb-img">
+            <img src="img/works/beatsyncdx.png" alt="beatsyncDXのタイトル画面" loading="lazy">
+          </div>
+          <div class="build-body">
+            <div class="build-meta mono">
+              <span class="build-version">v1.0.0</span>
+              <span class="badge badge-live">Released</span>
+            </div>
+            <h3 class="build-title">beatsyncDX</h3>
+            <p class="build-desc">高校の文化祭にて出展した音楽ゲームです。</p>
+            <a href="#" class="build-link">詳細を見る →</a>
+          </div>
+        </article>
+        <article class="build-card reveal">
+          <div class="build-thumb build-thumb-img">
+            <img src="img/works/satsukibare.png" alt="五月晴のタイトル画面" loading="lazy">
+          </div>
+          <div class="build-body">
+            <div class="build-meta mono">
+              <span class="build-version">v0.1.0</span>
+              <span class="badge badge-dev">In Development</span>
+            </div>
+            <h3 class="build-title">五月晴</h3>
+            <p class="build-desc">アーケード風近接撃込抱え落ちシューティング</p>
+            <a href="#" class="build-link">詳細を見る →</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="news" class="section section-alt">
+    <div class="wrap">
+      <h2 class="section-title">開発ログ</h2>
+
+      <ul class="log-list">
+        <li class="log-item reveal">
+          <span class="log-date mono">2026.08.17</span>
+          <div class="log-body">
+            <h3 class="log-title">「五月晴」C108版バグ修正パッチ公開</h3>
+            <p class="log-desc">軽微な不具合を修正したパッチです。<a href="satsukibare_patch1.zip">ダウンロード</a></p>
+          </div>
+        </li>
+        <li class="log-item reveal">
+          <span class="log-date mono">2026.08.17</span>
+          <div class="log-body">
+            <h3 class="log-title">サイトを公開しました</h3>
+            <p class="log-desc">少し前から準備していた公式サイトを公開。</p>
+          </div>
+        </li>
+        <li class="log-item reveal">
+          <span class="log-date mono">2026.08.16</span>
+          <div class="log-body">
+            <h3 class="log-title">『五月晴』C108体験版頒布</h3>
+            <p class="log-desc">初参加となりましたが、多くの方に作品を手に取って頂けました。誠にありがとうございます。</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+</main>
+<script src="src/main.js"></script>
+</body>
+</html>
