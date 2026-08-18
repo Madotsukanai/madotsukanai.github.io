@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五月晴 — 皐月電創会</title>
+<meta name="description" content="皐月電創会が制作するアーケード風近接撃込抱え落ちシューティング「五月晴」の紹介ページです。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../src/main.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a href="../index.html#top" class="logo">
+      <img src="../img/logo.png" alt="" class="logo-img">
+      <span class="logo-text">皐月電創会</span>
+    </a>
+    <nav class="main-nav" id="main-nav">
+      <a href="../index.html#works">作品</a>
+      <a href="../index.html#news">開発ログ</a>
+      <a href="../index.html#about">サークルについて</a>
+      <a href="../index.html#contact">連絡先</a>
+    </nav>
+    <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="メニューを開く">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="wrap hero-inner" style="text-align: center;">
+      <div class="build-meta mono" style="justify-content:center; margin-bottom:16px;">
+        <span class="build-version">v0.1.0</span>
+        <span class="badge badge-dev">In Development</span>
+      </div>
+      <h1 class="hero-title" style="display:inline-block;">五月晴</h1>
+      <p class="hero-lead" style="white-space: normal; text-align: center;">アーケード風近接撃込抱え落ちシューティング</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="about-grid">
+        <div class="about-text">
+          <p class="about-lead reveal">
+            「五月晴」は、近距離での撃ち込みや、特殊システムを駆使して敵の攻撃を切り抜け、時には死んで活路を見出す新感覚のシューティングゲームです。
+          </p>
+          <p class="about-lead reveal">
+            現在も開発を継続中で、コミックマーケット108にて体験版を頒布しました。
+            今後もイベント出展やアップデートを予定しています。最新情報は開発ログをご確認ください。
+          </p>
+        </div>
+        <div class="about-media reveal">
+          <img src="../img/works/satsukibare.png" alt="タイトル画面" class="about-img">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2 class="section-title">更新履歴</h2>
+      <ul class="log-list">
+    	<li class="log-item reveal">
+    	  <span class="log-date mono">2026.08.18</span>
+    	  <div class="log-body">
+    	    <h3 class="log-title">Web体験版公開</h3>
+    	    <p class="log-desc">Web体験版を公開しました。ゲームとしては頒布時点とほぼ同じ状態です。<a href="trial.zip">ダウンロード</a></p>
+    	  </div>
+    	</li>
+        <li class="log-item reveal">
+          <span class="log-date mono">2026.08.18</span>
+          <div class="log-body">
+            <h3 class="log-title">Ver.0.1.1アップデートパッチ公開</h3>
+            <p class="log-desc">リプレイ機能等の追加を行いました。C108版バグ修正パッチ適用後に適用して下さい。<a href="0.1.1.zip">ダウンロード</a></p>
+          </div>
+        </li>
+        <li class="log-item reveal">
+          <span class="log-date mono">2026.08.17</span>
+          <div class="log-body">
+            <h3 class="log-title">C108版バグ修正パッチ公開</h3>
+            <p class="log-desc">軽微な不具合を修正したパッチです。<a href="patch1.zip">ダウンロード</a></p>
+          </div>
+        </li>
+        <li class="log-item reveal">
+          <span class="log-date mono">2026.08.16</span>
+          <div class="log-body">
+            <h3 class="log-title">コミックマーケット108にて体験版頒布</h3>
+            <p class="log-desc">初参加となりましたが、多くの方に作品を手に取って頂けました。誠にありがとうございます。</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap" style="text-align:center;">
+      <div class="hero-actions" style="justify-content:center;">
+        <a href="trial.zip" class="btn btn-primary">Web体験版をダウンロード</a>
+        <a href="../index.html#works" class="btn btn-ghost">作品一覧に戻る</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <span>© <span id="year"></span> 皐月電創会</span>
+  </div>
+</footer>
+
+<script src="../src/main.js"></script>
+</body>
+</html>
