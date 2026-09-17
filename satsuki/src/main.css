@@ -397,13 +397,17 @@ img { max-width: 100%; display: block; }
 }
 
 .log-desc a,
-.build-desc a {
+.build-desc a,
+.about-lead a,
+.about-text a {
   color: #1155CC;
   text-decoration: underline;
 }
 
 .log-desc a:hover,
-.build-desc a:hover {
+.build-desc a:hover,
+.about-lead a:hover,
+.about-text a:hover {
   color: #3B5BFD;
 }
 
