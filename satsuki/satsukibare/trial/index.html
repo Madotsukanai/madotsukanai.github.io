@@ -11,8 +11,8 @@
     <link rel="preload" as="fetch" href="./assets/data/32a1056b36843584e022.bin" crossorigin />
     <link rel="preload" as="fetch" href="./assets/data/26dcd9371b6de909fbed.bin" crossorigin />
     <title>五月晴</title>
-    <script type="module" crossorigin src="./assets/index-CM1fmctE.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-D0Z1olV8.css">
+    <script type="module" crossorigin src="./assets/index-DPMp9Q05.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BUJSNqZN.css">
   </head>
   <body>
     <div id="app-container">
@@ -83,29 +83,30 @@
             transform: translate(-50%, -50%);
             color: #595959;
             font-family: BIZUDPMincho;
-            font-size: 48px;
+            font-size: 46px;
             text-align: center;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 60px 90px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 40px 80px;
             border-radius: 15px;
             z-index: 10;
-            max-height: 80vh;
+            max-height: 880px;
             display: flex;
             flex-direction: column;
+            box-sizing: border-box;
           ">
-            <p style="margin-bottom: 60px; font-size: 60px; border-bottom: 3px solid white; padding-bottom: 15px; color: white; flex-shrink: 0;">- CONFIGURATION -</p>
+            <p style="margin-bottom: 30px; font-size: 56px; border-bottom: 3px solid white; padding-bottom: 12px; color: white; flex-shrink: 0;">- CONFIGURATION -</p>
             <div id="config-item-list" style="overflow-y: auto; flex: 1; min-height: 0; scrollbar-width: thin; scrollbar-color: #595959 transparent;">
-              <p id="config-item-0" style="margin: 30px 0; color: #FFFFFF;">Master Volume: 100%</p>
-              <p id="config-item-1" style="margin: 30px 0; color: #595959;">BGM Volume : 100%</p>
-              <p id="config-item-2" style="margin: 30px 0; color: #595959;">SE Volume  : 100%</p>
+              <p id="config-item-0" style="margin: 18px 0; color: #FFFFFF;">Master Volume: 100%</p>
+              <p id="config-item-1" style="margin: 18px 0; color: #595959;">BGM Volume : 100%</p>
+              <p id="config-item-2" style="margin: 18px 0; color: #595959;">SE Volume  : 100%</p>
               <!-- config-item-3: ブラウザ=Controller、Tauri=Window Size（JS側がビルド種別に応じて上書き） -->
-              <p id="config-item-3" style="margin: 30px 0; color: #595959;">Controller  : Configure Buttons</p>
-              <p id="config-item-4" style="margin: 30px 0; color: #595959;">Keyboard    : Configure Keys</p>
-              <p id="config-item-5" style="margin: 30px 0; color: #595959;">Online Ranking: ON</p>
+              <p id="config-item-3" style="margin: 18px 0; color: #595959;">Controller  : Configure Buttons</p>
+              <p id="config-item-4" style="margin: 18px 0; color: #595959;">Keyboard    : Configure Keys</p>
+              <p id="config-item-5" style="margin: 18px 0; color: #595959;">Online Ranking: ON</p>
               <!-- config-item-6: Tauriビルド時のみ使用（Online Ranking）、ブラウザビルドでは参照されない -->
-              <p id="config-item-6" style="margin: 30px 0; color: #595959; display: none;">Online Ranking: ON</p>
+              <p id="config-item-6" style="margin: 18px 0; color: #595959; display: none;">Online Ranking: ON</p>
             </div>
-            <p style="margin-top: 60px; font-size: 36px; color: #aaa; flex-shrink: 0;">(Press ESC or X to return)</p>
+            <p style="margin-top: 30px; font-size: 32px; color: #aaa; flex-shrink: 0;">(Press ESC or X to return)</p>
           </div>
         </div>
 
@@ -183,7 +184,8 @@
             border-radius: 15px;
             z-index: 10;
             min-width: 760px;
-            max-height: 80vh;
+            max-height: 880px;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
           ">
