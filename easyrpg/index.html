@@ -1164,9 +1164,13 @@
             </div>
           </div>
           
-          <p>ゲームのZIPファイルを選択してください。</p>
-          <p style="font-size: 0.85rem; color: #999;">RPGツクール2000/2003/XP/VX/VX Aceに対応しています。UTF-8とShift_JISエンコーディングに対応しています。</p>
-          <input type="file" id="game-file-input" accept=".zip" />
+          <p>ゲームのZIPファイル、またはゲームフォルダを選択してください。</p>
+          <p style="font-size: 0.85rem; color: #999;">RPGツクール2000/2003/XP/VX/VX Aceに対応しています。UTF-8とShift_JISエンコーディングに対応しています。<br>インストーラー形式（.exe）の場合は先に展開し、ゲームフォルダをZIPにまとめるかフォルダのまま選択してください。</p>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <input type="file" id="game-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+            <button type="button" id="game-folder-btn" style="white-space: nowrap;">📁 フォルダを選択</button>
+          </div>
+          <input type="file" id="game-folder-input" webkitdirectory directory multiple style="display:none;" />
         </div>
       </div>
 
@@ -1181,24 +1185,40 @@
             <div class="settings-inline" style="flex-wrap: wrap;">
               <label>
                 RPGツクール2000 RTP (日本語)
-                <input type="file" id="rtp2000-file-input" accept=".zip" />
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="file" id="rtp2000-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2000" style="white-space: nowrap;">📁</button>
+                </div>
+                <input type="file" id="rtp2000-folder-input" webkitdirectory directory multiple style="display:none;" />
               </label>
               <label>
                 RPGツクール2003 RTP (日本語)
-                <input type="file" id="rtp2003-file-input" accept=".zip" />
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="file" id="rtp2003-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2003" style="white-space: nowrap;">📁</button>
+                </div>
+                <input type="file" id="rtp2003-folder-input" webkitdirectory directory multiple style="display:none;" />
               </label>
               <label>
                 RPGツクール2000 RTP (英語)
-                <input type="file" id="rtp2000en-file-input" accept=".zip" />
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="file" id="rtp2000en-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2000en" style="white-space: nowrap;">📁</button>
+                </div>
+                <input type="file" id="rtp2000en-folder-input" webkitdirectory directory multiple style="display:none;" />
               </label>
               <label>
                 RPGツクール2003 RTP (英語)
-                <input type="file" id="rtp2003en-file-input" accept=".zip" />
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="file" id="rtp2003en-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2003en" style="white-space: nowrap;">📁</button>
+                </div>
+                <input type="file" id="rtp2003en-folder-input" webkitdirectory directory multiple style="display:none;" />
               </label>
             </div>
             <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
               ※ RTPインストーラー(.exe)が入ったZIPはそのまま使えません。事前に unshield などで展開し、
-              展開後のフォルダをZIPにまとめてから選択してください。
+              展開後のフォルダをZIPにまとめるかフォルダのまま選択してください。
             </p>
           </div>
 
@@ -2326,7 +2346,7 @@ class GameStorageManager {
     });
   }
   
-  async saveGame(gameId, gameName, files) {
+  async saveGame(gameId, gameName, files, metadata = {}) {
     const transaction = this.db.transaction(['games', 'gameFiles'], 'readwrite');
     
     // ゲームファイルの保存パスプレフィックス付与用の正規化配列を作成
@@ -2343,9 +2363,19 @@ class GameStorageManager {
         data: f.data
       };
     });
+
+    // 既存メタデータを読み込み、engineType など上書きしてはいけないフィールドを引き継ぐ
+    const gamesStore = transaction.objectStore('games');
+    const existingMeta = await new Promise((resolve) => {
+      const req = gamesStore.get(gameId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
     
     // ゲームメタデータを保存 (軽量な fileList を追加して、大容量実データの読み込みを不要にする)
     const gameData = {
+      ...(existingMeta || {}),         // 既存フィールド（engineType, rtpConfig 等）を保持
+      ...metadata,                     // 呼び出し元からの上書き（engineType など）
       id: gameId,
       name: gameName,
       lastPlayed: new Date().toISOString(),
@@ -2357,7 +2387,7 @@ class GameStorageManager {
       }))
     };
     
-    await transaction.objectStore('games').put(gameData);
+    await gamesStore.put(gameData);
     
     // ゲームファイルを保存
     const fileData = {
@@ -6782,7 +6812,15 @@ async function loadSavedGamesList() {
         storageManager.updateGameMetadata(game.id, { playTimeSeconds: bufferedPlayTime }).catch(e => {});
       }
       
-      const isMkxp = game.engineType === 'mkxp';
+      // engineType 未設定の場合は fileList のパスから判別（表示用のみ。起動時に正式保存）
+      let resolvedEngineType = game.engineType;
+      if (!resolvedEngineType && game.fileList) {
+        const hasMkxpFile = game.fileList.some(f =>
+          /[/\\]?game\.(rxdata|rvdata|rvdata2|rgssad|rgss2a|rgss3a)$/i.test(f.path || '')
+        );
+        resolvedEngineType = hasMkxpFile ? 'mkxp' : 'easyrpg';
+      }
+      const isMkxp = resolvedEngineType === 'mkxp';
       const engineBadge = isMkxp
         ? '<span style="display:inline-block;padding:0.1rem 0.4rem;background:#7b4f9e;color:#fff;border-radius:3px;font-size:0.72rem;font-weight:bold;vertical-align:middle;">XP/VX/VX Ace</span>'
         : '<span style="display:inline-block;padding:0.1rem 0.4rem;background:#1a6b3c;color:#fff;border-radius:3px;font-size:0.72rem;font-weight:bold;vertical-align:middle;">2000/2003</span>';
@@ -6966,7 +7004,18 @@ async function loadSavedGame(gameId) {
     console.log(`Loading saved game: ${gameData.name} (${gameData.files.length} files)`);
     document.getElementById('startup-dialog').style.display = 'none';
 
-    const engineType = gameData.engineType || 'easyrpg';
+    // engineType が未設定（旧登録ゲーム）の場合はファイル一覧から再判別
+    let engineType = gameData.engineType;
+    if (!engineType) {
+      const paths = (gameData.files || []).map(f => f.path || '');
+      const isMkxp = paths.some(p =>
+        /[/\\]?game\.(rxdata|rvdata|rvdata2|rgssad|rgss2a|rgss3a)$/i.test(p)
+      );
+      engineType = isMkxp ? 'mkxp' : 'easyrpg';
+      // 結果をメタデータに保存して次回から再判別不要にする
+      storageManager.updateGameMetadata(gameId, { engineType }).catch(() => {});
+      console.log(`[engineType] Auto-detected for "${gameData.name}": ${engineType}`);
+    }
     if (engineType === 'mkxp') {
       await loadMkxpGame(gameData.files, gameData.name, gameId);
     } else {
@@ -7508,11 +7557,17 @@ async function processZipFile(file) {
     let engineType = 'easyrpg'; // 'easyrpg' | 'mkxp'
     const filePaths = Object.keys(zip.files);
 
-    // mkxp判定: Game.rxdata(XP) / Game.rvdata(VX) / Game.rvdata2(VX Ace)
+    // mkxp判定:
+    //   通常形式: Game.rxdata(XP) / Game.rvdata(VX) / Game.rvdata2(VX Ace)
+    //   単一バイナリ形式（暗号化アーカイブ）:
+    //     Game.rgssad / .rgssad (XP) / Game.rgss2a (VX) / Game.rgss3a (VX Ace)
     const mkxpRootEntry =
       filePaths.find(p => /[/\\]?game\.rxdata$/i.test(p)) ||
       filePaths.find(p => /[/\\]?game\.rvdata$/i.test(p)) ||
-      filePaths.find(p => /[/\\]?game\.rvdata2$/i.test(p));
+      filePaths.find(p => /[/\\]?game\.rvdata2$/i.test(p)) ||
+      filePaths.find(p => /[/\\]?game\.rgssad$/i.test(p)) ||
+      filePaths.find(p => /[/\\]?game\.rgss2a$/i.test(p)) ||
+      filePaths.find(p => /[/\\]?game\.rgss3a$/i.test(p));
     if (mkxpRootEntry) {
       engineType = 'mkxp';
       const lastSlash = mkxpRootEntry.lastIndexOf('/');
@@ -7633,6 +7688,117 @@ async function processZipFile(file) {
   }
 }
 
+// フォルダ選択からゲームをライブラリへ保存する関数
+async function processGameFolderFiles(fileList) {
+  try {
+    const allFiles = Array.from(fileList);
+    if (allFiles.length === 0) return;
+
+    // ルートフォルダ名 = gameTitle
+    const rootFolder = allFiles[0].webkitRelativePath.split('/')[0];
+    const gameTitle = rootFolder || 'Unknown Game';
+
+    // エンジン判別
+    let engineType = 'easyrpg';
+    const relPaths = allFiles.map(f => f.webkitRelativePath);
+    const mkxpEntry =
+      relPaths.find(p => /\/game\.rxdata$/i.test(p)) ||
+      relPaths.find(p => /\/game\.rvdata$/i.test(p)) ||
+      relPaths.find(p => /\/game\.rvdata2$/i.test(p)) ||
+      relPaths.find(p => /\/game\.rgssad$/i.test(p)) ||
+      relPaths.find(p => /\/game\.rgss2a$/i.test(p)) ||
+      relPaths.find(p => /\/game\.rgss3a$/i.test(p));
+    if (mkxpEntry) {
+      engineType = 'mkxp';
+      console.log(`Folder: detected mkxp game (XP/VX/VX Ace)`);
+    } else {
+      console.log(`Folder: detected EasyRPG game (2000/2003)`);
+    }
+
+    // ファイル読み込み (ルートフォルダ名を除いた相対パスを使う)
+    const gameFiles = [];
+    for (const file of allFiles) {
+      // webkitRelativePath: "RootFolder/Data/xxx"  → relativePath: "Data/xxx"
+      const relativePath = file.webkitRelativePath.substring(rootFolder.length + 1);
+      if (!relativePath) continue;
+      // macOS 隠しファイル等を除外
+      if (relativePath.split('/').some(part => part.startsWith('.'))) continue;
+      if (relativePath.includes('__MACOSX')) continue;
+
+      const data = new Uint8Array(await file.arrayBuffer());
+      gameFiles.push({ path: relativePath, data });
+    }
+
+    // EasyRPG 用 index.json 生成
+    if (engineType === 'easyrpg') {
+      const indexJsonContent = generateIndexJson(gameFiles);
+      gameFiles.push({
+        path: 'index.json',
+        data: new TextEncoder().encode(indexJsonContent)
+      });
+    }
+
+    console.log(`Folder import: ${gameFiles.length} files, title="${gameTitle}", engine=${engineType}`);
+    await saveGameToLibrary(gameFiles, gameTitle, engineType);
+
+  } catch (error) {
+    console.error('Error processing game folder:', error);
+    alert('フォルダの処理中にエラーが発生しました: ' + error.message);
+  }
+}
+
+// フォルダ選択から RTP をインストールする関数
+async function processRTPFolderFiles(fileList, rtpInfo) {
+  const statusDiv = document.getElementById('status');
+  statusDiv.textContent = `${rtpInfo.name}を読み込み中...`;
+  try {
+    const allFiles = Array.from(fileList);
+    if (allFiles.length === 0) return;
+
+    const rtpDir = rtpInfo.dir || rtpInfo.id.replace('rtp', '');
+
+    // ルートフォルダ名を除いた相対パスでファイルを収集
+    const rootFolder = allFiles[0].webkitRelativePath.split('/')[0];
+    let rtpFiles = [];
+    for (const file of allFiles) {
+      const relativePath = file.webkitRelativePath.substring(rootFolder.length + 1);
+      if (!relativePath) continue;
+      if (relativePath.split('/').some(part => part.startsWith('.'))) continue;
+      const data = new Uint8Array(await file.arrayBuffer());
+      rtpFiles.push({ path: relativePath.replace(/\\/g, '/'), data });
+    }
+
+    if (rtpFiles.length === 0) {
+      throw new Error('フォルダ内にファイルが見つかりませんでした。');
+    }
+
+    // インストール先ディレクトリを付与
+    rtpFiles = rtpFiles.map(f => ({
+      path: `RTP/${rtpDir}/${f.path}`,
+      data: f.data
+    }));
+
+    console.log(`RTP folder import: ${rtpFiles.length} files -> RTP/${rtpDir}/`);
+    statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
+    await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
+
+    alert(
+      `${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
+      `ファイル数: ${rtpFiles.length}\n` +
+      `RTPを必要とするゲームで自動的に使用されます。`
+    );
+    statusDiv.textContent = '';
+    await loadRTPStatusList();
+
+  } catch (error) {
+    console.error('Error processing RTP folder:', error);
+    statusDiv.textContent = 'エラー: ' + error.message;
+    alert(`RTPフォルダの処理中にエラーが発生しました:\n${error.message}`);
+  }
+}
+
+
+
 // ゲームを起動せずにライブラリへ保存するだけの関数
 async function saveGameToLibrary(files, gameName, engineType = 'easyrpg') {
   const fileInput = document.getElementById('game-file-input');
@@ -7649,10 +7815,9 @@ async function saveGameToLibrary(files, gameName, engineType = 'easyrpg') {
   const gameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
   
   try {
-    await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
-    // engineType をメタデータに保存
-    await storageManager.updateGameMetadata(gameId, { engineType });
-    console.log('Game successfully saved to Library:', gameName);
+    // engineType を metadata 引数で渡すことで saveGame 内で一度に確定させる
+    await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles, { engineType });
+    console.log('Game successfully saved to Library:', gameName, '(engine:', engineType + ')');
     
     // ゲームリストを更新
     await loadSavedGamesList();
@@ -8394,7 +8559,7 @@ window.addEventListener('load', () => {
   const rtp2003FileInput = document.getElementById('rtp2003-file-input');
   const canvas = document.getElementById('canvas');
   
-  // ゲームファイル選択イベント
+  // ゲームファイル選択イベント（ZIP）
   fileInput.addEventListener('change', async (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -8406,8 +8571,21 @@ window.addEventListener('load', () => {
       }
     }
   });
+
+  // ゲームフォルダ選択ボタン → hidden input をクリック
+  const gameFolderBtn = document.getElementById('game-folder-btn');
+  const gameFolderInput = document.getElementById('game-folder-input');
+  if (gameFolderBtn && gameFolderInput) {
+    gameFolderBtn.addEventListener('click', () => gameFolderInput.click());
+    gameFolderInput.addEventListener('change', async (event) => {
+      if (event.target.files.length > 0) {
+        await processGameFolderFiles(event.target.files);
+        event.target.value = '';
+      }
+    });
+  }
   
-  // RTPファイル選択イベント（RTPの種類ごとに個別の入力欄を用意）
+  // RTPファイル選択イベント（ZIP）
   function wireRTPFileInput(inputEl, rtpInfo) {
     inputEl.addEventListener('change', async (event) => {
       const file = event.target.files[0];
@@ -8423,6 +8601,27 @@ window.addEventListener('load', () => {
       }
     });
   }
+
+  // RTP フォルダ選択ボタン → hidden input をクリック
+  const rtpMeta = [
+    { id: 'rtp2000',   name: 'RPGツクール2000 RTP (日本語)' },
+    { id: 'rtp2003',   name: 'RPGツクール2003 RTP (日本語)' },
+    { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)' },
+    { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)' },
+  ];
+  document.querySelectorAll('.rtp-folder-btn').forEach(btn => {
+    const rtpId = btn.dataset.rtp;
+    const rtpInfo = rtpMeta.find(r => r.id === rtpId);
+    const folderInput = document.getElementById(`${rtpId}-folder-input`);
+    if (!rtpInfo || !folderInput) return;
+    btn.addEventListener('click', () => folderInput.click());
+    folderInput.addEventListener('change', async (event) => {
+      if (event.target.files.length > 0) {
+        await processRTPFolderFiles(event.target.files, rtpInfo);
+        event.target.value = '';
+      }
+    });
+  });
   
   const rtp2000enFileInput = document.getElementById('rtp2000en-file-input');
   const rtp2003enFileInput = document.getElementById('rtp2003en-file-input');
