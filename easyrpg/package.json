@@ -1,0 +1,13 @@
+{
+  "name": "easyrpg-web",
+  "version": "1.0.0",
+  "description": "EasyRPG Player Web版",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
