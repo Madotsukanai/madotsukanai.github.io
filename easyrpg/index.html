@@ -1294,7 +1294,7 @@
           <hr style="border-color: #444; margin: 1.5rem 0;">
 
           <div class="settings-group">
-            <h3>カスタムフォント (.fon / .fnt / .bdf / .ttf / .ttc / .otf / .woff / .woff2)</h3>
+            <h3>カスタムフォント — EasyRPG (2000/2003) (.fon / .fnt / .bdf / .ttf / .ttc / .otf / .woff / .woff2)</h3>
             <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.75rem;">
               カスタムフォントを追加すると、ゲーム内のテキスト表示を変更できます（TrueType推奨）。
               ゲームプレイ中にEasyRPG本体の設定メニューから追加したファイルもここに反映されます。
@@ -1318,6 +1318,26 @@
               <label>
                 使用する明朝フォント
                 <select id="font2-select"></select>
+              </label>
+            </div>
+          </div>
+
+          <hr style="border-color: #444; margin: 1.5rem 0;">
+
+          <div class="settings-group">
+            <h3>カスタムフォント — mkxp-z (XP/VX/VX Ace) (.ttf / .ttc / .otf)</h3>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.75rem;">
+              XP/VX/VX Ace のゲームで使用するフォントを登録します。<br>
+              登録したフォントはすべてゲームの <code>Fonts/</code> ディレクトリに配置されます。<br>
+              ゲーム側が参照するフォント名と一致するファイル名のフォントが自動的に使用されます。
+            </p>
+            <div id="mkxpfont-status-list" class="asset-status-list">
+              <!-- mkxp-z フォントの状態がここに表示されます -->
+            </div>
+            <div class="settings-inline">
+              <label>
+                フォントの追加 (.ttf / .ttc / .otf)
+                <input type="file" id="mkxpfont-file-input" accept=".ttf,.ttc,.otf" multiple />
               </label>
             </div>
           </div>
@@ -3476,8 +3496,9 @@ async function deleteRTP(rtpId) {
 function getAssetTypeLabel(type) {
   const labels = {
     soundfont: 'サウンドフォント',
-    font1: 'ゴシックフォント',
-    font2: '明朝フォント'
+    font1:     'ゴシックフォント (EasyRPG)',
+    font2:     '明朝フォント (EasyRPG)',
+    mkxpfont:  'フォント (mkxp-z)',
   };
   return labels[type] || type;
 }
@@ -3485,8 +3506,9 @@ function getAssetTypeLabel(type) {
 function getAssetSettingKey(type) {
   return {
     soundfont: 'soundfont',
-    font1: 'font1',
-    font2: 'font2'
+    font1:     'font1',
+    font2:     'font2',
+    // mkxpfont は全ファイルを使用するため select キーなし
   }[type];
 }
 
@@ -3494,6 +3516,9 @@ function isValidAssetFile(type, filename) {
   const lower = filename.toLowerCase();
   if (type === 'soundfont') {
     return lower.endsWith('.sf2') || lower.endsWith('.soundfont');
+  }
+  if (type === 'mkxpfont') {
+    return lower.endsWith('.ttf') || lower.endsWith('.otf') || lower.endsWith('.ttc');
   }
   return lower.endsWith('.ttf') || lower.endsWith('.otf') || lower.endsWith('.ttc') ||
     lower.endsWith('.woff') || lower.endsWith('.woff2') || lower.endsWith('.fon');
@@ -3694,7 +3719,7 @@ async function loadAssetSettings() {
     }
   }
 
-  // Render fonts list
+  // Render EasyRPG fonts list
   if (fontContainer) {
     fontContainer.innerHTML = '';
     const fonts = assets.filter(a => a.type === 'font1' || a.type === 'font2');
@@ -3716,6 +3741,31 @@ async function loadAssetSettings() {
             <button class="rtp-delete-btn" onclick="deleteAsset('${asset.id.replace(/'/g, "\\'")}')">削除</button>
           `;
           fontContainer.appendChild(item);
+        });
+    }
+  }
+
+  // Render mkxp-z fonts list
+  const mkxpfontContainer = document.getElementById('mkxpfont-status-list');
+  if (mkxpfontContainer) {
+    mkxpfontContainer.innerHTML = '';
+    const mkxpFonts = assets.filter(a => a.type === 'mkxpfont');
+    if (mkxpFonts.length === 0) {
+      mkxpfontContainer.innerHTML = '<p style="color: #888; text-align: center; font-size: 0.85rem; padding: 1rem 0;">mkxp-z 用フォントは追加されていません。</p>';
+    } else {
+      mkxpFonts
+        .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+        .forEach(asset => {
+          const item = document.createElement('div');
+          item.className = 'asset-item';
+          item.innerHTML = `
+            <div class="asset-item-info">
+              <div class="asset-item-name">${escapeHtml(asset.name)}</div>
+              <div class="asset-item-detail">${formatBytes(asset.size)}</div>
+            </div>
+            <button class="rtp-delete-btn" onclick="deleteAsset('${asset.id.replace(/'/g, "\\'")}')">削除</button>
+          `;
+          mkxpfontContainer.appendChild(item);
         });
     }
   }
@@ -8594,12 +8644,13 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
       console.log(`[mkxp] Loaded RTP "${rtpName}": ${rtpData.files.length} files`);
     }
 
-    // フォントアセットを bios として渡す
+    // mkxp-z 専用フォントアセットを bios として渡す
     // mkxp-z は system_path/Fonts/ を /Game/Fonts/ にマウントする
     // → Nostalgist bios パス: "mkxp-z/Fonts/<ファイル名>"
+    // ※ EasyRPG 用の font1/font2 は渡さない（エンジン独立）
     try {
       const allAssets = await storageManager.getAllAssets();
-      const fontAssets = allAssets.filter(a => a.type === 'font1' || a.type === 'font2');
+      const fontAssets = allAssets.filter(a => a.type === 'mkxpfont');
       for (const asset of fontAssets) {
         if (!asset.data || !asset.name) continue;
         biosFiles.push({
@@ -9419,6 +9470,23 @@ window.addEventListener('load', () => {
   wireAssetFileInput('soundfont-file-input', 'soundfont');
   wireAssetFileInput('font1-file-input', 'font1');
   wireAssetFileInput('font2-file-input', 'font2');
+
+  // mkxp-z フォント入力（複数ファイル対応）
+  const mkxpfontInput = document.getElementById('mkxpfont-file-input');
+  if (mkxpfontInput) {
+    mkxpfontInput.addEventListener('change', async (event) => {
+      const files = Array.from(event.target.files);
+      for (const file of files) {
+        try {
+          await saveAssetFromFile('mkxpfont', file);
+        } catch (e) {
+          console.error('Failed to save mkxpfont:', e);
+          alert('フォントの保存に失敗しました: ' + e.message);
+        }
+      }
+      mkxpfontInput.value = '';
+    });
+  }
 
   // サウンドフォント/フォントの選択（ドロップダウン→設定に反映）
   function wireAssetSelect(selectId, settingKey) {
