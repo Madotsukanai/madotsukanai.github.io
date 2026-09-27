@@ -8616,10 +8616,18 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
     const coreJsText = await fetch(coreJsUrl).then(r => r.text());
     // Worker 生成箇所だけを絶対 URL で書き換える。
     // 例: new URL("mkxp-z_libretro.js",import.meta.url) → new URL("https://.../mkxp-z_libretro.js")
-    const patchedJs = coreJsText.replace(
-      /new URL\("mkxp-z_libretro\.js"\s*,\s*import\.meta\.url\)/g,
-      `new URL(${JSON.stringify(coreJsUrl)})`
-    );
+    const patchedJs = coreJsText
+      // Worker 生成箇所を絶対 URL で書き換え（Blob URL コンテキストで失敗するのを防ぐ）
+      .replace(
+        /new URL\("mkxp-z_libretro\.js"\s*,\s*import\.meta\.url\)/g,
+        `new URL(${JSON.stringify(coreJsUrl)})`
+      )
+      // WakeLock API の呼び出しを無効化
+      // document.hidden の状態によっては DOMException が throw されるため catch で握りつぶす
+      .replace(
+        'RPE.sentinelPromise=navigator.wakeLock.request("screen")',
+        'RPE.sentinelPromise=navigator.wakeLock.request("screen").catch(()=>{})'
+      );
     const coreJsBlob = new Blob([patchedJs], { type: 'application/javascript' });
 
     const nostalgist = await window.Nostalgist.launch({
@@ -8639,14 +8647,16 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
         video_aspect_ratio: '1.333333',
         video_scale_integer: false,
       },
-      // mkxp-z は PROXY_TO_PTHREAD ビルドのため以下の関数/オブジェクトが存在しない:
-      //   - Module.setCanvasSize: Nostalgist の postRun → resize() で呼ばれる
-      //   - JSEvents: Nostalgist の postRun → updateKeyboardEventHandlers() で参照される
-      //     (mkxp-z は readyPromiseResolve/return moduleRtn パターンを使わないため
-      //      Nostalgist の patchCoreJs が JSEvents を返せない)
-      // no-op スタブで回避する。
+      // mkxp-z は PROXY_TO_PTHREAD ビルドのため通常の Nostalgist の想定と異なる点がある:
+      //
+      // 1. Module.setCanvasSize が存在しない
+      //    → canvas の width/height 属性を直接セットするスタブで代替
+      // 2. JSEvents が patchCoreJs で取得できない → スタブ
       emscriptenModule: {
-        setCanvasSize: () => {},
+        setCanvasSize: (w, h) => {
+          const c = document.getElementById('canvas');
+          if (c && w > 0 && h > 0) { c.width = w; c.height = h; }
+        },
         JSEvents: { eventHandlers: [], registerOrRemoveHandler: () => {} },
       },
       waitForInteraction: false,
