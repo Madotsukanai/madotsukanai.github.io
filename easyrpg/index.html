@@ -8539,9 +8539,14 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
         try { iniData = await storageManager.getGameFile(gameIniFile.gameId, gameIniFile.path); } catch {}
       }
       if (iniData) {
-        const iniText = new TextDecoder('shift-jis').decode(iniData).replace(/\r\n/g, '\n');
+        // Shift-JIS → UTF-8 デコード後、CRLF を LF に統一
+        const iniText = new TextDecoder('shift-jis').decode(iniData).replace(/\r\n?/g, '\n');
+        // "^RTP=value" / "^RTP1=value" ... を抽出。
+        // \b で RTP が RTP1 にマッチするのを防ぐ。
+        // = の前後の空白は [^\S\r\n]* (タブ/スペースのみ、改行なし) で処理することで
+        // 空値行の \s* が次行まで貪欲にマッチするのを防ぐ。
         for (const key of ['RTP', 'RTP1', 'RTP2', 'RTP3']) {
-          const m = iniText.match(new RegExp(`^${key}\\s*=\\s*(.+)$`, 'mi'));
+          const m = iniText.match(new RegExp(`^${key}\\b[^\\S\\r\\n]*=[^\\S\\r\\n]*([^\\r\\n]+)`, 'mi'));
           if (m && m[1].trim()) rtpNames.push(m[1].trim());
         }
         console.log('[mkxp] Game.ini RTP:', rtpNames);
