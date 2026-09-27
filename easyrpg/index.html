@@ -4907,35 +4907,43 @@ class StorageExplorer {
     if (isDir) {
       // ディレクトリのリネーム: 配下の全ファイルのパスを更新
       const oldPrefix = fullPath + '/';
-      const newFullPath = parentPath ? `${parentPath}/${newName}` : newName;
-      const newPrefix = newFullPath + '/';
+      const oldRelPrefix = this._resolveGroup(fullPath)?.relativePath ?? oldName;
 
       const affectedEntries = this.allEntries.filter(e => e.path.startsWith(oldPrefix));
       for (const entry of affectedEntries) {
-        const groupInfo = { groupType: entry.groupType, groupId: entry.groupId, relativePath: entry.path };
-        // Determine new relative path by replacing the old folder name
+        const resolved = this._resolveGroup(entry.path);
+        if (!resolved) continue;
+        // _addFileToGroup にはプレフィックスなし相対パス（例: a/b）を渡す
         const relativeSuffix = entry.path.substring(oldPrefix.length);
-        const newRelativePath = groupInfo.relativePath.substring(0, groupInfo.relativePath.lastIndexOf(oldName + '/' + relativeSuffix)) + newName + '/' + relativeSuffix;
-        
+        const newRelativePath = oldRelPrefix.replace(
+          new RegExp(escapeRegExp(oldName) + '$'),
+          newName
+        ) + '/' + relativeSuffix;
+
         const data = await this._fetchFileData(entry);
         if (data) {
-          await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, newRelativePath, data);
-          await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+          await this._addFileToGroup(resolved.groupType, resolved.groupId, newRelativePath, data);
+          // _removeFileFromGroup にはストレージ生パス（entry.path）を渡す
+          await this._removeFileFromGroup(resolved.groupType, resolved.groupId, entry.path);
         }
       }
     } else {
       // ファイルのリネーム
       const entry = this.allEntries.find(e => e.path === fullPath);
       if (entry) {
-        const groupInfo = { groupType: entry.groupType, groupId: entry.groupId, relativePath: entry.path };
-        const newRelativePath = groupInfo.relativePath.replace(
-          new RegExp(escapeRegExp(oldName) + '$'),
-          newName
-        );
-        const data = await this._fetchFileData(entry);
-        if (data) {
-          await this._addFileToGroup(groupInfo.groupType, groupInfo.groupId, newRelativePath, data);
-          await this._removeFileFromGroup(groupInfo.groupType, groupInfo.groupId, groupInfo.relativePath);
+        const resolved = this._resolveGroup(entry.path);
+        if (resolved) {
+          // _addFileToGroup にはプレフィックスなし相対パス（例: a/b）を渡す
+          const newRelativePath = resolved.relativePath.replace(
+            new RegExp(escapeRegExp(oldName) + '$'),
+            newName
+          );
+          const data = await this._fetchFileData(entry);
+          if (data) {
+            await this._addFileToGroup(resolved.groupType, resolved.groupId, newRelativePath, data);
+            // _removeFileFromGroup にはストレージ生パス（entry.path）を渡す
+            await this._removeFileFromGroup(resolved.groupType, resolved.groupId, entry.path);
+          }
         }
       }
     }
