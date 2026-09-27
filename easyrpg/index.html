@@ -1236,9 +1236,34 @@
                 </div>
                 <input type="file" id="rtp2003en-folder-input" webkitdirectory directory multiple style="display:none;" />
               </label>
+              <label>
+                RPGツクール XP RTP (日本語)
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="file" id="rtpxp-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
+                  <button type="button" class="rtp-folder-btn" data-rtp="rtpxp" style="white-space: nowrap;">📁</button>
+                </div>
+                <input type="file" id="rtpxp-folder-input" webkitdirectory directory multiple style="display:none;" />
+              </label>
+              <label>
+                RPGツクール VX RTP (日本語)
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="file" id="rtpvx-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
+                  <button type="button" class="rtp-folder-btn" data-rtp="rtpvx" style="white-space: nowrap;">📁</button>
+                </div>
+                <input type="file" id="rtpvx-folder-input" webkitdirectory directory multiple style="display:none;" />
+              </label>
+              <label>
+                RPGツクール VX Ace RTP (日本語)
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="file" id="rtpvxace-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
+                  <button type="button" class="rtp-folder-btn" data-rtp="rtpvxace" style="white-space: nowrap;">📁</button>
+                </div>
+                <input type="file" id="rtpvxace-folder-input" webkitdirectory directory multiple style="display:none;" />
+              </label>
             </div>
             <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
               公式配布の ZIP・インストーラー EXE をそのままアップロードできます（InstallShield / NSIS 形式に対応）。<br>
+              XP/VX/VX Ace は Inno Setup 形式のインストーラーを ZIP にまとめてアップロードするか、展開済みフォルダを選択してください。<br>
               展開済みのフォルダや ZIP を使う場合も同様に選択できます。
             </p>
           </div>
@@ -3354,10 +3379,13 @@ async function loadRTPStatusList() {
   
   // 既知のRTP定義リスト
   const knownRTPs = [
-    { id: 'rtp2000', name: 'RPGツクール2000 RTP (日本語)', type: '2000' },
-    { id: 'rtp2003', name: 'RPGツクール2003 RTP (日本語)', type: '2003' },
-    { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)', type: '2000' },
-    { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)', type: '2003' }
+    { id: 'rtp2000',   name: 'RPGツクール2000 RTP (日本語)',   type: '2000' },
+    { id: 'rtp2003',   name: 'RPGツクール2003 RTP (日本語)',   type: '2003' },
+    { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)',     type: '2000' },
+    { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)',     type: '2003' },
+    { id: 'rtpxp',     name: 'RPGツクール XP RTP (日本語)',    type: 'XP' },
+    { id: 'rtpvx',     name: 'RPGツクール VX RTP (日本語)',    type: 'VX' },
+    { id: 'rtpvxace',  name: 'RPGツクール VX Ace RTP (日本語)', type: 'VXAce' },
   ];
   
   // インストール済みRTPを取得
@@ -8500,6 +8528,67 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
     console.log(`[mkxp] Packed ${packedCount} files into .mkxpz`);
     const mkxpzBlob = await mkxpZip.generateAsync({ type: 'blob', compression: 'STORE' });
 
+    // ゲームの Game.ini から RTP 名を読み取る
+    // RTP= または RTP1=/RTP2=/RTP3= に対応
+    statusDiv.textContent = 'RTP を確認中...';
+    const gameIniFile = files.find(f => /[/\\]?game\.ini$/i.test(f.path));
+    const rtpNames = [];
+    if (gameIniFile) {
+      let iniData = gameIniFile.data;
+      if (!iniData && gameIniFile.lazy && gameIniFile.gameId) {
+        try { iniData = await storageManager.getGameFile(gameIniFile.gameId, gameIniFile.path); } catch {}
+      }
+      if (iniData) {
+        const iniText = new TextDecoder('shift-jis').decode(iniData).replace(/\r\n/g, '\n');
+        for (const key of ['RTP', 'RTP1', 'RTP2', 'RTP3']) {
+          const m = iniText.match(new RegExp(`^${key}\\s*=\\s*(.+)$`, 'mi'));
+          if (m && m[1].trim()) rtpNames.push(m[1].trim());
+        }
+        console.log('[mkxp] Game.ini RTP:', rtpNames);
+      }
+    }
+
+    // XP/VX/VX Ace の RTP 名 → IndexedDB ID のマッピング
+    // mkxp-z が Game.ini の RTP= 値でディレクトリをマッチさせるため、
+    // 保存パスも同じ名前に合わせる必要がある。
+    const RTP_NAME_TO_ID = {
+      'rgss-rtp standard':  'rtpxp',    // XP
+      'rgss2-rtp standard': 'rtpvx',    // VX
+      'rpgvxace':           'rtpvxace', // VX Ace
+    };
+
+    // 必要な RTP を IndexedDB から取得して bios リストを構築
+    // bios のパス形式: "mkxp-z/RTP/<RTP名>/<ファイルパス>"
+    //   → Nostalgist が system ディレクトリ(/home/web_user/.../system/)に書き込む
+    //   → mkxp-z は system_path/RTP/<RTP名>/ をマウントする
+    const biosFiles = [];
+    for (const rtpName of rtpNames) {
+      const rtpId = RTP_NAME_TO_ID[rtpName.toLowerCase()];
+      if (!rtpId) {
+        console.warn(`[mkxp] Unknown RTP name: "${rtpName}" — skipping`);
+        continue;
+      }
+      let rtpData;
+      try { rtpData = await storageManager.getRTP(rtpId); } catch {}
+      if (!rtpData || !rtpData.files || rtpData.files.length === 0) {
+        console.warn(`[mkxp] RTP "${rtpName}" (${rtpId}) not installed — skipping`);
+        continue;
+      }
+      statusDiv.textContent = `RTP "${rtpName}" を読み込み中... (${rtpData.files.length} ファイル)`;
+      for (const f of rtpData.files) {
+        // f.path は保存時に "RTP/xp/Audio/BGM/..." のような形
+        // bios のパスは "mkxp-z/RTP/<RTP名>/<ファイル名>" にする
+        // ファイル名部分だけ取り出す（先頭の "RTP/<id>/" を除去）
+        const filePart = f.path.replace(/^RTP\/[^/]+\//i, '');
+        if (!filePart) continue;
+        biosFiles.push({
+          fileName: `mkxp-z/RTP/${rtpName}/${filePart}`,
+          fileContent: f.data instanceof Uint8Array ? new Blob([f.data]) : f.data,
+        });
+      }
+      console.log(`[mkxp] Loaded RTP "${rtpName}": ${rtpData.files.length} files`);
+    }
+
     statusDiv.textContent = 'mkxp-z を起動中...';
 
     // Nostalgist.js は element に HTMLCanvasElement が必要。
@@ -8517,12 +8606,20 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
     // Nostalgist.js は JS テキストを Blob URL として動的 import() するが、
     // そのコンテキストでは import.meta.url = "blob:..." になるため、
     // Worker 生成時の new URL("mkxp-z_libretro.js", import.meta.url) が失敗する。
-    // 対策: JS テキストを fetch し、import.meta.url を実際の絶対 URL に置換した
-    // Blob を core.js として渡す。
+    //
+    // 対策: JS テキストを fetch し、Worker 生成に使う
+    //   new URL("mkxp-z_libretro.js", import.meta.url)
+    // の部分だけを絶対 URL に展開した Blob を core.js として渡す。
+    // ※ "import.meta.url" という文字列そのものは残す必要がある
+    //   （Nostalgist の isEsmScript 判定が js.includes("import.meta.url") のため）
     const coreJsUrl = new URL('mkxp-z/mkxp-z_libretro.js', location.href).href;
     const coreJsText = await fetch(coreJsUrl).then(r => r.text());
-    // "import.meta.url" → ページ起点の絶対 URL 文字列リテラルに置換
-    const patchedJs = coreJsText.replace(/import\.meta\.url/g, JSON.stringify(coreJsUrl));
+    // Worker 生成箇所だけを絶対 URL で書き換える。
+    // 例: new URL("mkxp-z_libretro.js",import.meta.url) → new URL("https://.../mkxp-z_libretro.js")
+    const patchedJs = coreJsText.replace(
+      /new URL\("mkxp-z_libretro\.js"\s*,\s*import\.meta\.url\)/g,
+      `new URL(${JSON.stringify(coreJsUrl)})`
+    );
     const coreJsBlob = new Blob([patchedJs], { type: 'application/javascript' });
 
     const nostalgist = await window.Nostalgist.launch({
@@ -8535,10 +8632,22 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
         fileName: (gameName || 'game') + '.mkxpz',
         fileContent: mkxpzBlob,
       },
+      // RTP ファイルを system ディレクトリに配置（mkxp-z が /System/RTP/<名前>/ からマウント）
+      bios: biosFiles,
       element: mkxpCanvas,
       retroarchConfig: {
         video_aspect_ratio: '1.333333',
         video_scale_integer: false,
+      },
+      // mkxp-z は PROXY_TO_PTHREAD ビルドのため以下の関数/オブジェクトが存在しない:
+      //   - Module.setCanvasSize: Nostalgist の postRun → resize() で呼ばれる
+      //   - JSEvents: Nostalgist の postRun → updateKeyboardEventHandlers() で参照される
+      //     (mkxp-z は readyPromiseResolve/return moduleRtn パターンを使わないため
+      //      Nostalgist の patchCoreJs が JSEvents を返せない)
+      // no-op スタブで回避する。
+      emscriptenModule: {
+        setCanvasSize: () => {},
+        JSEvents: { eventHandlers: [], registerOrRemoveHandler: () => {} },
       },
       waitForInteraction: false,
     });
@@ -9218,6 +9327,9 @@ window.addEventListener('load', () => {
     { id: 'rtp2003',   name: 'RPGツクール2003 RTP (日本語)' },
     { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)' },
     { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)' },
+    { id: 'rtpxp',     name: 'RPGツクール XP RTP (日本語)' },
+    { id: 'rtpvx',     name: 'RPGツクール VX RTP (日本語)' },
+    { id: 'rtpvxace',  name: 'RPGツクール VX Ace RTP (日本語)' },
   ];
   document.querySelectorAll('.rtp-folder-btn').forEach(btn => {
     const rtpId = btn.dataset.rtp;
@@ -9235,11 +9347,17 @@ window.addEventListener('load', () => {
   
   const rtp2000enFileInput = document.getElementById('rtp2000en-file-input');
   const rtp2003enFileInput = document.getElementById('rtp2003en-file-input');
+  const rtpxpFileInput    = document.getElementById('rtpxp-file-input');
+  const rtpvxFileInput    = document.getElementById('rtpvx-file-input');
+  const rtpvxaceFileInput = document.getElementById('rtpvxace-file-input');
   
-  if (rtp2000FileInput) wireRTPFileInput(rtp2000FileInput, { id: 'rtp2000', name: 'RPGツクール2000 RTP (日本語)' });
-  if (rtp2003FileInput) wireRTPFileInput(rtp2003FileInput, { id: 'rtp2003', name: 'RPGツクール2003 RTP (日本語)' });
+  if (rtp2000FileInput)   wireRTPFileInput(rtp2000FileInput,   { id: 'rtp2000',   name: 'RPGツクール2000 RTP (日本語)' });
+  if (rtp2003FileInput)   wireRTPFileInput(rtp2003FileInput,   { id: 'rtp2003',   name: 'RPGツクール2003 RTP (日本語)' });
   if (rtp2000enFileInput) wireRTPFileInput(rtp2000enFileInput, { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)' });
   if (rtp2003enFileInput) wireRTPFileInput(rtp2003enFileInput, { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)' });
+  if (rtpxpFileInput)    wireRTPFileInput(rtpxpFileInput,    { id: 'rtpxp',    name: 'RPGツクール XP RTP (日本語)' });
+  if (rtpvxFileInput)    wireRTPFileInput(rtpvxFileInput,    { id: 'rtpvx',    name: 'RPGツクール VX RTP (日本語)' });
+  if (rtpvxaceFileInput) wireRTPFileInput(rtpvxaceFileInput, { id: 'rtpvxace', name: 'RPGツクール VX Ace RTP (日本語)' });
 
   // サウンドフォント/フォントの追加（ファイル選択→保存）
   function wireAssetFileInput(inputId, type) {
