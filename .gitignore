@@ -16,3 +16,6 @@ easyrpg/wasi-sdk-30/
 
 # mkxp-z ビルドソース
 easyrpg/mkxp-z-libretro-emscripten-src/
+easyrpg/unshield-src/
+easyrpg/xz-src/
+easyrpg/p7zip-wasm-src/

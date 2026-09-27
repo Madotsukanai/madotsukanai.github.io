@@ -10,6 +10,10 @@
        SharedArrayBuffer が必須です。GitHub Pages など COOP/COEP ヘッダを
        設定できない環境では、この Service Worker が代替します。 -->
   <script src="coi-serviceworker.min.js"></script>
+  <!-- InstallShield CAB 展開用 WASM (libunshield) -->
+  <script src="unshield/unshield.js"></script>
+  <!-- LZMA デコーダ WASM (NSIS インストーラー対応) -->
+  <script src="lzma/lzma.js"></script>
 
   <script>
     // スクリーンショット撮影（canvas.toDataURL）時に画面が真っ白/真っ黒になるのを防ぐため、
@@ -1186,7 +1190,7 @@
               <label>
                 RPGツクール2000 RTP (日本語)
                 <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2000-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <input type="file" id="rtp2000-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
                   <button type="button" class="rtp-folder-btn" data-rtp="rtp2000" style="white-space: nowrap;">📁</button>
                 </div>
                 <input type="file" id="rtp2000-folder-input" webkitdirectory directory multiple style="display:none;" />
@@ -1194,7 +1198,7 @@
               <label>
                 RPGツクール2003 RTP (日本語)
                 <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2003-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <input type="file" id="rtp2003-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
                   <button type="button" class="rtp-folder-btn" data-rtp="rtp2003" style="white-space: nowrap;">📁</button>
                 </div>
                 <input type="file" id="rtp2003-folder-input" webkitdirectory directory multiple style="display:none;" />
@@ -1202,7 +1206,7 @@
               <label>
                 RPGツクール2000 RTP (英語)
                 <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2000en-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <input type="file" id="rtp2000en-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
                   <button type="button" class="rtp-folder-btn" data-rtp="rtp2000en" style="white-space: nowrap;">📁</button>
                 </div>
                 <input type="file" id="rtp2000en-folder-input" webkitdirectory directory multiple style="display:none;" />
@@ -1210,15 +1214,15 @@
               <label>
                 RPGツクール2003 RTP (英語)
                 <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2003en-file-input" accept=".zip" style="flex: 1; min-width: 0;" />
+                  <input type="file" id="rtp2003en-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
                   <button type="button" class="rtp-folder-btn" data-rtp="rtp2003en" style="white-space: nowrap;">📁</button>
                 </div>
                 <input type="file" id="rtp2003en-folder-input" webkitdirectory directory multiple style="display:none;" />
               </label>
             </div>
             <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
-              ※ RTPインストーラー(.exe)が入ったZIPはそのまま使えません。事前に unshield などで展開し、
-              展開後のフォルダをZIPにまとめるかフォルダのまま選択してください。
+              公式配布の ZIP・インストーラー EXE をそのままアップロードできます（InstallShield / NSIS 形式に対応）。<br>
+              展開済みのフォルダや ZIP を使う場合も同様に選択できます。
             </p>
           </div>
 
@@ -6731,8 +6735,14 @@ async function processRTPZipFile(file, rtpInfo) {
   
   try {
     const arrayBuffer = await file.arrayBuffer();
-    
-    await processRTPFile(file, arrayBuffer, rtpInfo);
+    const fileName = file.name.toLowerCase();
+
+    if (fileName.endsWith('.exe')) {
+      // EXE ファイルを直接インストーラーとして処理
+      await processRTPInstallerExe(new Uint8Array(arrayBuffer), rtpInfo);
+    } else {
+      await processRTPFile(file, arrayBuffer, rtpInfo);
+    }
     
     // RTPステータスリストを更新
     await loadRTPStatusList();
@@ -6741,6 +6751,38 @@ async function processRTPZipFile(file, rtpInfo) {
     console.error('Error processing RTP ZIP:', error);
     statusDiv.textContent = 'エラー: ' + error.message;
     alert('RTPファイルの処理中にエラーが発生しました: ' + error.message);
+  }
+}
+
+// EXE ファイルを直接 RTP インストーラーとして処理する
+async function processRTPInstallerExe(exeData, rtpInfo) {
+  const statusDiv = document.getElementById('status');
+  const rtpDir = rtpInfo.dir || rtpInfo.id.replace('rtp', '');
+  statusDiv.textContent = `${rtpInfo.name}: インストーラーを展開中...`;
+  try {
+    const extracted = await extractInstallerExe(exeData, rtpInfo,
+      msg => { statusDiv.textContent = `${rtpInfo.name}: ${msg}`; });
+
+    const rtpFiles = extracted.map(f => ({
+      path: `RTP/${rtpDir}/${f.path}`,
+      data: f.data
+    }));
+
+    if (rtpFiles.length === 0) throw new Error('RTP ファイルが見つかりませんでした。');
+
+    statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
+    await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
+
+    alert(
+      `${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
+      `ファイル数: ${rtpFiles.length}\n` +
+      `RTPを必要とするゲームで自動的に使用されます。`
+    );
+    statusDiv.textContent = '';
+  } catch (error) {
+    console.error('Error processing RTP installer:', error);
+    statusDiv.textContent = 'エラー: ' + error.message;
+    throw error;
   }
 }
 
@@ -7425,6 +7467,530 @@ async function processRarFile(file) {
   statusDiv.textContent = '';
 }
 
+
+// ============================================================
+// MS Cabinet (MSCF) 純 JS パーサー
+// InstallShield インストーラー EXE に埋め込まれた outer CAB を展開し、
+// 内部の data1.cab / data2.cab / data1.hdr を取り出す用途に特化。
+// MSZip (= raw deflate) 圧縮のみ対応。
+// ============================================================
+
+/**
+ * MS Cabinet の全ファイルを展開して Map<name, Uint8Array> で返す。
+ * @param {Uint8Array} cabData  MSCF ヘッダから始まる Cabinet バイト列
+ */
+async function parseMsCabinet(cabData) {
+  const v = new DataView(cabData.buffer, cabData.byteOffset, cabData.byteLength);
+  const sig = String.fromCharCode(cabData[0], cabData[1], cabData[2], cabData[3]);
+  if (sig !== 'MSCF') throw new Error('Not a MS Cabinet file');
+
+  // CFHEADER
+  const cabSize       = v.getUint32(8, true);
+  const firstFileOff  = v.getUint32(16, true);
+  const numFolders    = v.getUint16(26, true);
+  const numFiles      = v.getUint16(28, true);
+  const flags         = v.getUint16(30, true);
+  const resHdrSize    = (flags & 0x0004) ? v.getUint16(40, true) : 0;
+  const resFolderSize = (flags & 0x0004) ? cabData[42] : 0;
+  const resDataSize   = (flags & 0x0004) ? cabData[43] : 0;
+
+  let headerSize = 36;
+  if (flags & 0x0004) headerSize += 4; // reserve fields present
+
+  // CFFOLDER 配列
+  const folders = [];
+  let folderOff = headerSize;
+  for (let fi = 0; fi < numFolders; fi++) {
+    const dataOff     = v.getUint32(folderOff, true);
+    const numDataBlks = v.getUint16(folderOff + 4, true);
+    const compress    = v.getUint16(folderOff + 6, true);
+    folders.push({ dataOff, numDataBlks, compress });
+    folderOff += 8 + resFolderSize;
+  }
+
+  // CFFILE 配列
+  const files = [];
+  let fileOff = firstFileOff;
+  for (let fi = 0; fi < numFiles; fi++) {
+    const uncompSize = v.getUint32(fileOff, true);
+    const uncompOff  = v.getUint32(fileOff + 4, true);
+    const folderIdx  = v.getUint16(fileOff + 8, true);
+    let nameOff = fileOff + 16;
+    // ファイル名 (null-terminated ASCII / CP437)
+    let nameEnd = nameOff;
+    while (nameEnd < cabData.length && cabData[nameEnd] !== 0) nameEnd++;
+    const rawName = cabData.slice(nameOff, nameEnd);
+    const name = new TextDecoder('ascii').decode(rawName).replace(/\\/g, '/').replace(/^\//, '');
+    files.push({ name, uncompSize, uncompOff, folderIdx });
+    fileOff = nameEnd + 1;
+  }
+
+  // フォルダごとに全 CFDATA ブロックを結合・展開してストリームを得る
+  const folderStreams = [];
+  for (const folder of folders) {
+    const ismszip = (folder.compress & 0x00ff) === 0x0001;
+    let allUncomp = new Uint8Array(0);
+    let offset = folder.dataOff;
+
+    for (let bi = 0; bi < folder.numDataBlks; bi++) {
+      const checksum  = v.getUint32(offset, true);
+      const compSize  = v.getUint16(offset + 4, true);
+      const uncompSz  = v.getUint16(offset + 6, true);
+      const blkData   = cabData.slice(offset + 8 + resDataSize, offset + 8 + resDataSize + compSize);
+      offset += 8 + resDataSize + compSize;
+
+      let uncompBlock;
+      if (ismszip && blkData[0] === 0x43 && blkData[1] === 0x4B) {
+        // MSZip: skip 2-byte 'CK' signature then raw-deflate
+        const deflateData = blkData.slice(2);
+        const ds = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        const reader = ds.readable.getReader();
+        writer.write(deflateData);
+        writer.close();
+        const chunks = [];
+        let done = false;
+        while (!done) {
+          const { value, done: d } = await reader.read();
+          if (value) chunks.push(value);
+          done = d;
+        }
+        const total = chunks.reduce((s, c) => s + c.length, 0);
+        uncompBlock = new Uint8Array(total);
+        let pos2 = 0;
+        for (const c of chunks) { uncompBlock.set(c, pos2); pos2 += c.length; }
+      } else {
+        // No compression
+        uncompBlock = blkData.slice(0);
+      }
+
+      // append
+      const merged = new Uint8Array(allUncomp.length + uncompBlock.length);
+      merged.set(allUncomp);
+      merged.set(uncompBlock, allUncomp.length);
+      allUncomp = merged;
+    }
+    folderStreams.push(allUncomp);
+  }
+
+  // ファイルごとに対応フォルダストリームからスライス
+  const result = new Map();
+  for (const f of files) {
+    const stream = folderStreams[f.folderIdx];
+    if (!stream) continue;
+    result.set(f.name, stream.slice(f.uncompOff, f.uncompOff + f.uncompSize));
+  }
+  return result;
+}
+
+/**
+ * InstallShield インストーラー EXE から MS Cabinet を探して返す。
+ * EXE 内を線形スキャンし、最大かつ正しい cabinet_size を持つ MSCF を選ぶ。
+ * @param {Uint8Array} exeData
+ * @returns {Uint8Array|null}
+ */
+function extractMsCabinetFromExe(exeData) {
+  const v = new DataView(exeData.buffer, exeData.byteOffset, exeData.byteLength);
+  let best = null;
+  let bestSize = 0;
+  for (let i = 0; i < exeData.length - 8; i++) {
+    if (exeData[i] === 0x4D && exeData[i+1] === 0x53 &&
+        exeData[i+2] === 0x43 && exeData[i+3] === 0x46) { // MSCF
+      const cabSize = v.getUint32(i + 8, true);
+      if (cabSize > 1000 && i + cabSize <= exeData.length && cabSize > bestSize) {
+        bestSize = cabSize;
+        best = { offset: i, size: cabSize };
+      }
+    }
+  }
+  if (!best) return null;
+  return exeData.slice(best.offset, best.offset + best.size);
+}
+
+/**
+ * UnshieldModule (WASM) の遅延初期化。
+ * 初回呼び出し時に UnshieldModule() を解決してキャッシュする。
+ */
+let _unshieldModulePromise = null;
+function getUnshieldModule() {
+  if (!_unshieldModulePromise) {
+    if (typeof UnshieldModule === 'undefined') {
+      return Promise.reject(new Error('UnshieldModule が読み込まれていません'));
+    }
+    _unshieldModulePromise = UnshieldModule({
+      locateFile: (name) => 'unshield/' + name,
+    });
+  }
+  return _unshieldModulePromise;
+}
+
+/**
+ * InstallShield CAB ファイル群 (data1.cab, data2.cab, data1.hdr) を WASM で展開し、
+ * RTP ファイル一覧を返す。
+ * @param {Map<string,Uint8Array>} cabFiles  filename -> data の Map
+ * @param {function(string):void} onProgress  進捗コールバック
+ * @returns {Promise<Array<{path:string,data:Uint8Array}>>}
+ */
+async function extractInstallShieldCab(cabFiles, onProgress) {
+  const M = await getUnshieldModule();
+  const FS = M.FS;
+
+  // MEMFS に必要ファイルを書き込む
+  for (const [name, data] of cabFiles) {
+    const basename = name.split('/').pop();
+    try { FS.unlink('/' + basename); } catch(e) {}
+    FS.writeFile('/' + basename, data);
+  }
+
+  // C 文字列をアロケートするヘルパー（allocateUTF8 は非推奨）
+  function mallocStr(s) {
+    const len = M.lengthBytesUTF8(s) + 1;
+    const ptr = M._malloc(len);
+    M.stringToUTF8(s, ptr, len);
+    return ptr;
+  }
+
+  const cabPathPtr = mallocStr('/data1.cab');
+  const handle = M._wasm_unshield_open(cabPathPtr);
+  M._free(cabPathPtr);
+  if (handle < 0) throw new Error('InstallShield CAB を開けませんでした');
+
+  const count = M._wasm_unshield_file_count(handle);
+  onProgress && onProgress(`InstallShield CAB: ${count} ファイルを展開中...`);
+
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    const namePtr = M._wasm_unshield_file_name(handle, i);
+    const rawName = M.UTF8ToString(namePtr);
+    // ファイル名が Shift-JIS で格納されている場合は latin-1 経由でデコード
+    let decodedName = rawName;
+    try {
+      const bytes = new Uint8Array(rawName.length);
+      for (let k = 0; k < rawName.length; k++) bytes[k] = rawName.charCodeAt(k);
+      decodedName = new TextDecoder('shift-jis').decode(bytes);
+    } catch(e) {}
+
+    const outPath = `/out_${i}`;
+    const outPathPtr = mallocStr(outPath);
+    const ok = M._wasm_unshield_extract_file(handle, i, outPathPtr);
+    M._free(outPathPtr);
+    if (!ok) { console.warn(`unshield: failed to extract file ${i}: ${rawName}`); continue; }
+
+    const data = FS.readFile(outPath);
+    try { FS.unlink(outPath); } catch(e) {}
+
+    // パスを正規化（ディレクトリ区切り・フォルダプレフィックス除去）
+    const normalized = decodedName.replace(/\\/g, '/').replace(/^[^/]*\/RTP\//, '');
+    result.push({ path: normalized, data });
+  }
+
+  M._wasm_unshield_close(handle);
+  return result;
+}
+
+
+
+/**
+ * インストーラー EXE（InstallShield または NSIS）から RTP ファイルを展開する。
+ * 自動でインストーラー種別を判別する。
+ * @param {Uint8Array} exeData
+ * @param {object} rtpInfo  { id, name }
+ * @param {function(string):void} onProgress
+ * @returns {Promise<Array<{path:string,data:Uint8Array}>>}
+ */
+async function extractInstallerExe(exeData, rtpInfo, onProgress) {
+  // ── チェックサム検証 ──
+  // 公式インストーラー EXE のみ受け付ける（SHA-256 許可リスト）
+  const ALLOWED_HASHES = new Set([
+    '70a24f2cf5563b2a87e0c15f1529877cba7023abd13e6fb938a47d33f5c66d74', // RPG2000RTP.exe (JP)
+    'ef341b694a00d5df0e0a70f372ea0684358cb0742c36ba40e7c99bf9e3f6a149', // RPG2003RTP.exe (JP)
+    'ec82b92da65ca6fdb2d3df25dfbcd7f2bb716e4fe63a079e8e5e396e91fa5e29', // rpg2000_rtp_installer.exe (EN)
+    'dc18dc22bb4f2e9cca223a2df3f1aef1dc08f5ab8616e028200a1f381a6d1354', // rpg2003_rtp_installer.exe (EN)
+  ]);
+
+  const hashBuf = await crypto.subtle.digest('SHA-256', exeData);
+  const hashHex = Array.from(new Uint8Array(hashBuf))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+
+  if (!ALLOWED_HASHES.has(hashHex)) {
+    throw new Error(
+      `このファイルは公式 RTP インストーラーとして認識できませんでした。\n` +
+      `SHA-256: ${hashHex}\n\n` +
+      `対応しているのは以下の公式インストーラーのみです：\n` +
+      `・RPGツクール2000 RTP (日本語版公式 ZIP 内の RPG2000RTP.exe)\n` +
+      `・RPGツクール2003 RTP (日本語版公式 ZIP 内の RPG2003RTP.exe)\n` +
+      `・RPGツクール2000 RTP (英語版公式 rpg2000_rtp_installer.exe)\n` +
+      `・RPGツクール2003 RTP (英語版公式 rpg2003_rtp_installer.zip 内の exe)`
+    );
+  }
+  console.log(`Installer checksum verified: ${hashHex}`);
+
+  // ── インストーラー種別を判別 ──
+  const v = new DataView(exeData.buffer, exeData.byteOffset, exeData.byteLength);
+
+  // NSIS: "NullsoftInst" マジックを検索
+  let isNsis = false;
+  const DEADBEEF = 0xDEADBEEF;
+  for (let i = 0; i < Math.min(exeData.length - 28, 200000); i += 512) {
+    if (v.getUint32(i + 4, true) === DEADBEEF) {
+      const magic = new TextDecoder('ascii').decode(exeData.slice(i + 8, i + 20));
+      if (magic === 'NullsoftInst') { isNsis = true; break; }
+    }
+  }
+
+  // InstallShield: EXE 内に MSCF を持つ
+  const outerCab = isNsis ? null : extractMsCabinetFromExe(exeData);
+  const isInstallShield = !!outerCab;
+
+  if (isNsis) {
+    console.log('NSIS installer detected');
+    onProgress && onProgress('NSIS インストーラーを展開中...');
+    const extracted = await extractNsisInstaller(exeData, onProgress);
+    // icon.ico や uninst.exe などを除いて RTP ファイルのみ返す
+    const rtpFiles = extracted.filter(f => {
+      const ext = f.path.split('.').pop().toLowerCase();
+      return ['png','wav','mid','midi','bmp','jpg','jpeg','gif','ogg','mp3'].includes(ext);
+    });
+    console.log(`NSIS extraction complete: ${rtpFiles.length} RTP files`);
+    return rtpFiles;
+
+  } else if (isInstallShield) {
+    console.log('InstallShield installer detected');
+    onProgress && onProgress('Outer Cabinet を解析中...');
+    const outerFiles = await parseMsCabinet(outerCab);
+    console.log('Outer CAB contents:', [...outerFiles.keys()]);
+
+    const cabMap = new Map();
+    for (const [name, data] of outerFiles) {
+      const bn = name.split('/').pop().toLowerCase();
+      if (bn === 'data1.cab' || bn === 'data2.cab' || bn === 'data1.hdr') {
+        cabMap.set(bn, data);
+      }
+    }
+    if (!cabMap.has('data1.cab')) throw new Error('data1.cab が見つかりませんでした。');
+
+    onProgress && onProgress('InstallShield CAB を展開中...');
+    const extracted = await extractInstallShieldCab(cabMap, onProgress);
+    const rtpFiles = extracted.filter(f => f.path && !f.path.startsWith('_'));
+    console.log(`InstallShield extraction complete: ${rtpFiles.length} RTP files`);
+    return rtpFiles;
+
+  } else {
+    throw new Error('対応していないインストーラー形式です（InstallShield または NSIS のみ対応）。');
+  }
+}
+
+
+
+// ============================================================
+// NSIS インストーラー EXE パーサー (NSIS2/NSIS3 + LZMA)
+// RPGツクール2000/2003 海外版 RTP インストーラー対応
+// ============================================================
+
+/**
+ * LzmaModule (WASM) の遅延初期化。
+ */
+let _lzmaModulePromise = null;
+function getLzmaModule() {
+  if (!_lzmaModulePromise) {
+    if (typeof LzmaModule === 'undefined') {
+      return Promise.reject(new Error('LzmaModule が読み込まれていません'));
+    }
+    _lzmaModulePromise = LzmaModule({
+      locateFile: (name) => 'lzma/' + name,
+    });
+  }
+  return _lzmaModulePromise;
+}
+
+/**
+ * LZMA alone フォーマットのデータを WASM で展開する。
+ * @param {Uint8Array} src  LZMA alone ストリーム（props5 + [size8] + data）
+ * @param {number} knownUncompSize  既知の展開後サイズ（不明なら 0）
+ * @returns {Promise<Uint8Array>}
+ */
+async function lzmaDecodeWasm(src, knownUncompSize = 0) {
+  const M = await getLzmaModule();
+  const ptr = M._malloc(src.length);
+  M.HEAPU8.set(src, ptr);
+  const lo = knownUncompSize >>> 0;
+  const hi = (knownUncompSize > 0xFFFFFFFF) ? Math.floor(knownUncompSize / 0x100000000) : 0;
+  const decompSize = M._wasm_lzma_decode(ptr, src.length, lo, hi);
+  M._free(ptr);
+  if (decompSize < 0) throw new Error('LZMA decode failed');
+  const result = M.FS.readFile('/lzma_out');
+  try { M.FS.unlink('/lzma_out'); } catch(e) {}
+  return result;
+}
+
+/**
+ * NSIS2/3 インストーラー EXE から RTP ファイルを展開する。
+ *
+ * NSIS のアーカイブ構造（non-solid, LZMA モード）:
+ *   [stub (PE exe)] [firstheader(28B)] [4B size field] [LZMA header] [file blocks...]
+ *
+ * @param {Uint8Array} exeData
+ * @param {function(string):void} onProgress
+ * @returns {Promise<Array<{path:string,data:Uint8Array}>>}
+ */
+async function extractNsisInstaller(exeData, onProgress) {
+  const v = new DataView(exeData.buffer, exeData.byteOffset, exeData.byteLength);
+
+  // ── firstheader を探す ──
+  // signature: flags(4) + 0xDEADBEEF(4) + "NullsoftInst"(12) + hdrlen(4) + following(4) = 28B
+  const DEADBEEF = 0xDEADBEEF;
+  let stubSize = -1;
+  for (let i = 0; i < exeData.length - 28; i += 512) {
+    if (v.getUint32(i + 4, true) === DEADBEEF) {
+      const magic = new TextDecoder('ascii').decode(exeData.slice(i + 8, i + 20));
+      if (magic === 'NullsoftInst') { stubSize = i; break; }
+    }
+  }
+  // フォールバック: 細かくスキャン
+  if (stubSize < 0) {
+    for (let i = 0; i < exeData.length - 28; i++) {
+      if (v.getUint32(i + 4, true) === DEADBEEF) {
+        const magic = new TextDecoder('ascii').decode(exeData.slice(i + 8, i + 20));
+        if (magic === 'NullsoftInst') { stubSize = i; break; }
+      }
+    }
+  }
+  if (stubSize < 0) throw new Error('NSIS firstheader が見つかりませんでした');
+
+  const firstHdrOff = stubSize;
+  const lengthOfHeader   = v.getUint32(firstHdrOff + 20, true);
+  const lengthOfFollowing = v.getUint32(firstHdrOff + 24, true);
+
+  // ── ヘッダ LZMA ストリームを展開 ──
+  // comp_start = firstHdrOff + 28 (firstheader の直後)
+  const compStart = firstHdrOff + 28;
+  // 最初の 4 バイトは「compressed_header_size | solid_flag」フィールド
+  const lzmaStart = compStart + 4;
+  const lzmaProps = exeData.slice(lzmaStart, lzmaStart + 5);
+
+  onProgress && onProgress('NSIS ヘッダを展開中...');
+
+  // ヘッダ LZMA の終端をバイナリサーチで特定（最大 20000 バイトまで試す）
+  let headerCompSize = -1;
+  for (let trySize = 5; trySize <= Math.min(20000, lengthOfFollowing); trySize++) {
+    const candidate = new Uint8Array(5 + 8 + trySize - 5);
+    candidate.set(lzmaProps);
+    const sizeBytes = new Uint8Array(8);
+    new DataView(sizeBytes.buffer).setUint32(0, lengthOfHeader, true);
+    candidate.set(sizeBytes, 5);
+    candidate.set(exeData.slice(lzmaStart + 5, lzmaStart + trySize), 13);
+    try {
+      const result = await lzmaDecodeWasm(candidate, lengthOfHeader);
+      if (result.length === lengthOfHeader) { headerCompSize = trySize; break; }
+    } catch(e) {}
+  }
+  if (headerCompSize < 0) throw new Error('NSIS ヘッダの LZMA 圧縮サイズを特定できませんでした');
+
+  const headerLzma = new Uint8Array(5 + 8 + (headerCompSize - 5));
+  headerLzma.set(lzmaProps);
+  new DataView(headerLzma.buffer).setUint32(5, lengthOfHeader, true);
+  headerLzma.set(exeData.slice(lzmaStart + 5, lzmaStart + headerCompSize), 13);
+  const header = await lzmaDecodeWasm(headerLzma, lengthOfHeader);
+
+  const filesDataStart = lzmaStart + headerCompSize;
+
+  // ── ブロックヘッダをパース ──
+  const dv = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  // bhoSize = 8 (32bit NSIS)
+  // index: 0=pages, 1=sections, 2=entries, 3=strings, 4=langtables...
+  const entriesOff = dv.getUint32(4 + 8 * 2,     true);
+  const entriesNum = dv.getUint32(4 + 8 * 2 + 4, true);
+  const stringsOff = dv.getUint32(4 + 8 * 3,     true);
+
+  function getString(idx) {
+    if (!idx) return '';
+    let start = stringsOff + idx;
+    let end = start;
+    while (end < header.length && header[end] !== 0) end++;
+    return new TextDecoder('latin1').decode(header.slice(start, end));
+  }
+
+  // EW_CREATEDIR=11, EW_EXTRACTFILE=20 (NSIS3 layout)
+  const EW_CREATEDIR  = 11;
+  const EW_EXTRACTFILE = 20;
+
+  let currentOutpath = '';
+  const fileList = []; // { relPath, dataIdx }
+
+  // NSIS 変数エスケープを除去するヘルパー
+  // 変数参照は \xFD + 1byte + ... の形式
+  function cleanNsisPath(s) {
+    // \xFD\x??\x80 = 変数参照（$INSTDIR 等）→ 除去
+    return s.replace(/\xfd[\x00-\xff]\x80/g, '').replace(/\\/g, '/').replace(/^\/+/, '');
+  }
+
+  // $INSTDIR 変数の raw バイトパターン (\xFD\x9F\x80)
+  const INSTDIR_PREFIX = '\xfd\x9f\x80';
+
+  for (let ei = 0; ei < entriesNum; ei++) {
+    const eOff = entriesOff + ei * 28;
+    if (eOff + 28 > header.length) break;
+    const opcode = dv.getUint32(eOff, true) & 0x1ff;
+    const p = [
+      dv.getUint32(eOff +  4, true),
+      dv.getUint32(eOff +  8, true),
+      dv.getUint32(eOff + 12, true),
+    ];
+    if (opcode === EW_CREATEDIR) {
+      const raw = getString(p[0]);
+      if (raw) currentOutpath = raw;
+    } else if (opcode === EW_EXTRACTFILE) {
+      const fname  = getString(p[1]);
+      const dataIdx = p[2];
+      if (fname) fileList.push({ outpath: currentOutpath, fname, dataIdx });
+    }
+  }
+
+  onProgress && onProgress(`NSIS: ${fileList.length} ファイルを展開中...`);
+
+  // ── ファイルブロックを読む ──
+  const exeDv = new DataView(exeData.buffer, exeData.byteOffset, exeData.byteLength);
+  async function readBlock(dataIdx) {
+    const off = filesDataStart + dataIdx;
+    const field = exeDv.getUint32(off, true);
+    const isLzma = (field >>> 31) === 1;
+    const compSize = field & 0x7FFFFFFF;
+    const raw = exeData.slice(off + 4, off + 4 + compSize);
+    if (isLzma) {
+      // LZMA stream: props(5) + size_unknown + data
+      const lzmaBlob = new Uint8Array(5 + 8 + (raw.length - 5));
+      lzmaBlob.set(raw.slice(0, 5));
+      lzmaBlob.fill(0xff, 5, 13); // unknown size
+      lzmaBlob.set(raw.slice(5), 13);
+      return lzmaDecodeWasm(lzmaBlob);
+    } else {
+      return raw.slice();
+    }
+  }
+
+  // ── RTP ファイルだけを収集 ──
+  // $INSTDIR を除いたサブフォルダが RTP サブディレクトリ名
+  const result = [];
+  for (const { outpath, fname, dataIdx } of fileList) {
+    // $INSTDIR 変数(\xfd\x9f\x80) か空 → RTP root または RTP サブフォルダ
+    // $PLUGINSDIR 等(\xfd\x9a\x80) → スキップ
+    if (outpath && !outpath.includes('\xfd\x9f\x80') && !outpath.includes('\xfd\x9f')) {
+      // INSTDIR 以外の変数（$PLUGINSDIR, $SMPROGRAMS 等）→ スキップ
+      if (outpath.includes('\xfd')) continue;
+    }
+    // ファイル名に変数参照を含む場合（プラグイン名など）→ スキップ
+    if (fname.includes('\xfd')) continue;
+
+    const cleanPath = cleanNsisPath(outpath);
+    const relPath = (cleanPath ? cleanPath + '/' : '') + fname;
+    const data = await readBlock(dataIdx);
+    result.push({ path: relPath, data });
+  }
+
+  return result;
+}
+
+
 async function processRTPFile(file, arrayBuffer, rtpInfo) {
   const startupDialog = document.getElementById('startup-dialog');
   const statusDiv = document.getElementById('status');
@@ -7436,43 +8002,56 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
   try {
     statusDiv.textContent = `${rtpInfo.name}を展開中...`;
     
-    // RTPのZIPファイルには、事前に展開済みのRTPアセット（Charset/Chipset/Monster等の
-    // フォルダ）がそのまま入っている前提で処理する
-    // （自己解凍EXEやInstallShield形式のインストーラーが入っている場合は、
-    // unshield等の外部ツールで展開してから通常のZIPとしてまとめ直してください）
     const zip = await JSZip.loadAsync(arrayBuffer);
     const entries = Object.keys(zip.files);
-    
     console.log(`RTP ZIP loaded with ${entries.length} entries`);
-    
+
+    // ZIP 内に .exe があるか確認（InstallShield インストーラー形式）
+    const exeEntry = entries.find(e => !zip.files[e].dir && e.toLowerCase().endsWith('.exe'));
+    const hasNonExe = entries.some(e => !zip.files[e].dir && !e.toLowerCase().endsWith('.exe')
+                                        && !e.toLowerCase().endsWith('.txt'));
+
     let rtpFiles = [];
-    for (const fileName of entries) {
-      if (zip.files[fileName].dir) continue;
-      const content = await zip.files[fileName].async('uint8array');
-      rtpFiles.push({ path: fileName.replace(/\\/g, '/'), data: content });
-    }
-    
-    if (rtpFiles.length === 0) {
-      throw new Error('ZIPファイル内にファイルが見つかりませんでした。');
-    }
-    
-    // 共通のルートフォルダを検出して除去
-    const filePaths = rtpFiles.map(f => f.path);
-    if (filePaths.length > 0) {
-      const firstPath = filePaths[0];
-      const slashIndex = firstPath.indexOf('/');
-      if (slashIndex > 0) {
-        const potentialRoot = firstPath.substring(0, slashIndex + 1);
-        if (filePaths.every(p => p.startsWith(potentialRoot))) {
-          console.log(`Stripping RTP root folder: ${potentialRoot}`);
-          rtpFiles = rtpFiles.map(f => ({
-            path: f.path.substring(potentialRoot.length),
-            data: f.data
-          })).filter(f => f.path.length > 0);
+
+    if (exeEntry && !hasNonExe) {
+      // ─── インストーラー EXE パス ───
+      statusDiv.textContent = `${rtpInfo.name}: インストーラーを検出しました。展開中...`;
+      console.log(`Installer detected: ${exeEntry}`);
+
+      const exeData = await zip.files[exeEntry].async('uint8array');
+      rtpFiles = await extractInstallerExe(exeData, rtpInfo,
+        msg => { statusDiv.textContent = `${rtpInfo.name}: ${msg}`; });
+
+    } else {
+      // ─── 通常 ZIP（展開済み RTP アセット）パス ───
+      for (const fileName of entries) {
+        if (zip.files[fileName].dir) continue;
+        const content = await zip.files[fileName].async('uint8array');
+        rtpFiles.push({ path: fileName.replace(/\\/g, '/'), data: content });
+      }
+
+      if (rtpFiles.length === 0) {
+        throw new Error('ZIPファイル内にファイルが見つかりませんでした。');
+      }
+
+      // 共通のルートフォルダを検出して除去
+      const filePaths = rtpFiles.map(f => f.path);
+      if (filePaths.length > 0) {
+        const firstPath = filePaths[0];
+        const slashIndex = firstPath.indexOf('/');
+        if (slashIndex > 0) {
+          const potentialRoot = firstPath.substring(0, slashIndex + 1);
+          if (filePaths.every(p => p.startsWith(potentialRoot))) {
+            console.log(`Stripping RTP root folder: ${potentialRoot}`);
+            rtpFiles = rtpFiles.map(f => ({
+              path: f.path.substring(potentialRoot.length),
+              data: f.data
+            })).filter(f => f.path.length > 0);
+          }
         }
       }
     }
-    
+
     // インストール先ディレクトリ (RTP/2000/ または RTP/2003/) をパスに付与
     rtpFiles = rtpFiles.map(f => ({
       path: `RTP/${rtpDir}/${f.path}`,
@@ -8591,10 +9170,10 @@ window.addEventListener('load', () => {
       const file = event.target.files[0];
       if (file) {
         const fileName = file.name.toLowerCase();
-        if (fileName.endsWith('.zip')) {
+        if (fileName.endsWith('.zip') || fileName.endsWith('.exe')) {
           await processRTPZipFile(file, rtpInfo);
         } else {
-          alert('RTPはZIP形式のみ対応しています。');
+          alert('ZIP ファイルまたは EXE インストーラーを選択してください。');
         }
         // 入力をリセット
         inputEl.value = '';
