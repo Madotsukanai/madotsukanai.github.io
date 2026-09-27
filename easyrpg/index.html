@@ -9215,6 +9215,16 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   function renderLoop() {
     rafId = requestAnimationFrame(renderLoop);
 
+    // mkxp-z 起動中は WebGL post-process を完全にスキップ
+    // （#canvas が OffscreenCanvas に転送されており texImage2D で読めないため）
+    if (window.MKXP_ACTIVE_NOSTALGIST) {
+      const srcCanvas = document.getElementById('canvas');
+      const dstCanvas = document.getElementById('webgl-post-process');
+      if (srcCanvas) srcCanvas.style.opacity = '1';
+      if (dstCanvas) dstCanvas.style.display = 'none';
+      return;
+    }
+
     const srcCanvas = document.getElementById('canvas');
     const dstCanvas = document.getElementById('webgl-post-process');
     if (!srcCanvas || !dstCanvas || !gl || !program) return;
