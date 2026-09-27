@@ -8513,9 +8513,21 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
       viewport.appendChild(mkxpCanvas);
     }
 
+    // mkxp-z_libretro.js は PROXY_TO_PTHREAD でビルドされた ESM。
+    // Nostalgist.js は JS テキストを Blob URL として動的 import() するが、
+    // そのコンテキストでは import.meta.url = "blob:..." になるため、
+    // Worker 生成時の new URL("mkxp-z_libretro.js", import.meta.url) が失敗する。
+    // 対策: JS テキストを fetch し、import.meta.url を実際の絶対 URL に置換した
+    // Blob を core.js として渡す。
+    const coreJsUrl = new URL('mkxp-z/mkxp-z_libretro.js', location.href).href;
+    const coreJsText = await fetch(coreJsUrl).then(r => r.text());
+    // "import.meta.url" → ページ起点の絶対 URL 文字列リテラルに置換
+    const patchedJs = coreJsText.replace(/import\.meta\.url/g, JSON.stringify(coreJsUrl));
+    const coreJsBlob = new Blob([patchedJs], { type: 'application/javascript' });
+
     const nostalgist = await window.Nostalgist.launch({
       core: {
-        js: 'mkxp-z/mkxp-z_libretro.js',
+        js: { fileContent: coreJsBlob, fileName: 'mkxp-z_libretro.js' },
         wasm: 'mkxp-z/mkxp-z_libretro.wasm',
         name: 'mkxp-z',
       },
