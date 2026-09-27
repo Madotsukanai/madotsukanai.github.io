@@ -3,7 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RPGツクール2000/2003 ゲームローダー</title>
+  <title>RPGツクール ゲームローダー</title>
+
+  <!-- SharedArrayBuffer を有効化するための coi-serviceworker
+       mkxp-z (XP/VX/VX Ace) は PROXY_TO_PTHREAD でビルドされており
+       SharedArrayBuffer が必須です。GitHub Pages など COOP/COEP ヘッダを
+       設定できない環境では、この Service Worker が代替します。 -->
+  <script src="coi-serviceworker.min.js"></script>
 
   <script>
     // スクリーンショット撮影（canvas.toDataURL）時に画面が真っ白/真っ黒になるのを防ぐため、
@@ -1138,7 +1144,7 @@
   <!-- 起動時のダイアログ -->
   <div id="startup-dialog">
     <div class="dialog-box">
-      <h2>RPGツクール2000/2003 ゲームローダー</h2>
+      <h2>RPGツクール ゲームローダー</h2>
 
       <!-- タブバー -->
       <div class="tab-bar">
@@ -1159,7 +1165,7 @@
           </div>
           
           <p>ゲームのZIPファイルを選択してください。</p>
-          <p style="font-size: 0.85rem; color: #999;">UTF-8とShift_JISエンコーディングに対応しています。</p>
+          <p style="font-size: 0.85rem; color: #999;">RPGツクール2000/2003/XP/VX/VX Aceに対応しています。UTF-8とShift_JISエンコーディングに対応しています。</p>
           <input type="file" id="game-file-input" accept=".zip" />
         </div>
       </div>
@@ -6776,12 +6782,24 @@ async function loadSavedGamesList() {
         storageManager.updateGameMetadata(game.id, { playTimeSeconds: bufferedPlayTime }).catch(e => {});
       }
       
+      const isMkxp = game.engineType === 'mkxp';
+      const engineBadge = isMkxp
+        ? '<span style="display:inline-block;padding:0.1rem 0.4rem;background:#7b4f9e;color:#fff;border-radius:3px;font-size:0.72rem;font-weight:bold;vertical-align:middle;">XP/VX/VX Ace</span>'
+        : '<span style="display:inline-block;padding:0.1rem 0.4rem;background:#1a6b3c;color:#fff;border-radius:3px;font-size:0.72rem;font-weight:bold;vertical-align:middle;">2000/2003</span>';
+      const rtpSelectHtml = isMkxp ? '' : `
+            <select onclick="event.stopPropagation();" onchange="changeGameRTP('${game.id}', this.value)" class="game-action-btn" style="background: #333; color: white; border: 1px solid #555; padding: 0.4rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+              <option value="auto" ${!game.rtpConfig || game.rtpConfig === 'auto' ? 'selected' : ''}>RTP自動判定 (実験的)</option>
+              <option value="jp" ${game.rtpConfig === 'jp' ? 'selected' : ''}>日本語(2000/2003)</option>
+              <option value="en" ${game.rtpConfig === 'en' ? 'selected' : ''}>英語(2000/2003)</option>
+              <option value="none" ${game.rtpConfig === 'none' ? 'selected' : ''}>RTPなし</option>
+            </select>`;
       gameDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
           <div style="flex: 1; min-width: 200px;" onclick="loadSavedGame('${game.id}')">
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
               <span id="game-title-${game.id}" style="font-weight: bold; font-size: 1.1rem;">${escapeHtml(game.name)}</span>
-              <button onclick="event.stopPropagation(); editGameTitle('${game.id}', '${escapeHtml(game.name).replace(/'/g, "\\'")}');" 
+              ${engineBadge}
+              <button onclick="event.stopPropagation(); editGameTitle('${game.id}', '${escapeHtml(game.name).replace(/'/g, "\\'")}');"
                       class="game-action-btn"
                       style="padding: 0.2rem 0.4rem; background: #666; border: none; color: white; border-radius: 3px; cursor: pointer; font-size: 0.8rem;"
                       title="タイトルを編集">
@@ -6797,18 +6815,13 @@ async function loadSavedGamesList() {
             </div>
           </div>
           <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-            <select onclick="event.stopPropagation();" onchange="changeGameRTP('${game.id}', this.value)" class="game-action-btn" style="background: #333; color: white; border: 1px solid #555; padding: 0.4rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
-              <option value="auto" ${!game.rtpConfig || game.rtpConfig === 'auto' ? 'selected' : ''}>RTP自動判定 (実験的)</option>
-              <option value="jp" ${game.rtpConfig === 'jp' ? 'selected' : ''}>日本語(2000/2003)</option>
-              <option value="en" ${game.rtpConfig === 'en' ? 'selected' : ''}>英語(2000/2003)</option>
-              <option value="none" ${game.rtpConfig === 'none' ? 'selected' : ''}>RTPなし</option>
-            </select>
-            <button onclick="event.stopPropagation(); loadSavedGame('${game.id}');" 
+            ${rtpSelectHtml}
+            <button onclick="event.stopPropagation(); loadSavedGame('${game.id}');"
                     class="game-action-btn"
                     style="padding: 0.5rem 1rem; background: #4CAF50; border: none; color: white; border-radius: 4px; cursor: pointer; font-weight: bold;">
               起動
             </button>
-            <button onclick="event.stopPropagation(); deleteSavedGame('${game.id}');" 
+            <button onclick="event.stopPropagation(); deleteSavedGame('${game.id}');"
                     class="game-action-btn"
                     style="padding: 0.5rem 1rem; background: #f44336; border: none; color: white; border-radius: 4px; cursor: pointer;">
               削除
@@ -6846,6 +6859,11 @@ function returnToTopMenu() {
   if (isGamePlaying) {
     console.log('[returnToTopMenu] Game was active. Performing a clean reload to avoid memory/input leaks...');
     isGamePlaying = false;
+    // mkxp-z (Nostalgist.js) セッションのクリーンアップ
+    if (window.MKXP_ACTIVE_NOSTALGIST) {
+      try { window.MKXP_ACTIVE_NOSTALGIST.exit(); } catch (e) {}
+      window.MKXP_ACTIVE_NOSTALGIST = null;
+    }
     window.location.reload();
     return;
   }
@@ -6947,8 +6965,13 @@ async function loadSavedGame(gameId) {
     
     console.log(`Loading saved game: ${gameData.name} (${gameData.files.length} files)`);
     document.getElementById('startup-dialog').style.display = 'none';
-    
-    await loadGameFiles(gameData.files, gameData.name, gameId);
+
+    const engineType = gameData.engineType || 'easyrpg';
+    if (engineType === 'mkxp') {
+      await loadMkxpGame(gameData.files, gameData.name, gameId);
+    } else {
+      await loadGameFiles(gameData.files, gameData.name, gameId);
+    }
   } catch (e) {
     console.error('Failed to load saved game:', e);
     alert('ゲームの読み込みに失敗しました: ' + e.message);
@@ -7480,38 +7503,47 @@ async function processZipFile(file) {
     // ファイル抽出
     const gameFiles = [];
     
-    // ゲームの真のルートフォルダ（RPG_RT.ldbが存在する場所）を検出
+    // ゲームの真のルートフォルダと種別を検出
     let gameRootPrefix = '';
+    let engineType = 'easyrpg'; // 'easyrpg' | 'mkxp'
     const filePaths = Object.keys(zip.files);
-    
-    // 1. RPG_RT.ldb（または rpg_rt.ini、rpg_rt.exe）を探す
-    let ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.ldb'));
-    if (!ldbEntry) {
-      ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.ini'));
-    }
-    if (!ldbEntry) {
-      ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.exe'));
-    }
-    
-    if (ldbEntry) {
-      const lastSlash = ldbEntry.lastIndexOf('/');
-      if (lastSlash !== -1) {
-        gameRootPrefix = ldbEntry.substring(0, lastSlash + 1); // "FolderName/" や "FolderName/Sub/"
-        console.log(`Detected game root directory from RPG_RT.ldb location: "${gameRootPrefix}"`);
-      } else {
-        gameRootPrefix = ''; // 直下にある
-        console.log('RPG_RT.ldb detected at zip root.');
-      }
+
+    // mkxp判定: Game.rxdata(XP) / Game.rvdata(VX) / Game.rvdata2(VX Ace)
+    const mkxpRootEntry =
+      filePaths.find(p => /[/\\]?game\.rxdata$/i.test(p)) ||
+      filePaths.find(p => /[/\\]?game\.rvdata$/i.test(p)) ||
+      filePaths.find(p => /[/\\]?game\.rvdata2$/i.test(p));
+    if (mkxpRootEntry) {
+      engineType = 'mkxp';
+      const lastSlash = mkxpRootEntry.lastIndexOf('/');
+      gameRootPrefix = lastSlash !== -1 ? mkxpRootEntry.substring(0, lastSlash + 1) : '';
+      console.log(`Detected mkxp game (XP/VX/VX Ace). Root: "${gameRootPrefix}"`);
     } else {
-      // フォールバック: 従来の全ファイル共通親フォルダ検出
-      if (filePaths.length > 0) {
-        const firstPath = filePaths[0];
-        const slashIndex = firstPath.indexOf('/');
-        if (slashIndex > 0) {
-          const potentialRoot = firstPath.substring(0, slashIndex + 1);
-          if (filePaths.every(p => p.startsWith(potentialRoot))) {
-            gameRootPrefix = potentialRoot;
-            console.log(`Fallback detected root folder: "${gameRootPrefix}"`);
+      // EasyRPG: RPG_RT.ldb（または rpg_rt.ini、rpg_rt.exe）を探す
+      let ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.ldb'));
+      if (!ldbEntry) ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.ini'));
+      if (!ldbEntry) ldbEntry = filePaths.find(p => p.toLowerCase().endsWith('rpg_rt.exe'));
+
+      if (ldbEntry) {
+        const lastSlash = ldbEntry.lastIndexOf('/');
+        if (lastSlash !== -1) {
+          gameRootPrefix = ldbEntry.substring(0, lastSlash + 1);
+          console.log(`Detected EasyRPG game. Root: "${gameRootPrefix}"`);
+        } else {
+          gameRootPrefix = '';
+          console.log('RPG_RT.ldb detected at zip root.');
+        }
+      } else {
+        // フォールバック: 全ファイル共通親フォルダ検出
+        if (filePaths.length > 0) {
+          const firstPath = filePaths[0];
+          const slashIndex = firstPath.indexOf('/');
+          if (slashIndex > 0) {
+            const potentialRoot = firstPath.substring(0, slashIndex + 1);
+            if (filePaths.every(p => p.startsWith(potentialRoot))) {
+              gameRootPrefix = potentialRoot;
+              console.log(`Fallback detected root folder: "${gameRootPrefix}"`);
+            }
           }
         }
       }
@@ -7553,15 +7585,17 @@ async function processZipFile(file) {
       }
     }
     
-    // index.json生成（本家 gencache 互換のフォーマットで生成する。
-    // フラットな{path: null}形式だと EasyRPG Player 側のパースに失敗し、
-    // 大文字小文字違いのファイルを解決できずゲームが起動できない）
-    const indexJsonContent = generateIndexJson(gameFiles);
-    const indexJsonBase64 = uint8ArrayToBase64(new TextEncoder().encode(indexJsonContent));
-    gameFiles.push({
-      path: 'index.json',
-      data: indexJsonBase64
-    });
+    // index.json生成 (EasyRPG 専用。mkxp ゲームには不要)
+    if (engineType === 'easyrpg') {
+      // フラットな{path: null}形式だと EasyRPG Player 側のパースに失敗し、
+      // 大文字小文字違いのファイルを解決できずゲームが起動できない
+      const indexJsonContent = generateIndexJson(gameFiles);
+      const indexJsonBase64 = uint8ArrayToBase64(new TextEncoder().encode(indexJsonContent));
+      gameFiles.push({
+        path: 'index.json',
+        data: indexJsonBase64
+      });
+    }
 
     console.log(`Total files extracted: ${gameFiles.length}`);
     
@@ -7591,7 +7625,7 @@ async function processZipFile(file) {
     }));
     
     // ライブラリへ追加のみ（起動はしない）
-    await saveGameToLibrary(files, gameTitle);
+    await saveGameToLibrary(files, gameTitle, engineType);
     
   } catch (error) {
     console.error('Error processing ZIP:', error);
@@ -7600,7 +7634,7 @@ async function processZipFile(file) {
 }
 
 // ゲームを起動せずにライブラリへ保存するだけの関数
-async function saveGameToLibrary(files, gameName) {
+async function saveGameToLibrary(files, gameName, engineType = 'easyrpg') {
   const fileInput = document.getElementById('game-file-input');
   
   // プレフィックス(games/ゲームID/)を一時的に除去
@@ -7616,6 +7650,8 @@ async function saveGameToLibrary(files, gameName) {
   
   try {
     await storageManager.saveGame(gameId, gameName || 'Unknown Game', cleanFiles);
+    // engineType をメタデータに保存
+    await storageManager.updateGameMetadata(gameId, { engineType });
     console.log('Game successfully saved to Library:', gameName);
     
     // ゲームリストを更新
@@ -7653,6 +7689,104 @@ function sanitizeGameTitleForStorageKey(title) {
     .trim()
     .replace(/[\/\\]/g, '_'); // パス区切りとして解釈される文字を置換
   return normalized || 'default';
+}
+
+// ============================================================
+// mkxp-z (XP/VX/VX Ace) 起動関数
+// Nostalgist.js + mkxp-z libretro コアを使用
+// ゲームファイルをメモリ上で .mkxpz (ZIP) にまとめて渡す
+// ============================================================
+async function loadMkxpGame(files, gameName, existingGameId = null) {
+  const statusDiv = document.getElementById('status');
+  statusDiv.textContent = 'mkxp-z エンジンを起動中...';
+  console.log(`[mkxp] Preparing ${files.length} files for mkxp-z...`);
+
+  try {
+    // Nostalgist.js を動的ロード（まだ読み込まれていない場合）
+    if (!window.Nostalgist) {
+      statusDiv.textContent = 'Nostalgist.js を読み込み中...';
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/nostalgist@0.22.0/dist/nostalgist.umd.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Nostalgist.js の読み込みに失敗しました'));
+        document.head.appendChild(s);
+      });
+    }
+
+    // ゲームファイルをメモリ上の ZIP (= .mkxpz) にまとめる
+    // JSZip を使ってストア圧縮（圧縮なし）で格納する
+    statusDiv.textContent = 'ゲームデータをパック中...';
+    const mkxpZip = new JSZip();
+    let packedCount = 0;
+    for (const f of files) {
+      let data = f.data;
+      // lazy ファイルは IndexedDB から取得
+      if (!data && f.lazy) {
+        try {
+          if (f.gameId) {
+            data = await storageManager.getGameFile(f.gameId, f.path);
+          }
+        } catch (e) {
+          console.warn('[mkxp] Failed to fetch lazy file:', f.path, e);
+        }
+      }
+      if (!data) continue;
+      const relPath = f.path.replace(/^games\/[^/]+\//i, '');
+      mkxpZip.file(relPath, data, { compression: 'STORE' });
+      packedCount++;
+    }
+    console.log(`[mkxp] Packed ${packedCount} files into .mkxpz`);
+    const mkxpzBlob = await mkxpZip.generateAsync({ type: 'blob', compression: 'STORE' });
+
+    statusDiv.textContent = 'mkxp-z を起動中...';
+
+    // #viewport に Nostalgist.js の canvas を追加する
+    // （EasyRPG の #canvas は残しておき、mkxp-z 用の canvas を別途生成させる）
+    const viewport = document.getElementById('viewport');
+
+    const nostalgist = await window.Nostalgist.launch({
+      core: {
+        js: 'mkxp-z/mkxp-z_libretro.js',
+        wasm: 'mkxp-z/mkxp-z_libretro.wasm',
+        name: 'mkxp-z',
+      },
+      rom: {
+        fileName: (gameName || 'game') + '.mkxpz',
+        fileContent: mkxpzBlob,
+      },
+      element: viewport,
+      style: {
+        width: '100%',
+        height: '100%',
+        position: 'absolute',
+        top: '0',
+        left: '0',
+      },
+      retroarchConfig: {
+        video_aspect_ratio: '1.333333',
+        video_scale_integer: false,
+      },
+      waitForInteraction: false,
+    });
+
+    window.MKXP_ACTIVE_NOSTALGIST = nostalgist;
+    isGamePlaying = true;
+
+    console.log('[mkxp] Nostalgist launched successfully');
+
+    // ゲーム終了イベントのフック（RetroArch はコールバックを提供しないため
+    // canvas が非表示になる / 手動で returnToTopMenu() を呼ぶ方式のみ対応）
+
+  } catch (error) {
+    console.error('[mkxp] Failed to launch:', error);
+    statusDiv.textContent = 'エラー: mkxp-z の起動に失敗しました';
+    document.getElementById('startup-dialog').style.display = 'flex';
+    isGameLoading = false;
+    setGameButtonsDisabled(false);
+    alert('mkxp-z の起動に失敗しました: ' + error.message +
+      '\n\nmkxp-z/mkxp-z_libretro.js が配置されているか確認してください。');
+  }
 }
 
 // EasyRPG起動関数（ファイルを受け取って起動）
