@@ -8596,16 +8596,11 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
 
     statusDiv.textContent = 'mkxp-z を起動中...';
 
-    // Nostalgist.js は element に HTMLCanvasElement が必要。
-    // #viewport (div) を渡すと "invalid element" になるため、
-    // viewport 内に専用 canvas を生成して渡す。
-    const viewport = document.getElementById('viewport');
-    let mkxpCanvas = document.getElementById('mkxp-canvas');
-    if (!mkxpCanvas) {
-      mkxpCanvas = document.createElement('canvas');
-      mkxpCanvas.id = 'mkxp-canvas';
-      viewport.appendChild(mkxpCanvas);
-    }
+    // Nostalgist.js は element に HTMLCanvasElement が必要であり、
+    // 渡した canvas の id を強制的に "canvas" に書き換える。
+    // そのため既存の <canvas id="canvas"> をそのまま渡す。
+    // （専用 canvas を作っても id が上書きされ getElementById('mkxp-canvas') が null になる）
+    const mkxpCanvas = document.getElementById('canvas');
 
     // mkxp-z_libretro.js は PROXY_TO_PTHREAD でビルドされた ESM。
     // Nostalgist.js は JS テキストを Blob URL として動的 import() するが、
@@ -9601,10 +9596,9 @@ if (checkbox) checkbox.checked = newState;
   })();
 
   function takeScreenshot() {
-    // mkxp-z (XP/VX/VX Ace) が起動中は #mkxp-canvas を使う
-    const canvas = window.MKXP_ACTIVE_NOSTALGIST
-      ? document.getElementById('mkxp-canvas')
-      : document.getElementById('canvas');
+    // EasyRPG / mkxp-z どちらも #canvas を使う
+    // （Nostalgist は渡した canvas の id を "canvas" に上書きするため）
+    const canvas = document.getElementById('canvas');
     if (!canvas) return;
     try {
       // アスペクト比は 4:3 (EasyRPG / RPGツクール XP/VX 共通)
