@@ -7,7 +7,6 @@ easyrpg/player-js/
 easyrpg.zip
 
 # mkxp-z build sources
-easyrpg/mkxp-z/
 easyrpg/retroarch/
 easyrpg/libretro-super/
 easyrpg/emsdk/
@@ -17,4 +16,3 @@ easyrpg/wasi-sdk-30/
 
 # mkxp-z ビルドソース
 easyrpg/mkxp-z-libretro-emscripten-src/
-easyrpg/wasi-sdk-30/
