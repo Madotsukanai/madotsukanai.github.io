@@ -1,21 +1,26 @@
-easyrpg/easyrpg-player
+# npm
 easyrpg/package.json
 easyrpg/package-lock.json
 easyrpg/node_modules/
+
+# EasyRPG Player ビルド関連
+easyrpg/easyrpg-player
 easyrpg/buildscripts/
 easyrpg/player-js/
 easyrpg.zip
 
-# mkxp-z build sources
+# mkxp-z (XP/VX/VX Ace) ビルド関連
 easyrpg/retroarch/
 easyrpg/libretro-super/
 easyrpg/emsdk/
-
-# wasi-sdk-30 (mkxp-z ビルド用)
 easyrpg/wasi-sdk-30/
-
-# mkxp-z ビルドソース
 easyrpg/mkxp-z-libretro-emscripten-src/
+
+# unshield (InstallShield CAB 展開 WASM) ビルドソース
 easyrpg/unshield-src/
+
+# liblzma (NSIS 展開 WASM) ビルドソース
 easyrpg/xz-src/
+
+# p7zip ソース (未使用 / 参照用)
 easyrpg/p7zip-wasm-src/
