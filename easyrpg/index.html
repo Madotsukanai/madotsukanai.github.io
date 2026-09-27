@@ -8594,6 +8594,24 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
       console.log(`[mkxp] Loaded RTP "${rtpName}": ${rtpData.files.length} files`);
     }
 
+    // フォントアセットを bios として渡す
+    // mkxp-z は system_path/Fonts/ を /Game/Fonts/ にマウントする
+    // → Nostalgist bios パス: "mkxp-z/Fonts/<ファイル名>"
+    try {
+      const allAssets = await storageManager.getAllAssets();
+      const fontAssets = allAssets.filter(a => a.type === 'font1' || a.type === 'font2');
+      for (const asset of fontAssets) {
+        if (!asset.data || !asset.name) continue;
+        biosFiles.push({
+          fileName: `mkxp-z/Fonts/${asset.name}`,
+          fileContent: asset.data instanceof Uint8Array ? new Blob([asset.data]) : asset.data,
+        });
+        console.log(`[mkxp] Adding font to bios: ${asset.name}`);
+      }
+    } catch (e) {
+      console.warn('[mkxp] Failed to load font assets:', e);
+    }
+
     statusDiv.textContent = 'mkxp-z を起動中...';
 
     // Nostalgist.js は element に HTMLCanvasElement が必要であり、
