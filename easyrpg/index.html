@@ -971,7 +971,24 @@
     
     #canvas.crt-mode {
       image-rendering: auto; /* ドットの滲み（バイリニア補間） */
-      }
+    }
+
+    /* mkxp-z (XP/VX/VX Ace) 用キャンバス — #canvas と同等のスタイル */
+    #mkxp-canvas {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      transform: translate(-50%, -50%) translateZ(0);
+      will-change: transform;
+      border: 0;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      object-fit: contain;
+      object-position: 50% 50%;
+      backface-visibility: hidden;
+    }
 
     #scanline-overlay {
       position: absolute;
@@ -8485,9 +8502,16 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
 
     statusDiv.textContent = 'mkxp-z を起動中...';
 
-    // #viewport に Nostalgist.js の canvas を追加する
-    // （EasyRPG の #canvas は残しておき、mkxp-z 用の canvas を別途生成させる）
+    // Nostalgist.js は element に HTMLCanvasElement が必要。
+    // #viewport (div) を渡すと "invalid element" になるため、
+    // viewport 内に専用 canvas を生成して渡す。
     const viewport = document.getElementById('viewport');
+    let mkxpCanvas = document.getElementById('mkxp-canvas');
+    if (!mkxpCanvas) {
+      mkxpCanvas = document.createElement('canvas');
+      mkxpCanvas.id = 'mkxp-canvas';
+      viewport.appendChild(mkxpCanvas);
+    }
 
     const nostalgist = await window.Nostalgist.launch({
       core: {
@@ -8499,14 +8523,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
         fileName: (gameName || 'game') + '.mkxpz',
         fileContent: mkxpzBlob,
       },
-      element: viewport,
-      style: {
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
-        top: '0',
-        left: '0',
-      },
+      element: mkxpCanvas,
       retroarchConfig: {
         video_aspect_ratio: '1.333333',
         video_scale_integer: false,
@@ -8516,7 +8533,9 @@ async function loadMkxpGame(files, gameName, existingGameId = null) {
 
     window.MKXP_ACTIVE_NOSTALGIST = nostalgist;
     isGamePlaying = true;
+    isGameLoading = false;
 
+    statusDiv.textContent = '';
     console.log('[mkxp] Nostalgist launched successfully');
 
     // ゲーム終了イベントのフック（RetroArch はコールバックを提供しないため
@@ -9447,10 +9466,13 @@ if (checkbox) checkbox.checked = newState;
   })();
 
   function takeScreenshot() {
-    const canvas = document.getElementById('canvas');
+    // mkxp-z (XP/VX/VX Ace) が起動中は #mkxp-canvas を使う
+    const canvas = window.MKXP_ACTIVE_NOSTALGIST
+      ? document.getElementById('mkxp-canvas')
+      : document.getElementById('canvas');
     if (!canvas) return;
     try {
-      // EasyRPG (RPG Maker 2000/2003) のアスペクト比は 4:3 
+      // アスペクト比は 4:3 (EasyRPG / RPGツクール XP/VX 共通)
       const targetRatio = 4 / 3;
       const canvasRatio = canvas.width / canvas.height;
       
