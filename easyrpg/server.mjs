@@ -44,7 +44,7 @@ http.createServer((req, res) => {
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Embedder-Policy': 'require-corp',
     'Cross-Origin-Resource-Policy': 'cross-origin',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
   };
 
