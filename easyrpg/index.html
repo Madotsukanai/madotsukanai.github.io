@@ -3496,9 +3496,9 @@ class GameStorageManager {
     });
   }
 
-  // mkxp-z セーブデータを EasyRPG と同じ /home/web_user IndexedDB の FILE_DATA に保存する
+  // EasyRPG と同じ IDBFS データベース (/customgame/Save) の FILE_DATA に保存する
   async saveIDBFSFile(gameId, idbPath, data) {
-    const IDBFS_DB = '/home/web_user';
+    const IDBFS_DB = '/customgame/Save';
     const db = await new Promise((resolve, reject) => {
       const req = indexedDB.open(IDBFS_DB, 21);
       req.onupgradeneeded = (e) => {
@@ -3510,20 +3510,20 @@ class GameStorageManager {
     });
     const tx = db.transaction(['FILE_DATA'], 'readwrite');
     const store = tx.objectStore('FILE_DATA');
-    const key = `Save/${gameId}/${idbPath.replace(/^.*\//, '')}`;
+    const key = `/customgame/Save/${gameId}/${idbPath.replace(/^.*\//, '')}`;
     store.put({ timestamp: new Date(), mode: 33206, contents: data instanceof Uint8Array ? data : new Uint8Array(data) }, key);
     // 親ディレクトリエントリ
-    store.put({ timestamp: new Date(), mode: 16895 }, `Save/${gameId}`);
-    store.put({ timestamp: new Date(), mode: 16895 }, `Save`);
+    store.put({ timestamp: new Date(), mode: 16895 }, `/customgame/Save/${gameId}`);
+    store.put({ timestamp: new Date(), mode: 16895 }, '/customgame/Save');
     await new Promise((resolve, reject) => {
       tx.oncomplete = () => { db.close(); resolve(); };
       tx.onerror = () => { db.close(); reject(tx.error); };
     });
   }
 
-  // mkxp-z セーブデータを /home/web_user IndexedDB の FILE_DATA から取得する
+  // mkxp-z セーブデータを EasyRPG と同じ IDBFS データベースから取得する
   async getIDBFSSaves(gameId) {
-    const IDBFS_DB = '/home/web_user';
+    const IDBFS_DB = '/customgame/Save';
     const db = await new Promise((resolve, reject) => {
       const req = indexedDB.open(IDBFS_DB, 21);
       req.onupgradeneeded = (e) => {
@@ -3535,7 +3535,7 @@ class GameStorageManager {
     });
     const tx = db.transaction(['FILE_DATA'], 'readonly');
     const store = tx.objectStore('FILE_DATA');
-    const prefix = `Save/${gameId}/`;
+    const prefix = `/customgame/Save/${gameId}/`;
     const results = [];
     await new Promise((resolve, reject) => {
       const range = IDBKeyRange.bound(prefix, prefix + '\uffff');
@@ -3551,6 +3551,36 @@ class GameStorageManager {
       req.onerror = () => reject(req.error);
     });
     db.close();
+    // 旧版mkxp-z保存は /home/web_user DB に置いていたため、初回だけ新しい
+    // EasyRPG共通の /customgame/Save DB へ移行する。
+    if (results.length === 0) {
+      const legacyDb = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('/home/web_user', 21);
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = () => reject(req.error);
+      });
+      if (legacyDb.objectStoreNames.contains('FILE_DATA')) {
+        const legacyTx = legacyDb.transaction(['FILE_DATA'], 'readonly');
+        const legacyStore = legacyTx.objectStore('FILE_DATA');
+        const legacyPrefix = `Save/${gameId}/`;
+        await new Promise((resolve, reject) => {
+          const req = legacyStore.openCursor(IDBKeyRange.bound(legacyPrefix, legacyPrefix + '\uffff'));
+          req.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (!cursor) { resolve(); return; }
+            if (cursor.value && cursor.value.contents) {
+              results.push({ path: cursor.key, data: cursor.value.contents });
+            }
+            cursor.continue();
+          };
+          req.onerror = () => reject(req.error);
+        });
+      }
+      legacyDb.close();
+      for (const save of results) {
+        await this.saveIDBFSFile(gameId, save.path, save.data);
+      }
+    }
     return results;
   }
 
@@ -4017,6 +4047,100 @@ function isValidAssetFile(type, filename) {
     lower.endsWith('.woff') || lower.endsWith('.woff2') || lower.endsWith('.fon');
 }
 
+// Windows のフォント名は日本語名・全角英数字・空白の有無が混在するため、
+// 比較時だけ Unicode 互換正規化して表記ゆれを吸収する。
+function normalizeFontFamilyName(name) {
+  return String(name || '').normalize('NFKC').toLowerCase().replace(/[\s　]+/g, ' ').trim();
+}
+
+// TTC の各 SFNT face を独立した TTF に展開する。
+// TTC 内のテーブルオフセットはコレクション全体基準なので、単純な拡張子変更ではなく
+// 新しい SFNT ディレクトリを作り、テーブルをコピーしてオフセット/チェックサムを再構築する。
+function splitTrueTypeCollection(input) {
+  const data = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  if (view.getUint32(0, false) !== 0x74746366) return null; // 'ttcf'
+
+  const numFonts = view.getUint32(8, false);
+  const writeU16 = (bytes, offset, value) => new DataView(bytes.buffer).setUint16(offset, value, false);
+  const writeU32 = (bytes, offset, value) => new DataView(bytes.buffer).setUint32(offset, value >>> 0, false);
+  const checksum = (bytes) => {
+    let sum = 0;
+    for (let i = 0; i < bytes.length; i += 4) {
+      const word = ((bytes[i] || 0) << 24) | ((bytes[i + 1] || 0) << 16) |
+        ((bytes[i + 2] || 0) << 8) | (bytes[i + 3] || 0);
+      sum = (sum + (word >>> 0)) >>> 0;
+    }
+    return sum;
+  };
+
+  const faces = [];
+  for (let faceIndex = 0; faceIndex < numFonts; faceIndex++) {
+    const faceOffset = view.getUint32(12 + faceIndex * 4, false);
+    const numTables = view.getUint16(faceOffset + 4, false);
+    const records = [];
+    for (let i = 0; i < numTables; i++) {
+      const recordOffset = faceOffset + 12 + i * 16;
+      const tag = String.fromCharCode(...data.subarray(recordOffset, recordOffset + 4));
+      // TTC 内の DSIG は元コレクションに対する署名なので、単独フォントから除外する。
+      if (tag === 'DSIG') continue;
+      records.push({
+        tag,
+        checkSum: view.getUint32(recordOffset + 4, false),
+        sourceOffset: view.getUint32(recordOffset + 8, false),
+        length: view.getUint32(recordOffset + 12, false),
+      });
+    }
+
+    const count = records.length;
+    const directoryLength = 12 + count * 16;
+    let totalLength = directoryLength;
+    for (const record of records) totalLength = (totalLength + 3 & ~3) + record.length;
+    const output = new Uint8Array((totalLength + 3) & ~3);
+    const outputView = new DataView(output.buffer);
+    output.set(data.subarray(faceOffset, faceOffset + 4), 0); // sfntVersion
+    writeU16(output, 4, count);
+    let power = 1;
+    let selector = 0;
+    while (power * 2 <= count) { power *= 2; selector++; }
+    writeU16(output, 6, power * 16);
+    writeU16(output, 8, selector);
+    writeU16(output, 10, count * 16 - power * 16);
+
+    let tableOffset = directoryLength;
+    let headOffset = -1;
+    for (let i = 0; i < count; i++) {
+      const record = records[i];
+      tableOffset = (tableOffset + 3) & ~3;
+      const recordOut = 12 + i * 16;
+      for (let j = 0; j < 4; j++) output[recordOut + j] = record.tag.charCodeAt(j);
+      const table = data.slice(record.sourceOffset, record.sourceOffset + record.length);
+      if (record.tag === 'head' && table.length >= 12) {
+        table.fill(0, 8, 12); // checksumAdjustment is zero while calculating head checksum
+        headOffset = tableOffset;
+      }
+      output.set(table, tableOffset);
+      writeU32(output, recordOut + 4, checksum(table));
+      writeU32(output, recordOut + 8, tableOffset);
+      writeU32(output, recordOut + 12, record.length);
+      tableOffset += record.length;
+    }
+    if (headOffset >= 0) {
+      writeU32(output, headOffset + 8, (0xB1B0AFBA - checksum(output)) >>> 0);
+    }
+    // 生成データが単独 SFNT として読めることを最低限検査する。
+    if (outputView.getUint16(4, false) !== count) throw new Error('TTF table directory was not written');
+    faces.push(output);
+  }
+  return faces;
+}
+
+function fontFaceOutputName(sourceName, familyName, index) {
+  const stem = sourceName.replace(/\.(ttc|otc)$/i, '');
+  const safeFamily = String(familyName || `Face ${index + 1}`).replace(/[\\/:*?"<>|]/g, '-').trim();
+  return `${stem} - ${safeFamily}.ttf`;
+}
+
 // Windows の C:\Windows\Fonts フォルダから mkxp-z に必要なフォントを自動抽出して保存する。
 // フォルダ内の .ttf/.ttc/.otf をスキャンし、mkxp-z が必要とするファミリー名を持つものだけ保存する。
 // statusEl が渡された場合はそこに進捗を表示する。
@@ -4030,6 +4154,7 @@ async function processWindowsFontsFolder(fileList, statusEl) {
   // RGSS3 (VX Ace): VL Gothic
   const NEEDED_FAMILIES = new Set([
     'arial', 'ms pgothic', 'ms gothic', 'ms pmincho', 'ms mincho',
+    'ms ゴシック', 'ms ｐゴシック', 'ms pゴシック', 'ms 明朝', 'ms ｐ明朝', 'ms p明朝',
     'umeplus gothic', 'vl gothic', 'courier new',
     // ゲームがよく使う追加フォント
     'times new roman', 'tahoma', 'verdana',
@@ -4047,6 +4172,7 @@ async function processWindowsFontsFolder(fileList, statusEl) {
 
   if (statusEl) statusEl.textContent = `スキャン中... (0 / ${fontFiles.length})`;
 
+  const neededFamilies = new Set([...NEEDED_FAMILIES].map(normalizeFontFamilyName));
   let saved = 0;
   let scanned = 0;
   for (const file of fontFiles) {
@@ -4054,16 +4180,14 @@ async function processWindowsFontsFolder(fileList, statusEl) {
     if (statusEl) statusEl.textContent = `スキャン中... (${scanned} / ${fontFiles.length}) — ${file.name}`;
     try {
       const data = new Uint8Array(await file.arrayBuffer());
-      const names = await readFontFamilyNames(data);
-
-      // ファミリー名が NEEDED_FAMILIES のいずれかにマッチするか確認
-      const matched = names && names.some(n => NEEDED_FAMILIES.has(n.toLowerCase()));
-      if (!matched) continue; // 不要なフォントはスキップ
-
-      const extra = names && names.length > 0 ? { familyNames: names } : {};
-      await storageManager.saveAsset('mkxpfont', file.name, data, extra);
-      saved++;
-      console.log(`[winfonts] Saved: ${file.name} (${names ? names.join(', ') : '?'})`);
+      const faces = await expandMkxpFontAsset(file.name, data);
+      for (const face of faces) {
+        const matched = face.familyNames.some(n => neededFamilies.has(normalizeFontFamilyName(n)));
+        if (!matched) continue;
+        await storageManager.saveAsset('mkxpfont', face.name, face.data, { familyNames: face.familyNames });
+        saved++;
+        console.log(`[winfonts] Saved: ${face.name} (${face.familyNames.join(', ') || '?'})`);
+      }
     } catch (e) {
       console.warn(`[winfonts] Failed to process "${file.name}":`, e);
     }
@@ -4154,6 +4278,17 @@ async function readFontFamilyNames(data) {
   }
 }
 
+async function expandMkxpFontAsset(name, data) {
+  const faces = splitTrueTypeCollection(data);
+  if (!faces) return [{ name, data, familyNames: await readFontFamilyNames(data) || [] }];
+  const expanded = [];
+  for (let i = 0; i < faces.length; i++) {
+    const familyNames = await readFontFamilyNames(faces[i]) || [];
+    expanded.push({ name: fontFaceOutputName(name, familyNames[0], i), data: faces[i], familyNames });
+  }
+  return expanded;
+}
+
 async function saveAssetFromFile(type, file) {
   if (!file) return;
   if (!isValidAssetFile(type, file.name)) {
@@ -4166,11 +4301,14 @@ async function saveAssetFromFile(type, file) {
   // mkxpfont の場合はフォントファイルからファミリー名を読み取って保存しておく
   let extra = {};
   if (type === 'mkxpfont') {
-    const names = await readFontFamilyNames(data);
-    if (names && names.length > 0) {
-      extra.familyNames = names;
-      console.log(`[mkxpfont] Family names for "${file.name}":`, names);
+    const faces = await expandMkxpFontAsset(file.name, data);
+    for (const face of faces) {
+      const faceExtra = face.familyNames.length > 0 ? { familyNames: face.familyNames } : {};
+      await storageManager.saveAsset(type, face.name, face.data, faceExtra);
+      console.log(`[mkxpfont] Saved "${face.name}"${face.familyNames.length ? ` (${face.familyNames.join(', ')})` : ''}`);
     }
+    await loadAssetSettings();
+    return;
   }
 
   await storageManager.saveAsset(type, file.name, data, extra);
@@ -7819,10 +7957,30 @@ let isGameDeleting = false;
 let isGameRenaming = false;
 let isGamePlaying = false;
 let isGameExitReloading = false;
+let mkxpExitPromise = null;
+
+// 終了経路にかかわらず、終了時セーブをIndexedDBへ同期してからページを再読込する。
+function finishMkxpGameExit() {
+  if (mkxpExitPromise) return mkxpExitPromise;
+  mkxpExitPromise = (async () => {
+    if (window.__mkxpSaveSyncTimeout) {
+      clearTimeout(window.__mkxpSaveSyncTimeout);
+      window.__mkxpSaveSyncTimeout = null;
+    }
+    const saveOnExit = window.__mkxpOnSaveExit;
+    window.__mkxpOnSaveExit = null;
+    if (typeof saveOnExit === 'function') {
+      try { await saveOnExit(); }
+      catch (error) { console.warn('[mkxp] Save sync on exit failed:', error); }
+    }
+    returnToTopMenu(true);
+  })();
+  return mkxpExitPromise;
+}
 
 // mkxp-z はゲーム終了後も RetroArch の dummy core に移行してランタイム自体は終了しない。
 // そのため Emscripten の onExit ではなく、libretro core の終了ログを監視する。
-function watchMkxpGameExit() {
+function watchMkxpGameExit(gameName) {
   const methods = ['log', 'info', 'warn', 'error', 'debug'];
   const originals = new Map(methods.map(method => [method, console[method]]));
   let watching = true;
@@ -7838,10 +7996,22 @@ function watchMkxpGameExit() {
     console[method] = function(...args) {
       original.apply(this, args);
       const message = args.map(value => String(value)).join(' ');
+      const savePathMatch = message.match(/\/mkxp-z\/Saves\/([^"\]]+)/);
+      if (savePathMatch) {
+        try {
+          const gameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
+          const mapping = JSON.parse(localStorage.getItem('mkxpSaveDirectories') || '{}');
+          mapping[gameId] = savePathMatch[1];
+          localStorage.setItem('mkxpSaveDirectories', JSON.stringify(mapping));
+          originals.get('log').call(console, `[mkxp] Save folder detected for ${gameId}: ${savePathMatch[1]}`);
+        } catch (error) {
+          console.warn('[mkxp] Failed to remember the save folder:', error);
+        }
+      }
       if (message.includes('Game exited; terminating')) {
         stopWatching();
         originals.get('log').call(console, '[mkxp] Game exit detected; reloading the page.');
-        setTimeout(() => returnToTopMenu(true), 0);
+        setTimeout(() => finishMkxpGameExit(), 0);
       }
     };
   }
@@ -9877,9 +10047,8 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       }
     }
 
-    // mkxp-z 専用フォントアセットを bios として渡す。
-    // mkxp-z は system_path/Fonts/ を /Game/Fonts/ にマウントする。
-    // → Nostalgist bios パス: "mkxp-z/Fonts/<ファイル名>"
+    // mkxp-z 専用フォントをゲームフォルダ内の Fonts/ に同梱する。
+    // mkxp-z は Fonts/ をゲームフォルダまたは RTP から検索する。
     // ※ EasyRPG 用の font1/font2 は渡さない（エンジン独立）
     //
     // また、インストール済みフォントのファミリー名から fontSub エントリを生成して
@@ -9893,8 +10062,6 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     //   RGSS3 (VX Ace): "VL Gothic"
     // ゲームスクリプトが Font.default_name を上書きしている場合もあるが、
     // インストール済みフォントを全デフォルト名に対して置換登録しておく。
-    // mkxp-z に渡す bios フォントリスト（スコープを外側に出して launch に渡す）
-    let mkxpFontBios = [];
     try {
       // メタデータのみ取得（サウンドフォント等の大きいデータをまとめて読まない）
       const allAssetsMeta = await storageManager.getAllAssetsMeta();
@@ -9921,20 +10088,25 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       }
 
       const fontAssetsMeta = allAssetsMeta.filter(a => a.type === 'mkxpfont');
-      // フォントファイルを bios として収集（Nostalgist bios パス: "mkxp-z/Fonts/<filename>"）
-      // フォントは個別取得してデータを bios に渡す
+      // フォントをゲームZIPの Fonts/ に配置し、mkxp-z が通常の探索経路で読めるようにする。
+      let bundledFontCount = 0;
+      const bundledFontNames = [];
       for (const meta of fontAssetsMeta) {
         const asset = await storageManager.getAssetById(meta.id);
         if (!asset || !asset.data) continue;
         const data = asset.data instanceof Uint8Array ? asset.data
           : asset.data instanceof ArrayBuffer ? new Uint8Array(asset.data)
+          : asset.data instanceof Blob ? new Uint8Array(await asset.data.arrayBuffer())
           : null;
         if (!data) continue;
-        mkxpFontBios.push({
-          fileName: `mkxp-z/Fonts/${asset.name}`,
-          fileContent: new Blob([data]),
-        });
+        const faces = await expandMkxpFontAsset(asset.name, data);
+        for (const face of faces) {
+          mkxpZip.file(`Fonts/${face.name}`, face.data, { compression: 'STORE' });
+          bundledFontNames.push(face.name);
+          bundledFontCount++;
+        }
       }
+      console.info(`[mkxp:fonts] Bundled ${bundledFontCount} font(s): ${bundledFontNames.join(', ') || '(none)'}`);
 
       // fontSub の構築:
       // RGSS のデフォルトフォント名のうち「日本語グリフを持たないもの」を、
@@ -9947,13 +10119,14 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       // 日本語グリフを持つフォントファミリー名（インストール済みなら置換先候補）:
       const JP_FAMILIES = new Set([
         'ms gothic', 'ms pgothic', 'ms ui gothic',
-        'ｍｓ ゴシック', 'ｍｓ ｐゴシック',
+        'ms ゴシック', 'ms ｐゴシック', 'ms pゴシック',
         'ms mincho', 'ms pmincho',
         'umeplus gothic', 'vl gothic',
         'meiryo', 'yu gothic', 'yu mincho',
         'noto sans jp', 'noto serif jp',
       ]);
       // 日本語グリフを持たないデフォルト名（これらを fontSub の置換元にする）
+      const jpFamilyKeys = new Set([...JP_FAMILIES].map(normalizeFontFamilyName));
       const NON_JP_DEFAULTS = new Set(['arial', 'umeplus gothic', 'vl gothic']);
 
       // インストール済みフォントから日本語対応ファミリー名を収集
@@ -9961,7 +10134,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       const installedJpFamilies = [];
       for (const asset of fontAssetsMeta) {
         for (const family of (asset.familyNames || [])) {
-          if (JP_FAMILIES.has(family.toLowerCase())) {
+          if (jpFamilyKeys.has(normalizeFontFamilyName(family))) {
             installedJpFamilies.push(family);
           }
         }
@@ -9971,53 +10144,52 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       if (installedJpFamilies.length > 0) {
         // 置換先は最初に見つかった日本語フォント（優先: MS Gothic > MS PGothic > ...）
         const preferredJp = ['ms gothic', 'ms pgothic', 'ms ui gothic', 'meiryo', 'yu gothic'];
-        const jpTarget = installedJpFamilies.find(f => preferredJp.includes(f.toLowerCase()))
+        const jpTarget = installedJpFamilies.find(f => preferredJp.includes(normalizeFontFamilyName(f)))
           || installedJpFamilies[0];
-
         // NON_JP_DEFAULTS は日本語グリフを持たないことが確定しているデフォルト名。
         // インストール済みかどうかに関わらず、日本語フォントへの置換エントリを登録する。
         for (const defaultName of NON_JP_DEFAULTS) {
           fontSubEntries.push(`${defaultName}>${jpTarget}`);
         }
+        console.info(`[mkxp:fonts] Japanese font target: ${jpTarget}; fontSub: ${fontSubEntries.join(', ')}`);
       }
 
-      // Fonts/ ディレクトリエントリを明示的に追加。
-      // JSZip はデフォルトでディレクトリエントリを作らないが、
-      // PhysFS が PHYSFS_enumerate("/Game", ...) で "Fonts" エントリを列挙するには
-      // ZIP 内に明示的なディレクトリエントリが必要。
-      
-      // メモリ節約: フォント埋め込みを完全に無効化（システムフォントに依存）
-      // RTPが正常にマウントできれば、ゲーム起動に必須ではない
-      const ENABLE_FONT_EMBEDDING = false;
-      
-      if (ENABLE_FONT_EMBEDDING) {
-        const ESSENTIAL_FONTS = new Set(['msgothic.ttc', 'msmincho.ttc']);
-        const fontsToEmbed = fontAssets.filter(a => 
-          a.data && a.name && ESSENTIAL_FONTS.has(a.name.toLowerCase())
-        );
-        
-        if (fontsToEmbed.length > 0) {
-          mkxpZip.folder('Fonts');
-        }
-        for (const asset of fontsToEmbed) {
-          const zipName = asset.name.toLowerCase().endsWith('.ttc')
-            ? asset.name.replace(/\.ttc$/i, '.ttf')
-            : asset.name;
-          mkxpZip.file(`Fonts/${zipName}`, asset.data, { compression: 'STORE' });
+      // mkxp.json にフォント置換とサウンドフォント設定を反映する。
+      // 既存設定は保持しつつ、アプリ側で必要な項目だけマージする。
+      let mkxpJsonObj = {};
+      const existingMkxpJson = mkxpZip.file('mkxp.json');
+      if (existingMkxpJson) {
+        try {
+          mkxpJsonObj = JSON.parse(await existingMkxpJson.async('string'));
+          if (!mkxpJsonObj || Array.isArray(mkxpJsonObj) || typeof mkxpJsonObj !== 'object') {
+            mkxpJsonObj = {};
+          }
+        } catch (error) {
+          console.warn('[mkxp] Existing mkxp.json is invalid; keeping it unchanged:', error);
+          mkxpJsonObj = null;
         }
       }
-
-      // mkxp.json を生成してゲーム ZIP に追加
-      // fontSub とサウンドフォント設定をまとめて書く。
-      // ゲーム側の mkxp.json がすでにある場合は上書きしない（ゲーム側の設定を尊重）。
-      const mkxpJsonObj = {};
       if (fontSubEntries.length > 0) {
-        mkxpJsonObj.fontSub = [...new Set(fontSubEntries)];
+        if (mkxpJsonObj) {
+          const existingFontSub = Array.isArray(mkxpJsonObj.fontSub) ? mkxpJsonObj.fontSub : [];
+          mkxpJsonObj.fontSub = [...new Set([...existingFontSub, ...fontSubEntries])];
+        }
       }
-      if (settings.soundfont) {
+      if (installedJpFamilies.length > 0 && mkxpJsonObj) {
+        // ZIP内に置くだけでは実行されないため、両タイミングに明示登録する。
+        mkxpJsonObj.preloadScript = [...new Set([
+          ...(Array.isArray(mkxpJsonObj.preloadScript) ? mkxpJsonObj.preloadScript : []),
+          'Scripts/Preload/font_fix.rb',
+        ])];
+        mkxpJsonObj.postloadScript = [...new Set([
+          ...(Array.isArray(mkxpJsonObj.postloadScript) ? mkxpJsonObj.postloadScript : []),
+          'Scripts/Preload/font_fix.rb',
+        ])];
+      }
+      if (settings.soundfont && mkxpJsonObj) {
         mkxpJsonObj.midiSoundFont = `SoundFonts/${settings.soundfont}`;
       }
-      if (Object.keys(mkxpJsonObj).length > 0 && !mkxpZip.file('mkxp.json')) {
+      if (mkxpJsonObj && Object.keys(mkxpJsonObj).length > 0) {
         mkxpZip.file('mkxp.json', JSON.stringify(mkxpJsonObj, null, 2), { compression: 'STORE' });
       }
 
@@ -10028,7 +10200,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       //            "mkxp-z/Scripts/Postload/font_fix.rb"
       if (installedJpFamilies.length > 0) {
         const preferredJp = ['ms gothic', 'ms pgothic', 'ms ui gothic', 'meiryo', 'yu gothic'];
-        const jpTarget = installedJpFamilies.find(f => preferredJp.includes(f.toLowerCase()))
+        const jpTarget = installedJpFamilies.find(f => preferredJp.includes(normalizeFontFamilyName(f)))
           || installedJpFamilies[0];
         // Font.default_name には文字列または配列を渡せる
         // 日本語フォントを先頭に、元のデフォルト名を fallback として並べる
@@ -10097,7 +10269,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     const coreJsBlob = new Blob([patchedJs], { type: 'application/javascript' });
 
     console.log(`[mkxp:timing] Before Nostalgist.launch ${elapsed()}`);
-    stopMkxpGameExitWatch = watchMkxpGameExit();
+    stopMkxpGameExitWatch = watchMkxpGameExit(gameName);
     const nostalgist = await window.Nostalgist.launch({
       core: {
         js: { fileContent: coreJsBlob, fileName: 'mkxp-z_libretro.js' },
@@ -10108,17 +10280,13 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
         fileName: 'game.mkxpz',
         fileContent: mkxpzBlob,
       },
-      bios: mkxpFontBios,
       element: mkxpCanvas,
       retroarchConfig: {
         video_aspect_ratio: '1.333333',
         video_scale_integer: false,
-        // EasyRPGと同じIndexedDB上のIDBFSにセーブを保存する。
-        savefile_directory: `/Save/${sanitizeGameTitleForStorageKey(gameName || 'Unknown Game')}`,
-        // 大量のWASI DEBUGログをブラウザconsoleへ流すと起動・描画を妨げるため、
-        // 通常利用ではINFO以上に抑える（問題調査時は一時的に 0 に戻す）。
-        log_verbosity: false,
-        libretro_log_level: 1,
+        // 終了検知もRetroArchのログを利用するため、詳細ログを有効にする。
+        log_verbosity: true,
+        libretro_log_level: 0,
         // RGSS デフォルト: Z=決定(Input::C=JOYPAD_A), X=キャンセル(Input::B=JOYPAD_B)
         // RetroArch デフォルトは逆(z→JOYPAD_B, x→JOYPAD_A)なのでここで修正
         input_player1_a: 'z',
@@ -10135,17 +10303,13 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           if (c && w > 0 && h > 0) { c.width = w; c.height = h; }
         },
         JSEvents: { eventHandlers: [], registerOrRemoveHandler: () => {} },
-        // ゲーム終了検知: RetroArch の正常終了パスで setTimeout(Module.retroArchExit, 0) が呼ばれる
-        retroArchExit: async () => {
-          // セーブを IndexedDB に保存してからトップに戻る
-          if (typeof window.__mkxpOnSaveExit === 'function') {
-            try { await window.__mkxpOnSaveExit(); } catch {}
-            window.__mkxpOnSaveExit = null;
-          }
-          if (typeof returnToTopMenu === 'function') returnToTopMenu();
-        },
+        // RetroArch/Emscriptenいずれの終了通知でもセーブ同期後に必ず再読込する。
+        onExit: () => finishMkxpGameExit(),
+        retroArchExit: () => finishMkxpGameExit(),
       },
       waitForInteraction: false,
+      // FSへのセーブ復元を済ませてからゲームを実行する。
+      runEmulatorManually: true,
     });
 
     window.MKXP_ACTIVE_NOSTALGIST = nostalgist;
@@ -10158,19 +10322,19 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     // IDBFS はビルドに含まれていないため、Module.FS を直接操作して
     // IndexedDB (storageManager) との間でセーブを同期する。
     //
-    // セーブパス: RetroArch save_directory の下に mkxp-z が
+    // RetroArchのGET_SAVE_DIRECTORY配下にmkxp-zが
     //   mkxp-z/Saves/<punycode-title>/ を作る。
-    //   RetroArch save_directory = /home/web_user/retroarch/userdata/saves/mkxp-z
-    //   → 実パス = /home/web_user/retroarch/userdata/saves/mkxp-z/mkxp-z/Saves/<punycode>/
     //
     // IndexedDB 側の保存先: storageManager の idbfs グループ
     //   groupType='save', groupId=<gameId>, path=Save/<gameId>/Save1.rvdata 等
     // ------------------------------------------------------------------
     const mkxpSaveGameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
-    const mkxpSaveBasePath = '/home/web_user/retroarch/userdata/saves/mkxp-z/mkxp-z/Saves';
+    const mkxpSaveBasePath = '/home/web_user/retroarch/saves/mkxp-z/mkxp-z/Saves';
 
     // セーブファイルの拡張子（VX: .rvdata, VX Ace: .rvdata2, XP: .rxdata）
     const MKXP_SAVE_EXTS = /\.(rxdata|rvdata|rvdata2)$/i;
+    const mkxpLastSavedData = new Map();
+    let mkxpSavePathWarningShown = false;
 
     // mkxp-z の FS からセーブファイルを IndexedDB に保存する
     async function mkxpSavesToIndexedDB() {
@@ -10179,7 +10343,29 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
         // mkxp-z/Saves/ 以下のサブディレクトリを全て走査する
         let saveDirs;
         try { saveDirs = fs.readdir(mkxpSaveBasePath).filter(n => n !== '.' && n !== '..'); }
-        catch { return; } // セーブディレクトリが存在しない場合は何もしない
+        catch (error) {
+          if (!mkxpSavePathWarningShown) {
+            console.warn(`[mkxp] Save directory is not accessible: ${mkxpSaveBasePath}`, error);
+            mkxpSavePathWarningShown = true;
+          }
+          return;
+        }
+
+        let gameSaveDir;
+        try {
+          const mapping = JSON.parse(localStorage.getItem('mkxpSaveDirectories') || '{}');
+          gameSaveDir = mapping[mkxpSaveGameId];
+        } catch {}
+        if (!gameSaveDir && saveDirs.length === 1) gameSaveDir = saveDirs[0];
+        if (!gameSaveDir || !saveDirs.includes(gameSaveDir)) {
+          if (!mkxpSavePathWarningShown) {
+            console.warn(`[mkxp] Could not identify save folder for ${mkxpSaveGameId}; found:`, saveDirs);
+            mkxpSavePathWarningShown = true;
+          }
+          return;
+        }
+        mkxpSavePathWarningShown = false;
+        saveDirs = [gameSaveDir];
 
         for (const subDir of saveDirs) {
           const dirPath = `${mkxpSaveBasePath}/${subDir}`;
@@ -10192,9 +10378,12 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
             const fpath = `${dirPath}/${fname}`;
             let data;
             try { data = fs.readFile(fpath); } catch { continue; }
+            const previous = mkxpLastSavedData.get(fname);
+            if (previous && previous.length === data.length && previous.every((byte, i) => byte === data[i])) continue;
             // IndexedDB に保存: Save/<gameId>/<filename>
             try {
               await storageManager.saveIDBFSFile(mkxpSaveGameId, fname, data);
+              mkxpLastSavedData.set(fname, new Uint8Array(data));
               console.log(`[mkxp] Saved to IndexedDB: Save/${mkxpSaveGameId}/${fname} (${data.length} bytes)`);
             } catch (e) {
               console.warn(`[mkxp] Failed to save Save/${mkxpSaveGameId}/${fname} to IndexedDB:`, e);
@@ -10214,12 +10403,28 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
         const saves = await storageManager.getIDBFSSaves(mkxpSaveGameId);
         if (!saves || saves.length === 0) return;
 
-        // セーブディレクトリを作成（punycode ディレクトリは不明なので既存を流用するか新規作成）
-        // mkxp-z が起動時に自分でディレクトリを作るため、ここでは直接書き込む
-        // まず mkxp-z のセーブディレクトリが存在するか確認（少し待つ必要あり）
-        const targetDir = `${mkxpSaveBasePath}/${mkxpSaveGameId}`;
-        try { fs.mkdir(`${mkxpSaveBasePath}`); } catch {}
-        try { fs.mkdir(targetDir); } catch {}
+        // mkxp-zが作る保存先はゲームタイトルのpunycode名なので、
+        // 前回保存時に記録した実ディレクトリへ復元する。
+        const mapping = JSON.parse(localStorage.getItem('mkxpSaveDirectories') || '{}');
+        let targetSubDir = mapping[mkxpSaveGameId];
+        for (let attempt = 0; attempt < 40; attempt++) {
+          try {
+            const dirs = fs.readdir(mkxpSaveBasePath).filter(n => n !== '.' && n !== '..');
+            if (targetSubDir && dirs.includes(targetSubDir)) break;
+            if (!targetSubDir && dirs.length === 1) targetSubDir = dirs[0];
+            if (targetSubDir && dirs.includes(targetSubDir)) break;
+          } catch {}
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (!targetSubDir) {
+          console.warn('[mkxp] Cannot identify the game save folder yet; skipping save restore.');
+          return;
+        }
+        const targetDir = `${mkxpSaveBasePath}/${targetSubDir}`;
+        // mkxp-z がまだゲームを開始していないため、保存先が未作成ならここで作成する。
+        try { fs.mkdirTree(targetDir); } catch (e) {
+          if (!fs.analyzePath(targetDir).exists) throw e;
+        }
 
         for (const save of saves) {
           const fname = save.path.replace(/^.*\//, ''); // 最後のパス部分
@@ -10236,8 +10441,35 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       }
     }
 
-    // セーブを IndexedDB から復元（遅延実行: mkxp-z がセーブディレクトリを作った後）
-    setTimeout(indexedDBToMkxpSaves, 3000);
+    // セーブファイルへの書き込み完了時だけIndexedDBへ同期する。
+    function installMkxpSaveWriteHook() {
+      const fs = nostalgist.getEmscripten().Module.FS;
+      if (!fs || typeof fs.close !== 'function' || fs.close.__mkxpSaveHook) return;
+      const originalClose = fs.close;
+      const closeWithSaveSync = function(stream) {
+        const result = originalClose.apply(this, arguments);
+        const filePath = stream && typeof stream.path === 'string' ? stream.path : '';
+        const isSavePath = filePath.startsWith(mkxpSaveBasePath + '/') &&
+          MKXP_SAVE_EXTS.test(filePath);
+        const isWritable = !stream || stream.flags === undefined ||
+          (stream.flags & 3) !== 0 || (stream.flags & 64) !== 0 || (stream.flags & 1024) !== 0;
+        if (isSavePath && isWritable) {
+          if (window.__mkxpSaveSyncTimeout) clearTimeout(window.__mkxpSaveSyncTimeout);
+          window.__mkxpSaveSyncTimeout = setTimeout(() => {
+            window.__mkxpSaveSyncTimeout = null;
+            mkxpSavesToIndexedDB();
+          }, 400);
+        }
+        return result;
+      };
+      closeWithSaveSync.__mkxpSaveHook = true;
+      fs.close = closeWithSaveSync;
+    }
+
+    // コア実行前に復元・監視設定を完了させ、起動時のセーブ読み込みに間に合わせる。
+    await indexedDBToMkxpSaves();
+    installMkxpSaveWriteHook();
+    await nostalgist.launchEmulator();
 
     // ゲーム終了時にセーブを IndexedDB に保存
     window.__mkxpOnSaveExit = mkxpSavesToIndexedDB;
