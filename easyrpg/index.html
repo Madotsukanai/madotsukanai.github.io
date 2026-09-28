@@ -3496,6 +3496,64 @@ class GameStorageManager {
     });
   }
 
+  // mkxp-z セーブデータを EasyRPG と同じ /home/web_user IndexedDB の FILE_DATA に保存する
+  async saveIDBFSFile(gameId, idbPath, data) {
+    const IDBFS_DB = '/home/web_user';
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDBFS_DB, 21);
+      req.onupgradeneeded = (e) => {
+        if (!e.target.result.objectStoreNames.contains('FILE_DATA'))
+          e.target.result.createObjectStore('FILE_DATA');
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = () => reject(req.error);
+    });
+    const tx = db.transaction(['FILE_DATA'], 'readwrite');
+    const store = tx.objectStore('FILE_DATA');
+    const key = `Save/${gameId}/${idbPath.replace(/^.*\//, '')}`;
+    store.put({ timestamp: new Date(), mode: 33206, contents: data instanceof Uint8Array ? data : new Uint8Array(data) }, key);
+    // 親ディレクトリエントリ
+    store.put({ timestamp: new Date(), mode: 16895 }, `Save/${gameId}`);
+    store.put({ timestamp: new Date(), mode: 16895 }, `Save`);
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
+  // mkxp-z セーブデータを /home/web_user IndexedDB の FILE_DATA から取得する
+  async getIDBFSSaves(gameId) {
+    const IDBFS_DB = '/home/web_user';
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDBFS_DB, 21);
+      req.onupgradeneeded = (e) => {
+        if (!e.target.result.objectStoreNames.contains('FILE_DATA'))
+          e.target.result.createObjectStore('FILE_DATA');
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = () => reject(req.error);
+    });
+    const tx = db.transaction(['FILE_DATA'], 'readonly');
+    const store = tx.objectStore('FILE_DATA');
+    const prefix = `Save/${gameId}/`;
+    const results = [];
+    await new Promise((resolve, reject) => {
+      const range = IDBKeyRange.bound(prefix, prefix + '\uffff');
+      const req = store.openCursor(range);
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor) { resolve(); return; }
+        if (cursor.value && cursor.value.contents) {
+          results.push({ path: cursor.key, data: cursor.value.contents });
+        }
+        cursor.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return results;
+  }
+
   async deleteAsset(assetId) {
     // Check if asset is actively used before deleting
     const assets = await this.getAllAssets();
@@ -8103,6 +8161,140 @@ async function copySaveDirectoryForRenamedGame(oldSaveDir, newSaveDir) {
 }
 
 // ZIP処理用のユーティリティ関数
+
+/**
+ * RGSS 暗号化アーカイブ（.rgssad / .rgss2a / .rgss3a）を展開する。
+ *
+ * v1 (.rgssad / .rgss2a):
+ *   ヘッダ: "RGSSAD\0\x01"（8バイト）
+ *   ファイルエントリ: nameLen(uint32 xor magic) | name(各バイト xor magic) | size(uint32 xor magic) | data(各4バイト xor magic)
+ *   magic = 0xDEADCAFE、毎回 magic = magic * 7 + 3 で更新
+ *
+ * v3 (.rgss3a):
+ *   ヘッダ: "RGSSAD\0\x03"（8バイト）+ baseMagic(uint32)、baseMagic = baseMagic*9+3
+ *   TOC: offset(xor baseMagic) | size(xor baseMagic) | magic(xor baseMagic) | nameLen(xor baseMagic) | name(xor baseMagic bytes)
+ *   offset=0 でエントリ終端
+ *
+ * @param {Uint8Array} buf - アーカイブのバイト列
+ * @returns {{ path: string, data: Uint8Array }[] | null} - 展開されたファイル一覧、またはフォーマット不正の場合 null
+ */
+function extractRgssArchive(buf) {
+  const RGSS_MAGIC = 0xDEADCAFE;
+
+  function readUint32LE(view, pos) {
+    return view.getUint32(pos, true);
+  }
+
+  // ヘッダ確認
+  const header = String.fromCharCode(buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
+  if (header !== 'RGSSAD') return null;
+  // buf[6] == 0x00, buf[7] == version (1 or 3)
+  const version = buf[7];
+  if (version !== 1 && version !== 3) return null;
+
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const files = [];
+
+  if (version === 1) {
+    // v1 / v2 (.rgssad / .rgss2a)
+    let magic = RGSS_MAGIC;
+    let pos = 8; // ヘッダ直後から
+
+    while (pos + 4 <= buf.length) {
+      // nameLen
+      let nameLen = readUint32LE(view, pos) ^ magic;
+      magic = (magic * 7 + 3) >>> 0;
+      pos += 4;
+
+      if (nameLen === 0 || pos + nameLen > buf.length) break;
+
+      // name（各バイト xor magic の下位バイト）
+      const nameBytes = new Uint8Array(nameLen);
+      for (let i = 0; i < nameLen; i++) {
+        nameBytes[i] = buf[pos + i] ^ (magic & 0xFF);
+        magic = (magic * 7 + 3) >>> 0;
+        if (nameBytes[i] === 0x5C) nameBytes[i] = 0x2F; // '\\' → '/'
+      }
+      pos += nameLen;
+      const path = new TextDecoder('utf-8').decode(nameBytes);
+
+      if (pos + 4 > buf.length) break;
+
+      // size
+      let size = readUint32LE(view, pos) ^ magic;
+      magic = (magic * 7 + 3) >>> 0;
+      pos += 4;
+
+      if (pos + size > buf.length) break;
+
+      // data（4バイト単位で XOR）
+      // C++ の RGSS_openArchive は TOC読み込み中 data をスキップするだけで magic を進めない。
+      // startMagic = 現在の magic を保存し、seek でデータをスキップして次エントリへ進む。
+      const startMagic = magic; // このファイルのデータ復号に使う magic
+      const data = buf.slice(pos, pos + size);
+      let fm = startMagic;
+      for (let i = 0; i < data.length; i += 4) {
+        const xorKey = fm;
+        fm = (fm * 7 + 3) >>> 0;
+        const remaining = Math.min(4, data.length - i);
+        for (let b = 0; b < remaining; b++) {
+          data[i + b] ^= (xorKey >>> (b * 8)) & 0xFF;
+        }
+      }
+      // TOC 読み込み中はデータをスキップするだけ（magic は進めない）
+
+      pos += size;
+      files.push({ path, data });
+    }
+
+  } else {
+    // v3 (.rgss3a)
+    let baseMagic = readUint32LE(view, 8);
+    baseMagic = ((baseMagic * 9) + 3) >>> 0;
+    let pos = 12; // ヘッダ8バイト + baseMagic 4バイト
+
+    // TOC 読み込み
+    const entries = [];
+    while (pos + 16 <= buf.length) {
+      let offset = readUint32LE(view, pos) ^ baseMagic; pos += 4;
+      if (offset === 0) break;
+      let size   = readUint32LE(view, pos) ^ baseMagic; pos += 4;
+      let magic  = readUint32LE(view, pos) ^ baseMagic; pos += 4;
+      let nameLen= readUint32LE(view, pos) ^ baseMagic; pos += 4;
+
+      if (pos + nameLen > buf.length) break;
+
+      const nameBytes = new Uint8Array(nameLen);
+      for (let i = 0; i < nameLen; i++) {
+        nameBytes[i] = buf[pos + i] ^ ((baseMagic >>> (8 * (i % 4))) & 0xFF);
+        if (nameBytes[i] === 0x5C) nameBytes[i] = 0x2F; // '\\' → '/'
+      }
+      pos += nameLen;
+      const path = new TextDecoder('utf-8').decode(nameBytes);
+      entries.push({ offset, size, magic, path });
+    }
+
+    // データ読み込み
+    for (const entry of entries) {
+      if (entry.offset + entry.size > buf.length) continue;
+      const data = buf.slice(entry.offset, entry.offset + entry.size);
+      let fm = entry.magic;
+      for (let i = 0; i < data.length; i += 4) {
+        const xorKey = fm;
+        fm = (fm * 7 + 3) >>> 0;
+        const remaining = Math.min(4, data.length - i);
+        for (let b = 0; b < remaining; b++) {
+          data[i + b] ^= (xorKey >>> (b * 8)) & 0xFF;
+        }
+      }
+      files.push({ path: entry.path, data });
+    }
+  }
+
+  return files.length > 0 ? files : null;
+}
+
+
 function detectEncoding(uint8Array) {
   // UTF-8 BOM (EF BB BF) があれば即 UTF-8 確定
   if (uint8Array.length >= 3 &&
@@ -9545,6 +9737,28 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       }
       if (!data) continue;
       const relPath = f.path.replace(/^games\/[^/]+\//i, '');
+
+      // RGSS 暗号化アーカイブ (.rgssad / .rgss2a / .rgss3a) を検出したら事前展開する。
+      // mkxp-z の WASI 環境では PHYSFS_mountHandle による暗号化アーカイブのオンデマンド展開が
+      // ブロッキング読み込みでハングするため、JS 側で展開して個別ファイルとして ZIP に詰める。
+      if (/\.(rgssad|rgss2a|rgss3a)$/i.test(relPath)) {
+        const buf = data instanceof Uint8Array ? data : new Uint8Array(data);
+        const extracted = extractRgssArchive(buf);
+        if (extracted) {
+          console.log(`[mkxp] Extracted ${extracted.length} files from ${relPath}`);
+          for (const entry of extracted) {
+            if (!mkxpZip.file(entry.path)) {
+              mkxpZip.file(entry.path, entry.data, { compression: 'STORE' });
+              packedCount++;
+            }
+          }
+          // アーカイブ本体は ZIP に含めない（展開済みのため不要）
+          continue;
+        } else {
+          console.warn(`[mkxp] Failed to extract RGSS archive: ${relPath}, falling through`);
+        }
+      }
+
       mkxpZip.file(relPath, data, { compression: 'STORE' });
       packedCount++;
     }
@@ -9899,6 +10113,8 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       retroarchConfig: {
         video_aspect_ratio: '1.333333',
         video_scale_integer: false,
+        // EasyRPGと同じIndexedDB上のIDBFSにセーブを保存する。
+        savefile_directory: `/Save/${sanitizeGameTitleForStorageKey(gameName || 'Unknown Game')}`,
         // 大量のWASI DEBUGログをブラウザconsoleへ流すと起動・描画を妨げるため、
         // 通常利用ではINFO以上に抑える（問題調査時は一時的に 0 に戻す）。
         log_verbosity: false,
@@ -9919,13 +10135,14 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           if (c && w > 0 && h > 0) { c.width = w; c.height = h; }
         },
         JSEvents: { eventHandlers: [], registerOrRemoveHandler: () => {} },
-        onExit: (status) => {
-          console.log('[mkxp] Emscripten runtime exited with status:', status);
-          if (typeof returnToTopMenu === 'function') returnToTopMenu(true);
-        },
         // ゲーム終了検知: RetroArch の正常終了パスで setTimeout(Module.retroArchExit, 0) が呼ばれる
-        retroArchExit: () => {
-          if (typeof returnToTopMenu === 'function') returnToTopMenu(true);
+        retroArchExit: async () => {
+          // セーブを IndexedDB に保存してからトップに戻る
+          if (typeof window.__mkxpOnSaveExit === 'function') {
+            try { await window.__mkxpOnSaveExit(); } catch {}
+            window.__mkxpOnSaveExit = null;
+          }
+          if (typeof returnToTopMenu === 'function') returnToTopMenu();
         },
       },
       waitForInteraction: false,
@@ -9935,6 +10152,95 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     isGamePlaying = true;
     isGameLoading = false;
     statusDiv.textContent = '';
+
+    // ------------------------------------------------------------------
+    // mkxp-z セーブデータ管理
+    // IDBFS はビルドに含まれていないため、Module.FS を直接操作して
+    // IndexedDB (storageManager) との間でセーブを同期する。
+    //
+    // セーブパス: RetroArch save_directory の下に mkxp-z が
+    //   mkxp-z/Saves/<punycode-title>/ を作る。
+    //   RetroArch save_directory = /home/web_user/retroarch/userdata/saves/mkxp-z
+    //   → 実パス = /home/web_user/retroarch/userdata/saves/mkxp-z/mkxp-z/Saves/<punycode>/
+    //
+    // IndexedDB 側の保存先: storageManager の idbfs グループ
+    //   groupType='save', groupId=<gameId>, path=Save/<gameId>/Save1.rvdata 等
+    // ------------------------------------------------------------------
+    const mkxpSaveGameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
+    const mkxpSaveBasePath = '/home/web_user/retroarch/userdata/saves/mkxp-z/mkxp-z/Saves';
+
+    // セーブファイルの拡張子（VX: .rvdata, VX Ace: .rvdata2, XP: .rxdata）
+    const MKXP_SAVE_EXTS = /\.(rxdata|rvdata|rvdata2)$/i;
+
+    // mkxp-z の FS からセーブファイルを IndexedDB に保存する
+    async function mkxpSavesToIndexedDB() {
+      try {
+        const fs = nostalgist.getEmscripten().Module.FS;
+        // mkxp-z/Saves/ 以下のサブディレクトリを全て走査する
+        let saveDirs;
+        try { saveDirs = fs.readdir(mkxpSaveBasePath).filter(n => n !== '.' && n !== '..'); }
+        catch { return; } // セーブディレクトリが存在しない場合は何もしない
+
+        for (const subDir of saveDirs) {
+          const dirPath = `${mkxpSaveBasePath}/${subDir}`;
+          let files;
+          try { files = fs.readdir(dirPath).filter(n => n !== '.' && n !== '..'); }
+          catch { continue; }
+
+          for (const fname of files) {
+            if (!MKXP_SAVE_EXTS.test(fname)) continue;
+            const fpath = `${dirPath}/${fname}`;
+            let data;
+            try { data = fs.readFile(fpath); } catch { continue; }
+            // IndexedDB に保存: Save/<gameId>/<filename>
+            try {
+              await storageManager.saveIDBFSFile(mkxpSaveGameId, fname, data);
+              console.log(`[mkxp] Saved to IndexedDB: Save/${mkxpSaveGameId}/${fname} (${data.length} bytes)`);
+            } catch (e) {
+              console.warn(`[mkxp] Failed to save Save/${mkxpSaveGameId}/${fname} to IndexedDB:`, e);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[mkxp] mkxpSavesToIndexedDB failed:', e);
+      }
+    }
+
+    // IndexedDB のセーブファイルを mkxp-z の FS に書き込む
+    async function indexedDBToMkxpSaves() {
+      try {
+        const fs = nostalgist.getEmscripten().Module.FS;
+        // storageManager から idbfs グループのセーブを取得
+        const saves = await storageManager.getIDBFSSaves(mkxpSaveGameId);
+        if (!saves || saves.length === 0) return;
+
+        // セーブディレクトリを作成（punycode ディレクトリは不明なので既存を流用するか新規作成）
+        // mkxp-z が起動時に自分でディレクトリを作るため、ここでは直接書き込む
+        // まず mkxp-z のセーブディレクトリが存在するか確認（少し待つ必要あり）
+        const targetDir = `${mkxpSaveBasePath}/${mkxpSaveGameId}`;
+        try { fs.mkdir(`${mkxpSaveBasePath}`); } catch {}
+        try { fs.mkdir(targetDir); } catch {}
+
+        for (const save of saves) {
+          const fname = save.path.replace(/^.*\//, ''); // 最後のパス部分
+          if (!MKXP_SAVE_EXTS.test(fname)) continue;
+          try {
+            fs.writeFile(`${targetDir}/${fname}`, save.data);
+            console.log(`[mkxp] Restored save from IndexedDB: ${fname}`);
+          } catch (e) {
+            console.warn(`[mkxp] Failed to restore save ${fname}:`, e);
+          }
+        }
+      } catch (e) {
+        console.warn('[mkxp] indexedDBToMkxpSaves failed:', e);
+      }
+    }
+
+    // セーブを IndexedDB から復元（遅延実行: mkxp-z がセーブディレクトリを作った後）
+    setTimeout(indexedDBToMkxpSaves, 3000);
+
+    // ゲーム終了時にセーブを IndexedDB に保存
+    window.__mkxpOnSaveExit = mkxpSavesToIndexedDB;
 
   } catch (error) {
     if (stopMkxpGameExitWatch) stopMkxpGameExitWatch();
