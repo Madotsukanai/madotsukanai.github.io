@@ -7709,17 +7709,17 @@ function setGameButtonsDisabled(disabled) {
 }
 
 // Function to return to the startup menu when the game ends
-function returnToTopMenu() {
+function returnToTopMenu(forceReload = false) {
   console.log('[returnToTopMenu] Re-displaying the top menu...');
   
-  if (isGamePlaying) {
+  if (forceReload || isGamePlaying) {
+    if (isGameExitReloading) return;
+    isGameExitReloading = true;
     console.log('[returnToTopMenu] Game was active. Performing a clean reload to avoid memory/input leaks...');
     isGamePlaying = false;
-    // mkxp-z (Nostalgist.js) セッションのクリーンアップ
-    if (window.MKXP_ACTIVE_NOSTALGIST) {
-      try { window.MKXP_ACTIVE_NOSTALGIST.exit(); } catch (e) {}
-      window.MKXP_ACTIVE_NOSTALGIST = null;
-    }
+    // ゲーム終了ログの後は RetroArch 側ですでに SHUTDOWN が始まっている。
+    // Nostalgist.exit() を重ねると WASM worker の終了処理と競合するため、
+    // セッションの破棄はページ再読み込みに任せる。
     window.location.reload();
     return;
   }
@@ -7760,6 +7760,36 @@ let isGameLoading = false;
 let isGameDeleting = false;
 let isGameRenaming = false;
 let isGamePlaying = false;
+let isGameExitReloading = false;
+
+// mkxp-z はゲーム終了後も RetroArch の dummy core に移行してランタイム自体は終了しない。
+// そのため Emscripten の onExit ではなく、libretro core の終了ログを監視する。
+function watchMkxpGameExit() {
+  const methods = ['log', 'info', 'warn', 'error', 'debug'];
+  const originals = new Map(methods.map(method => [method, console[method]]));
+  let watching = true;
+  const stopWatching = () => {
+    if (!watching) return;
+    watching = false;
+    for (const [method, original] of originals) {
+      console[method] = original;
+    }
+  };
+
+  for (const [method, original] of originals) {
+    console[method] = function(...args) {
+      original.apply(this, args);
+      const message = args.map(value => String(value)).join(' ');
+      if (message.includes('Game exited; terminating')) {
+        stopWatching();
+        originals.get('log').call(console, '[mkxp] Game exit detected; reloading the page.');
+        setTimeout(() => returnToTopMenu(true), 0);
+      }
+    };
+  }
+
+  return stopWatching;
+}
 
 window.changeGameRTP = async function(gameId, value) {
   try {
@@ -9480,6 +9510,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
   statusDiv.textContent = 'mkxp-z エンジンを起動中...';
   const t0 = performance.now();
   const elapsed = () => `+${((performance.now() - t0) / 1000).toFixed(2)}s`;
+  let stopMkxpGameExitWatch = null;
 
   try {
     // Nostalgist.js を動的ロード（まだ読み込まれていない場合）
@@ -9847,10 +9878,12 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       .replace(
         'RPE.sentinelPromise=navigator.wakeLock.request("screen")',
         'RPE.sentinelPromise=navigator.wakeLock.request("screen").catch(()=>{})'
-      );
+      )
+      ;
     const coreJsBlob = new Blob([patchedJs], { type: 'application/javascript' });
 
     console.log(`[mkxp:timing] Before Nostalgist.launch ${elapsed()}`);
+    stopMkxpGameExitWatch = watchMkxpGameExit();
     const nostalgist = await window.Nostalgist.launch({
       core: {
         js: { fileContent: coreJsBlob, fileName: 'mkxp-z_libretro.js' },
@@ -9866,8 +9899,10 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       retroarchConfig: {
         video_aspect_ratio: '1.333333',
         video_scale_integer: false,
-        log_verbosity: true,
-        libretro_log_level: 0,
+        // 大量のWASI DEBUGログをブラウザconsoleへ流すと起動・描画を妨げるため、
+        // 通常利用ではINFO以上に抑える（問題調査時は一時的に 0 に戻す）。
+        log_verbosity: false,
+        libretro_log_level: 1,
         // RGSS デフォルト: Z=決定(Input::C=JOYPAD_A), X=キャンセル(Input::B=JOYPAD_B)
         // RetroArch デフォルトは逆(z→JOYPAD_B, x→JOYPAD_A)なのでここで修正
         input_player1_a: 'z',
@@ -9884,6 +9919,14 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           if (c && w > 0 && h > 0) { c.width = w; c.height = h; }
         },
         JSEvents: { eventHandlers: [], registerOrRemoveHandler: () => {} },
+        onExit: (status) => {
+          console.log('[mkxp] Emscripten runtime exited with status:', status);
+          if (typeof returnToTopMenu === 'function') returnToTopMenu(true);
+        },
+        // ゲーム終了検知: RetroArch の正常終了パスで setTimeout(Module.retroArchExit, 0) が呼ばれる
+        retroArchExit: () => {
+          if (typeof returnToTopMenu === 'function') returnToTopMenu(true);
+        },
       },
       waitForInteraction: false,
     });
@@ -9893,10 +9936,8 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     isGameLoading = false;
     statusDiv.textContent = '';
 
-    // ゲーム終了イベントのフック（RetroArch はコールバックを提供しないため
-    // canvas が非表示になる / 手動で returnToTopMenu() を呼ぶ方式のみ対応）
-
   } catch (error) {
+    if (stopMkxpGameExitWatch) stopMkxpGameExitWatch();
     console.error('[mkxp] Failed to launch:', error);
     statusDiv.textContent = 'エラー: mkxp-z の起動に失敗しました';
     document.getElementById('startup-dialog').style.display = 'flex';
