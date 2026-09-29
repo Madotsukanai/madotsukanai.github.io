@@ -3719,9 +3719,18 @@ class GameStorageManager {
     });
     const tx = db.transaction(['FILE_DATA'], 'readwrite');
     const store = tx.objectStore('FILE_DATA');
-    const key = `/customgame/Save/${gameId}/${idbPath.replace(/^.*\//, '')}`;
+    // idbPath にサブパス（例: "Save/1.rvdata"）が含まれる場合はそのまま保持する
+    const relPath = idbPath.replace(/\\/g, '/').replace(/^\/+/, '');
+    const key = `/customgame/Save/${gameId}/${relPath}`;
     store.put({ timestamp: new Date(), mode: 33206, contents: data instanceof Uint8Array ? data : new Uint8Array(data) }, key);
-    // 親ディレクトリエントリ
+    // 親ディレクトリエントリを全階層分作成
+    const parts = relPath.split('/');
+    for (let i = 1; i <= parts.length; i++) {
+      const dirKey = `/customgame/Save/${gameId}/${parts.slice(0, i - 1).join('/')}`.replace(/\/$/, '');
+      if (dirKey !== `/customgame/Save/${gameId}`) {
+        store.put({ timestamp: new Date(), mode: 16895 }, dirKey);
+      }
+    }
     store.put({ timestamp: new Date(), mode: 16895 }, `/customgame/Save/${gameId}`);
     store.put({ timestamp: new Date(), mode: 16895 }, '/customgame/Save');
     await new Promise((resolve, reject) => {
@@ -5968,6 +5977,29 @@ class StorageExplorer {
             req.onerror = () => reject(req.error);
           };
           doOpen();
+        });
+      } else if (groupType === 'soundfont') {
+        // IDBFS データベース (groupId = dbName) の Soundfont エントリを削除
+        await new Promise((resolve, reject) => {
+          const req = indexedDB.open(groupId, 21);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('FILE_DATA')) {
+              db.createObjectStore('FILE_DATA');
+            }
+          };
+          req.onsuccess = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains('FILE_DATA')) { db.close(); resolve(); return; }
+            const tx = db.transaction(['FILE_DATA'], 'readwrite');
+            const store = tx.objectStore('FILE_DATA');
+            const key = originalKey || ('/' + relativePath);
+            const delReq = store.delete(key);
+            delReq.onsuccess = () => { db.close(); resolve(); };
+            delReq.onerror = () => { db.close(); reject(delReq.error); };
+            tx.onerror = () => { db.close(); reject(tx.error); };
+          };
+          req.onerror = () => reject(req.error);
         });
       } else if (groupType === 'asset') {
         // エクスプローラー上での削除に対応
@@ -8337,7 +8369,9 @@ function watchMkxpGameExit(gameName) {
     console[method] = function(...args) {
       original.apply(this, args);
       const message = args.map(value => String(value)).join(' ');
-      const savePathMatch = message.match(/\/mkxp-z\/Saves\/([^"\]]+)/);
+      // "/mkxp-z/Saves/<dir>" の最初のパス要素（ディレクトリ名のみ）を抽出する
+      // ディレクトリ名に先頭スペースや記号が含まれる場合があるため、/ と " と ] のみ除外する
+      const savePathMatch = message.match(/\/mkxp-z\/Saves\/([^/"]+?)(?:\/|"|$)/);
       if (savePathMatch) {
         try {
           const gameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
@@ -10285,6 +10319,10 @@ function setStatusText(main, sub = '') {
 // ゲームファイルをメモリ上で .mkxpz (ZIP) にまとめて渡す
 // ============================================================
 async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 'auto') {
+  // EasyRPG 側と同じグローバル変数を設定してスクリーンショットのファイル名に使用する
+  const _mkxpTitle = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
+  window.EASYRPG_GAME_TITLE = _mkxpTitle;
+  window.MKXP_GAME_TITLE = _mkxpTitle;
   const statusDiv = document.getElementById('status');
   const statusMain = document.getElementById('status-main');
   const statusSub  = document.getElementById('status-sub');
@@ -10675,6 +10713,54 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           '    end',
           '  end',
           'end',
+          '',
+          '# Patch Marshal.dump to notify JS when save data is written.',
+          '# JS polls for /Save/__save_notify__ and syncs to IndexedDB when detected.',
+          'unless $mkxpfont_save_patch_done',
+          '  $mkxpfont_save_patch_done = true',
+          '  module Marshal',
+          '    class << self',
+          '      alias_method :_mkxpfont_dump_orig, :dump',
+          '      def dump(*args, &block)',
+          '        result = _mkxpfont_dump_orig(*args, &block)',
+          '        begin; IO.write("/Save/__save_notify__", ""); rescue; end',
+          '        result',
+          '      end',
+          '    end',
+          '  end',
+          'end',
+          '',
+          '# Screenshot via JS request file.',
+          '# JS writes /Save/__screenshot_request__ to trigger a screenshot.',
+          '# We patch Graphics.update to check for the request file each frame.',
+          '# Graphics.screenshot is unimplemented in RETRO builds; instead we use',
+          '# snap_to_bitmap + raw_data to get raw RGBA bytes and write them to',
+          '# /Save/__screenshot_raw__ so JS can read them back and encode as PNG.',
+          'if defined?(Graphics) && !Graphics.respond_to?(:_mkxpfont_update_orig)',
+          '  class << Graphics',
+          '    alias_method :_mkxpfont_update_orig, :update',
+          '    SCREENSHOT_REQUEST = "/Save/__screenshot_request__"',
+          '    SCREENSHOT_RAW     = "/Save/__screenshot_raw__"',
+          '    def update',
+          '      _mkxpfont_update_orig',
+          '      if File.exist?(SCREENSHOT_REQUEST)',
+          '        begin',
+          '          File.delete(SCREENSHOT_REQUEST)',
+          '          bmp = Graphics.snap_to_bitmap',
+          '          w = bmp.width',
+          '          h = bmp.height',
+          '          raw = bmp.raw_data',
+          '          bmp.dispose',
+          '          # Write: 8-byte header (width uint32le, height uint32le) + RGBA bytes',
+          '          header = [w, h].pack("V2")',
+          '          File.open(SCREENSHOT_RAW, "wb") { |f| f.write(header + raw) }',
+          '        rescue => e',
+          '          $stderr.puts "[font_fix] screenshot error: " + e.to_s',
+          '        end',
+          '      end',
+          '    end',
+          '  end',
+          'end',
         ].join("\n");
         const rubyBytes = new TextEncoder().encode(rubyScript);
         // preload スクリプト（ゲームスクリプト実行前）
@@ -10800,10 +10886,39 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     const mkxpSaveGameId = sanitizeGameTitleForStorageKey(gameName || 'Unknown Game');
     const mkxpSaveBasePath = '/home/web_user/retroarch/saves/mkxp-z/mkxp-z/Saves';
 
-    // セーブファイルの拡張子（VX: .rvdata, VX Ace: .rvdata2, XP: .rxdata）
-    const MKXP_SAVE_EXTS = /\.(rxdata|rvdata|rvdata2)$/i;
+    // セーブファイルの拡張子（VX: .rvdata, VX Ace: .rvdata2, XP: .rxdata）+ カスタムセーブ形式
+    // mkxp-z は PHYSFS の write dir 直下に自由にファイルを作れるため、
+    // 拡張子フィルターは広めに設定し、明らかにセーブ以外のものだけ除外する。
+    const MKXP_SAVE_EXTS = /\.(rxdata|rvdata|rvdata2|cdat|dat|sav|save|bin|json|ini|txt|xml)$/i;
     const mkxpLastSavedData = new Map();
     let mkxpSavePathWarningShown = false;
+
+    // gameSaveDir 以下を再帰的にスキャンしてセーブファイルを収集する
+    // 戻り値: [{ relPath: "Save/1.rvdata", absPath: "..." }, ...]
+    function mkxpCollectSaveFiles(fs, rootDir) {
+      const results = [];
+      function scan(absDir, relDir) {
+        let entries;
+        try { entries = fs.readdir(absDir).filter(n => n !== '.' && n !== '..'); } catch { return; }
+        for (const name of entries) {
+          const absPath = `${absDir}/${name}`;
+          const relPath = relDir ? `${relDir}/${name}` : name;
+          let stat;
+          try { stat = fs.stat(absPath); } catch { continue; }
+          if (stat && (stat.mode & 0o170000) === 0o040000) {
+            // ディレクトリ：再帰
+            scan(absPath, relPath);
+          } else {
+            // ファイル：拡張子フィルター
+            if (MKXP_SAVE_EXTS.test(name)) {
+              results.push({ relPath, absPath });
+            }
+          }
+        }
+      }
+      scan(rootDir, '');
+      return results;
+    }
 
     // mkxp-z の FS からセーブファイルを IndexedDB に保存する
     async function mkxpSavesToIndexedDB() {
@@ -10826,6 +10941,13 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           gameSaveDir = mapping[mkxpSaveGameId];
         } catch {}
         if (!gameSaveDir && saveDirs.length === 1) gameSaveDir = saveDirs[0];
+        // マッピングもなく複数候補がある場合: セーブファイルが実際に存在するディレクトリを探す（再帰）
+        if (!gameSaveDir || !saveDirs.includes(gameSaveDir)) {
+          for (const candidate of saveDirs) {
+            const found = mkxpCollectSaveFiles(fs, `${mkxpSaveBasePath}/${candidate}`);
+            if (found.length > 0) { gameSaveDir = candidate; break; }
+          }
+        }
         if (!gameSaveDir || !saveDirs.includes(gameSaveDir)) {
           if (!mkxpSavePathWarningShown) {
             console.warn(`[mkxp] Could not identify save folder for ${mkxpSaveGameId}; found:`, saveDirs);
@@ -10834,29 +10956,30 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           return;
         }
         mkxpSavePathWarningShown = false;
-        saveDirs = [gameSaveDir];
+        // スクリーンショット等で外部から参照できるようグローバルに公開する
+        window.MKXP_SAVE_DIR = `${mkxpSaveBasePath}/${gameSaveDir}`;
+        // このゲームのセーブフォルダを localStorage に記録（次回復元用）
+        try {
+          const mapping = JSON.parse(localStorage.getItem('mkxpSaveDirectories') || '{}');
+          if (mapping[mkxpSaveGameId] !== gameSaveDir) {
+            mapping[mkxpSaveGameId] = gameSaveDir;
+            localStorage.setItem('mkxpSaveDirectories', JSON.stringify(mapping));
+            console.log(`[mkxp] Save folder recorded for ${mkxpSaveGameId}: ${gameSaveDir}`);
+          }
+        } catch {}
 
-        for (const subDir of saveDirs) {
-          const dirPath = `${mkxpSaveBasePath}/${subDir}`;
-          let files;
-          try { files = fs.readdir(dirPath).filter(n => n !== '.' && n !== '..'); }
-          catch { continue; }
-
-          for (const fname of files) {
-            if (!MKXP_SAVE_EXTS.test(fname)) continue;
-            const fpath = `${dirPath}/${fname}`;
-            let data;
-            try { data = fs.readFile(fpath); } catch { continue; }
-            const previous = mkxpLastSavedData.get(fname);
-            if (previous && previous.length === data.length && previous.every((byte, i) => byte === data[i])) continue;
-            // IndexedDB に保存: Save/<gameId>/<filename>
-            try {
-              await storageManager.saveIDBFSFile(mkxpSaveGameId, fname, data);
-              mkxpLastSavedData.set(fname, new Uint8Array(data));
-              console.log(`[mkxp] Saved to IndexedDB: Save/${mkxpSaveGameId}/${fname} (${data.length} bytes)`);
-            } catch (e) {
-              console.warn(`[mkxp] Failed to save Save/${mkxpSaveGameId}/${fname} to IndexedDB:`, e);
-            }
+        const saveFiles = mkxpCollectSaveFiles(fs, `${mkxpSaveBasePath}/${gameSaveDir}`);
+        for (const { relPath, absPath } of saveFiles) {
+          let data;
+          try { data = fs.readFile(absPath); } catch { continue; }
+          const previous = mkxpLastSavedData.get(relPath);
+          if (previous && previous.length === data.length && previous.every((b, i) => b === data[i])) continue;
+          try {
+            await storageManager.saveIDBFSFile(mkxpSaveGameId, relPath, data);
+            mkxpLastSavedData.set(relPath, new Uint8Array(data));
+            console.log(`[mkxp] Saved to IndexedDB: ${relPath} (${data.length} bytes)`);
+          } catch (e) {
+            console.warn(`[mkxp] Failed to save ${relPath} to IndexedDB:`, e);
           }
         }
       } catch (e) {
@@ -10896,13 +11019,22 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
         }
 
         for (const save of saves) {
-          const fname = save.path.replace(/^.*\//, ''); // 最後のパス部分
-          if (!MKXP_SAVE_EXTS.test(fname)) continue;
+          // save.path は "/customgame/Save/<gameId>/Save/1.rvdata" 等
+          // targetDir 以下に復元するための相対パスを取得する
+          const prefix = `/customgame/Save/${mkxpSaveGameId}/`;
+          const relPath = save.path.startsWith(prefix)
+            ? save.path.slice(prefix.length)
+            : save.path.replace(/^.*\//, '');
+          if (!MKXP_SAVE_EXTS.test(relPath.split('/').pop())) continue;
+          const destPath = `${targetDir}/${relPath}`;
+          // サブディレクトリが必要なら作成する
+          const destDir = destPath.substring(0, destPath.lastIndexOf('/'));
+          try { fs.mkdirTree(destDir); } catch {}
           try {
-            fs.writeFile(`${targetDir}/${fname}`, save.data);
-            console.log(`[mkxp] Restored save from IndexedDB: ${fname}`);
+            fs.writeFile(destPath, save.data);
+            console.log(`[mkxp] Restored save from IndexedDB: ${relPath}`);
           } catch (e) {
-            console.warn(`[mkxp] Failed to restore save ${fname}:`, e);
+            console.warn(`[mkxp] Failed to restore save ${relPath}:`, e);
           }
         }
       } catch (e) {
@@ -10946,6 +11078,43 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
 
     // ゲーム終了時にセーブを IndexedDB に保存
     window.__mkxpOnSaveExit = mkxpSavesToIndexedDB;
+
+    // Ruby パッチが /Save/__save_notify__ を書いた際に即座に IndexedDB へ同期する。
+    // (font_fix.rb の Marshal.dump パッチがセーブデータのシリアライズを検知してこのファイルを作る)
+    // PROXY_TO_PTHREAD ビルドでは fs.close フックが動作しないためこの方式を採用。
+    // フォールバックとして 3秒ごとの定期ポーリングも併用する。
+    let mkxpSaveSyncing = false;
+    const mkxpSaveNotifyPath = () => {
+      const sd = window.MKXP_SAVE_DIR;
+      return sd ? `${sd}/__save_notify__` : null;
+    };
+    const mkxpSaveNotifyInterval = setInterval(async () => {
+      if (!isGamePlaying) { clearInterval(mkxpSaveNotifyInterval); return; }
+      if (mkxpSaveSyncing) return;
+      try {
+        const fs = nostalgist.getEmscripten().Module.FS;
+        const notifyPath = mkxpSaveNotifyPath();
+        if (notifyPath) {
+          try { fs.stat(notifyPath); } catch { return; } // ファイルが存在しなければスキップ
+          try { fs.unlink(notifyPath); } catch {}
+          console.log('[mkxp] Save notify detected; syncing to IndexedDB...');
+        }
+      } catch {}
+      mkxpSaveSyncing = true;
+      try { await mkxpSavesToIndexedDB(); } finally { mkxpSaveSyncing = false; }
+    }, 500);
+    // フォールバック: 3秒ごとの定期ポーリング（通知ファイルが作られなかった場合の保険）
+    const mkxpSavePollInterval = setInterval(() => {
+      if (!isGamePlaying) { clearInterval(mkxpSavePollInterval); return; }
+      if (!mkxpSaveSyncing) mkxpSavesToIndexedDB();
+    }, 3000);
+    // ゲーム終了時にポーリングを停止
+    const origOnSaveExit = window.__mkxpOnSaveExit;
+    window.__mkxpOnSaveExit = async () => {
+      clearInterval(mkxpSaveNotifyInterval);
+      clearInterval(mkxpSavePollInterval);
+      if (typeof origOnSaveExit === 'function') await origOnSaveExit();
+    };
 
   } catch (error) {
     if (stopMkxpGameExitWatch) stopMkxpGameExitWatch();
@@ -11879,11 +12048,120 @@ if (checkbox) checkbox.checked = newState;
     });
   })();
 
+  // スクリーンショットを IndexedDB に保存する共通処理
+  function saveScreenshotToIdb(ia, filename) {
+    const req = indexedDB.open('Save', 21);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('FILE_DATA')) {
+        db.createObjectStore('FILE_DATA');
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('FILE_DATA')) { db.close(); return; }
+      const tx = db.transaction(['FILE_DATA'], 'readwrite');
+      tx.objectStore('FILE_DATA').put({
+        timestamp: new Date(),
+        mode: 33206,
+        contents: ia
+      }, 'Save/Screenshots/' + filename);
+      tx.oncomplete = () => {
+        if (typeof storageExplorer !== 'undefined' && storageExplorer) {
+          storageExplorer._treeCache = null;
+          storageExplorer.loadAll().then(() => storageExplorer.render());
+        }
+      };
+    };
+  }
+
+  // スクリーンショットのファイル名を生成する
+  function makeScreenshotFilename() {
+    // mkxp-z 用に MKXP_GAME_TITLE を優先し、次に EASYRPG_GAME_TITLE、
+    // どちらも未設定なら MKXP_SAVE_DIR の末尾ディレクトリ名から取得する
+    let title = window.MKXP_GAME_TITLE || window.EASYRPG_GAME_TITLE;
+    if (!title && window.MKXP_SAVE_DIR) {
+      // MKXP_SAVE_DIR = ".../Saves/<punycode-or-title>" の末尾部分
+      title = window.MKXP_SAVE_DIR.split('/').filter(Boolean).pop() || '';
+    }
+    title = title || 'screenshot';
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_`
+                    + `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `${title}_${timestamp}.png`;
+  }
+
   function takeScreenshot() {
-    // EasyRPG / mkxp-z どちらも #canvas を使う
-    // （Nostalgist は渡した canvas の id を "canvas" に上書きするため）
     const canvas = document.getElementById('canvas');
     if (!canvas) return;
+
+    // mkxp-z (RetroArch/PROXY_TO_PTHREAD) の場合:
+    // キャンバスが OffscreenCanvas に転送されており drawImage で読み取れない。
+    // Nostalgist.screenshot() も GLctx が Worker 側にあるため使用不可。
+    // 代替: JS が WasmFS にリクエストファイルを書く → Ruby の Graphics.update パッチが
+    // 検出して Graphics.screenshot("/Save/__screenshot__.png") を実行 →
+    // JS がポーリングで PNG を読み取って IndexedDB に保存する。
+    if (window.MKXP_ACTIVE_NOSTALGIST) {
+      const nostalgist = window.MKXP_ACTIVE_NOSTALGIST;
+      const fs = nostalgist.getEmscripten().Module.FS;
+      // セーブディレクトリを解決する
+      let saveDir = window.MKXP_SAVE_DIR;
+      if (!saveDir) {
+        // まだ確定していない場合は WasmFS から直接探す
+        try {
+          const base = '/home/web_user/retroarch/saves/mkxp-z/mkxp-z/Saves';
+          const dirs = fs.readdir(base).filter(n => n !== '.' && n !== '..');
+          if (dirs.length === 1) saveDir = `${base}/${dirs[0]}`;
+        } catch {}
+      }
+      if (!saveDir) {
+        console.warn('[screenshot] mkxp-z save path not yet known');
+        return;
+      }
+      const reqPath = `${saveDir}/__screenshot_request__`;
+      const rawPath = `${saveDir}/__screenshot_raw__`;
+      try { fs.writeFile(reqPath, new Uint8Array(0)); } catch (e) {
+        console.error('[screenshot] Failed to write request file:', e);
+        return;
+      }
+      // フラッシュ演出（先に出す）
+      canvas.style.opacity = '0.5';
+      setTimeout(() => { canvas.style.opacity = ''; }, 100);
+      // Ruby が __screenshot_raw__ を書くまでポーリング（最大 5 秒、100ms 間隔）
+      let tries = 0;
+      const poll = setInterval(() => {
+        tries++;
+        let data;
+        try { data = fs.readFile(rawPath); } catch {}
+        if (data && data.length > 8) {
+          clearInterval(poll);
+          try { fs.unlink(rawPath); } catch {}
+          // ヘッダ: width(uint32le) + height(uint32le) + RGBA bytes
+          const view = new DataView(data.buffer, data.byteOffset);
+          const w = view.getUint32(0, true);
+          const h = view.getUint32(4, true);
+          const rgba = data.slice(8);
+          // Canvas で RGBA → PNG に変換
+          const offscreen = new OffscreenCanvas(w, h);
+          const ctx2d = offscreen.getContext('2d');
+          const imageData = new ImageData(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, w * h * 4), w, h);
+          ctx2d.putImageData(imageData, 0, 0);
+          offscreen.convertToBlob({ type: 'image/png' }).then((blob) => {
+            blob.arrayBuffer().then((ab) => {
+              saveScreenshotToIdb(new Uint8Array(ab), makeScreenshotFilename());
+            });
+          });
+        }
+        if (tries > 50) { // ~5秒
+          clearInterval(poll);
+          console.warn('[screenshot] Timed out waiting for screenshot PNG');
+        }
+      }, 100);
+      return;
+    }
+
+    // EasyRPG の場合: 通常の canvas.drawImage でキャプチャ
     try {
       // アスペクト比は 4:3 (EasyRPG / RPGツクール XP/VX 共通)
       const targetRatio = 4 / 3;
@@ -11936,18 +12214,6 @@ if (checkbox) checkbox.checked = newState;
       }
       
       const dataUrl = tempCanvas.toDataURL('image/png');
-      const title = window.EASYRPG_GAME_TITLE || 'easyrpg';
-      
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const hh = String(now.getHours()).padStart(2, '0');
-      const min = String(now.getMinutes()).padStart(2, '0');
-      const ss = String(now.getSeconds()).padStart(2, '0');
-      const timestamp = `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
-      const filename = `${title}_${timestamp}.png`;
-      
       const base64Data = dataUrl.split(',')[1];
       const byteString = atob(base64Data);
       const ab = new ArrayBuffer(byteString.length);
@@ -11956,34 +12222,7 @@ if (checkbox) checkbox.checked = newState;
         ia[i] = byteString.charCodeAt(i);
       }
       
-      const req = indexedDB.open('Save', 21);
-      req.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains('FILE_DATA')) {
-          db.createObjectStore('FILE_DATA');
-        }
-      };
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains('FILE_DATA')) {
-          db.close();
-          return;
-        }
-        const tx = db.transaction(['FILE_DATA'], 'readwrite');
-        const store = tx.objectStore('FILE_DATA');
-        store.put({
-          timestamp: new Date(),
-          mode: 33206,
-          contents: ia
-        }, 'Save/Screenshots/' + filename);
-        
-        tx.oncomplete = () => {
-          if (typeof storageExplorer !== 'undefined' && storageExplorer) {
-            storageExplorer._treeCache = null;
-            storageExplorer.loadAll().then(() => storageExplorer.render());
-          }
-        };
-      };
+      saveScreenshotToIdb(ia, makeScreenshotFilename());
       
       // 撮影時のフラッシュ演出
       const originalOpacity = canvas.style.opacity || '1';
@@ -12018,13 +12257,20 @@ if (checkbox) checkbox.checked = newState;
     });
   }
 
+  // capture:true でキャプチャフェーズに登録する。
+  // mkxp-z (RetroArch/Emscripten) はキャンバスレベルでキーイベントを消費するため、
+  // バブルフェーズでは F8 が window に届かない。キャプチャフェーズなら先に受け取れる。
   window.addEventListener('keydown', (e) => {
     if (!isGamePlaying) return; // ゲーム起動前はショートカットを無効化
     if (e.key === 'F8' || e.key === 'PrintScreen') {
+      // stopPropagation でゲームエンジン（RetroArch/mkxp-z）に F8 が届かないようにする。
+      // mkxp-z は F8 を Input::F8 として処理するため、ゲームが意図せず止まる。
       e.preventDefault();
+      e.stopPropagation();
       takeScreenshot();
     } else if (e.key === 'F4') {
       e.preventDefault();
+      e.stopPropagation();
       const viewport = document.getElementById('viewport');
       if (!document.fullscreenElement) {
         if (viewport.requestFullscreen) viewport.requestFullscreen();
@@ -12034,7 +12280,7 @@ if (checkbox) checkbox.checked = newState;
     } else if (e.key === 'F5') {
       e.preventDefault(); // ブラウザの更新を防ぎ、EasyRPG側で処理させるか無効化する
     }
-  });
+  }, true); // capture:true — キャプチャフェーズで受け取る（ゲームより先にイベントを受け取る）
 
   // Fullscreen button
   document.querySelector('#controls-fullscreen').addEventListener('click', () => {
