@@ -6639,7 +6639,8 @@ class StorageExplorer {
 
     newSaveBtn.addEventListener('click', async () => {
       const newText = textarea.value;
-      const newData = new TextEncoder().encode(newText);
+      // 元のエンコーディングを保持して保存する
+      const newData = encodeText(newText, encoding);
 
       // IndexedDB (グループ) に保存する
       const groupInfo = {
@@ -8847,60 +8848,30 @@ function detectEncoding(uint8Array) {
     return 'utf-8';
   }
 
-  let shift_jis_score = 0;
-  let utf8_score = 0;
-  const len = Math.min(uint8Array.length, 2000);
-
-  for (let i = 0; i < len; i++) {
-    const b0 = uint8Array[i];
-
-    // --- UTF-8 マルチバイトシーケンスを継続バイトまで検証 ---
-    // 2バイト (U+0080 〜 U+07FF): C2-DF 80-BF
-    if (b0 >= 0xC2 && b0 <= 0xDF && i + 1 < len) {
-      const b1 = uint8Array[i + 1];
-      if ((b1 & 0xC0) === 0x80) {
-        utf8_score += 3;
-        i += 1;
-        continue;
-      }
-    }
-    // 3バイト (U+0800 〜 U+FFFF): E0-EF + 2継続バイト
-    if (b0 >= 0xE0 && b0 <= 0xEF && i + 2 < len) {
-      const b1 = uint8Array[i + 1];
-      const b2 = uint8Array[i + 2];
-      if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80) {
-        utf8_score += 4;
-        i += 2;
-        continue;
-      }
-    }
-    // 4バイト (U+10000 〜): F0-F4 + 3継続バイト
-    if (b0 >= 0xF0 && b0 <= 0xF4 && i + 3 < len) {
-      const b1 = uint8Array[i + 1];
-      const b2 = uint8Array[i + 2];
-      const b3 = uint8Array[i + 3];
-      if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80) {
-        utf8_score += 5;
-        i += 3;
-        continue;
-      }
-    }
-
-    // --- Shift-JIS 2バイト文字 ---
-    // 第1バイト: 81-9F または E0-FC
-    if ((b0 >= 0x81 && b0 <= 0x9F) || (b0 >= 0xE0 && b0 <= 0xFC)) {
-      if (i + 1 < len) {
-        const b1 = uint8Array[i + 1];
-        if ((b1 >= 0x40 && b1 <= 0x7E) || (b1 >= 0x80 && b1 <= 0xFC)) {
-          shift_jis_score += 3;
-          i += 1;
-          continue;
-        }
-      }
-    }
+  // UTF-16 BOM があれば latin1 フォールバック（Shift-JIS でもない）
+  if (uint8Array.length >= 2 &&
+      ((uint8Array[0] === 0xFF && uint8Array[1] === 0xFE) ||
+       (uint8Array[0] === 0xFE && uint8Array[1] === 0xFF))) {
+    return 'utf-8';
   }
 
-  return shift_jis_score > utf8_score ? 'shift-jis' : 'utf-8';
+  // --- 最も確実な方法: TextDecoder の fatal モードで UTF-8 として解釈できるか試す ---
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(uint8Array);
+    // UTF-8 として完全に有効 → UTF-8 と判定
+    // ただし ASCII のみの場合は Shift-JIS の可能性もあるため、
+    // 高バイト (0x80以上) が含まれているかチェック
+    const hasHighByte = uint8Array.some(b => b >= 0x80);
+    if (!hasHighByte) {
+      // ASCII のみ → UTF-8/Shift-JIS 区別不要 (どちらでも同じ)
+      return 'utf-8';
+    }
+    // 高バイトを含むが UTF-8 として完全に有効 → UTF-8 確定
+    return 'utf-8';
+  } catch (_) {
+    // UTF-8 として不正なバイト列が含まれる → Shift-JIS と判定
+    return 'shift-jis';
+  }
 }
 
 function decodeFilename(uint8Array, encoding) {
@@ -8917,6 +8888,85 @@ function decodeFilename(uint8Array, encoding) {
   // UTF-8またはフォールバック
   const decoder = new TextDecoder('utf-8');
   return decoder.decode(uint8Array);
+}
+
+// テキストを指定エンコーディングでバイト列に変換する
+// encoding === 'shift-jis' の場合は Shift-JIS でエンコードする。
+// ブラウザ標準の TextEncoder は UTF-8 のみ対応のため、Shift-JIS エンコードは
+// TextDecoder のルックアップテーブル逆引きで実現する。
+function encodeText(str, encoding) {
+  if (encoding === 'shift-jis') {
+    // 遅延初期化: JS文字コード → Shift-JIS バイト列の逆テーブルをキャッシュ
+    if (!encodeText._sjisTable) {
+      const table = new Map();
+      const dec = new TextDecoder('shift-jis');
+      // 1バイト文字 (0x00–0x7F, 0xA1–0xDF: 半角カタカナ)
+      // 連続バイト列を一括デコードして文字とバイト値を対応付ける
+      const single1 = new Uint8Array(0x80);
+      for (let b = 0; b < 0x80; b++) single1[b] = b;
+      const decoded1 = dec.decode(single1);
+      for (let i = 0; i < decoded1.length; i++) {
+        table.set(decoded1.charCodeAt(i), [i]);
+      }
+      // 半角カタカナ 0xA1–0xDF
+      const single2 = new Uint8Array(0xDF - 0xA1 + 1);
+      for (let b = 0xA1; b <= 0xDF; b++) single2[b - 0xA1] = b;
+      // 各バイトを個別にデコード（連続デコードは文字境界が保証されないため）
+      for (let b = 0xA1; b <= 0xDF; b++) {
+        const ch = dec.decode(new Uint8Array([b]));
+        if (ch.length === 1 && ch !== '\uFFFD') table.set(ch.charCodeAt(0), [b]);
+      }
+      // 2バイト文字: 第1バイトのリスト
+      const leads = [];
+      for (let b = 0x81; b <= 0x9F; b++) leads.push(b);
+      for (let b = 0xE0; b <= 0xFC; b++) leads.push(b);
+      // 全2バイト組み合わせを1つの大きなバイト列で一括デコード
+      // 各ペアは 3バイト区切り(00 b0 b1)でデコードし文字を取得する
+      for (const b0 of leads) {
+        // 第2バイト候補: 0x40–0x7E, 0x80–0xFC
+        const trails = [];
+        for (let b1 = 0x40; b1 <= 0x7E; b1++) trails.push(b1);
+        for (let b1 = 0x80; b1 <= 0xFC; b1++) trails.push(b1);
+        // 区切り文字(0x20=スペース)を挟みながら全ペアを一括デコード
+        const buf = new Uint8Array(trails.length * 3);
+        for (let j = 0; j < trails.length; j++) {
+          buf[j * 3] = 0x20; // ASCII スペース (区切り)
+          buf[j * 3 + 1] = b0;
+          buf[j * 3 + 2] = trails[j];
+        }
+        const decoded = dec.decode(buf);
+        // デコード結果は ' ' + <2バイト文字> が繰り返される
+        let pos = 0;
+        for (let j = 0; j < trails.length; j++) {
+          if (pos >= decoded.length) break;
+          // スペースをスキップ
+          if (decoded[pos] === ' ') pos++;
+          if (pos < decoded.length && decoded[pos] !== '\uFFFD' && decoded[pos] !== ' ') {
+            table.set(decoded.charCodeAt(pos), [b0, trails[j]]);
+            pos++;
+          } else if (pos < decoded.length) {
+            pos++;
+          }
+        }
+      }
+      encodeText._sjisTable = table;
+    }
+    const table = encodeText._sjisTable;
+    const bytes = [];
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      const entry = table.get(code);
+      if (entry) {
+        for (const b of entry) bytes.push(b);
+      } else {
+        // マッピングなし → '?' で代替
+        bytes.push(0x3F);
+      }
+    }
+    return new Uint8Array(bytes);
+  }
+  // UTF-8 (デフォルト)
+  return new TextEncoder().encode(str);
 }
 
 // index.json生成関数
