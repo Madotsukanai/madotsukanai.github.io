@@ -1,19 +1,17 @@
 ページの読み込みが完了する前にレイアウトの開始が強制されました。スタイルシートがまだ読み込まれていない場合、スタイル付けされていないコンテンツがちらつく原因となる可能性があります。 localhost:8080:61:20
-GET
-http://localhost:8080/favicon.ico
-[HTTP/1.1 404 Not Found 0ms]
-[mkxp:timing] Nostalgist ready +0.08s localhost:8080:10139:13
+[mkxp:timing] Nostalgist ready +0.01s localhost:8080:10139:13
 [mkxp] Extracted 417 files from Game.rgssad localhost:8080:10168:19
-[mkxp:timing] Game files packed (445) +0.11s localhost:8080:10186:13
-[mkxp:timing] RTP loaded: Standard +0.20s localhost:8080:10279:15
-[mkxp:fonts] Bundled 23 font(s): arial.ttf, arialbd.ttf, arialbi.ttf, ariali.ttf, cour.ttf, courbd.ttf, courbi.ttf, couri.ttf, msgothic - MS Gothic.ttf, msgothic - MS UI Gothic.ttf, msgothic - MS PGothic.ttf, msmincho - MS Mincho.ttf, msmincho - MS PMincho.ttf, tahoma.ttf, tahomabd.ttf, times.ttf, timesbd.ttf, timesbi.ttf, timesi.ttf, verdana.ttf, verdanab.ttf, verdanai.ttf, verdanaz.ttf localhost:8080:10359:15
+[mkxp:timing] Game files packed (445) +0.03s localhost:8080:10186:13
+[mkxp:timing] RTP loaded: Standard +0.11s localhost:8080:10279:15
+[mkxp:fonts] Bundled 3 font(s): msgothic - MS Gothic.ttf, msgothic - MS PGothic.ttf, msgothic - MS UI Gothic.ttf localhost:8080:10359:15
 [mkxp:fonts] Japanese font target: MS Gothic; fontSub: arial>MS Gothic, umeplus gothic>MS Gothic, vl gothic>MS Gothic localhost:8080:10404:17
-[mkxp:timing] Before generateAsync +0.78s localhost:8080:10512:13
-[mkxp:timing] generateAsync done (98.3MB) +1.18s localhost:8080:10514:13
-[mkxp:timing] Before fetch coreJs +1.18s localhost:8080:10537:13
-[mkxp:timing] coreJs fetched (240KB) +1.19s localhost:8080:10540:13
-[mkxp:timing] Before Nostalgist.launch +1.19s localhost:8080:10558:13
+[mkxp:timing] Before generateAsync +0.45s localhost:8080:10505:13
+[mkxp:timing] generateAsync done (66.4MB) +0.68s localhost:8080:10507:13
+[mkxp:timing] Before fetch coreJs +0.68s localhost:8080:10530:13
+[mkxp:timing] coreJs fetched (240KB) +0.68s localhost:8080:10533:13
+[mkxp:timing] Before Nostalgist.launch +0.69s localhost:8080:10551:13
 [mkxp] Restored save from IndexedDB: Save1.rxdata localhost:8080:8188:16
+[INFO] Setting real canvas size: 1122 x 969 localhost:8080:8188:16
 [INFO] === Build ======================================= localhost:8080:8188:16
 [INFO] Capabilities: �K�������l�?�I�a���'�@�������%	��	���9�r
 o�L���������������� localhost:8080:8188:16
@@ -73,7 +71,6 @@ o�L���������������� localhost:8080:8188:16
 [libretro INFO] [mkxp-z @ ../src/core.cpp:1780] Using OpenGL ES 3.x graphics driver localhost:8080:8188:16
 [INFO] [Environ] GET_CAN_DUPE: true. localhost:8080:8188:16
 [INFO] [Environ] GET_SYSTEM_DIRECTORY: "/home/web_user/retroarch/system". localhost:8080:8188:16
-[INFO] Setting real canvas size: 1122 x 969 localhost:8080:8188:16
 [INFO] [Environ] GET_CORE_OPTIONS_VERSION. localhost:8080:8188:16
 [INFO] [Environ] SET_CORE_OPTIONS_V2. localhost:8080:8188:16
 [libretro INFO] [mkxp-z @ ../src/util/debugwriter.h:67] Game.ini: Could not determine encoding of Game.Title localhost:8080:8188:16
@@ -1501,125 +1498,24 @@ o�L���������������� localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1482] wasi:filesystem/types@0.2.0::[method]descriptor.stat(8) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:601] wasi:filesystem/types@0.2.0::[method]descriptor.read-via-stream(8, 0) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:589] WASI resource created: input-stream(9) -> file descriptor 8 "/Game/Scripts/Preload/font_fix.rb" localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3354] wasi:io/streams@0.2.0::[method]input-stream.blocking-read(9, 1214) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3354] wasi:io/streams@0.2.0::[method]input-stream.blocking-read(9, 1198) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3354] wasi:io/streams@0.2.0::[method]input-stream.blocking-read(9, 1024) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3541] wasi:io/streams@0.2.0::[resource-drop]input-stream(9) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:2955] wasi:filesystem/types@0.2.0::[resource-drop]descriptor(8) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/nkf.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/nkf.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/euc_jp.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/shift_jis.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/utf_16be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so.rb", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/site_ruby/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/vendor_ruby/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:1971] wasi:filesystem/types@0.2.0::[method]descriptor.open-at(7, 1, "lib/ruby/3.3.0/wasm32-wasip2/enc/utf_32be.so.so", 0, 1) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:371] wasi:cli/stderr@0.2.0::get-stderr() localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:372] WASI resource created: output-stream(3) -> standard error stream localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3877] wasi:io/streams@0.2.0::[method]output-stream.subscribe(3) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3878] WASI resource created: pollable(3) -> output stream 3 localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3546] wasi:io/streams@0.2.0::[method]output-stream.check-write(3) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3600] wasi:io/streams@0.2.0::[method]output-stream.write(3, 0x017d58d0 (68)) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3823] wasi:io/streams@0.2.0::[method]output-stream.blocking-flush(3) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3546] wasi:io/streams@0.2.0::[method]output-stream.check-write(3) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3600] wasi:io/streams@0.2.0::[method]output-stream.write(3, 0x00229573 (1)) localhost:8080:8188:16
+[libretro WARN] [mkxp-z stderr] [font_fix] Font.default_name => ["MS Gothic", "Arial", "MS PGothic"] localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasi.cpp:3823] wasi:io/streams@0.2.0::[method]output-stream.blocking-flush(3) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 42795008 bytes (653 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 42991616 bytes (656 pages) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43057152 bytes (657 pages) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43122688 bytes (658 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43188224 bytes (659 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43253760 bytes (660 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43319296 bytes (661 pages) localhost:8080:8188:16
@@ -1628,7 +1524,7 @@ o�L���������������� localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43646976 bytes (666 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43712512 bytes (667 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43778048 bytes (668 pages) localhost:8080:8188:16
-[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43843584 bytes (669 pages) localhost:8080:8188:16
+[libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 43974656 bytes (671 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 44040192 bytes (672 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 44236800 bytes (675 pages) localhost:8080:8188:16
 [libretro DEBUG] [mkxp-z @ ../binding-sandbox/wasm-rt.cpp:138] VM memory grown to 44367872 bytes (677 pages) localhost:8080:8188:16

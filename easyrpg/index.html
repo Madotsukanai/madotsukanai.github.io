@@ -979,6 +979,16 @@
       position: absolute;
       width: 100%;
       z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    #status-sub {
+      font-size: 0.78rem;
+      color: #bbb;
+      text-shadow: 1px 1px 2px black;
+      min-height: 1em;
     }
 
     #controls {
@@ -2598,7 +2608,7 @@ Public License instead of this License.
     </button>
   </div>
 
-  <div id="status">ZIPファイルを選択してください...</div>
+  <div id="status"><span id="status-main">ZIPファイルを選択してください...</span><span id="status-sub"></span></div>
 
   <div id="viewport">
     <canvas id="canvas" tabindex="-1" class="unselectable"></canvas>
@@ -2615,8 +2625,8 @@ Public License instead of this License.
     </div>
 
     <div id="apad" class="unselectable">
-      <div id="apad-escape" data-key="Escape"></div>
-      <div id="apad-enter" data-key="Enter"></div>
+      <div id="apad-x" data-key="KeyX"></div>
+      <div id="apad-z" data-key="KeyZ"></div>
     </div>
 
     <div id="syspad" class="unselectable">
@@ -4195,7 +4205,9 @@ function splitTrueTypeCollection(input) {
       const recordOffset = faceOffset + 12 + i * 16;
       const tag = String.fromCharCode(...data.subarray(recordOffset, recordOffset + 4));
       // TTC 内の DSIG は元コレクションに対する署名なので、単独フォントから除外する。
-      if (tag === 'DSIG') continue;
+      // EBDT/EBLC/EBSC は埋め込みビットマップ。FreeType がビットマップ優先で使い、
+      // 収録サイズ外のリクエスト時に描画崩れするため除外してアウトライン描画を強制する。
+      if (tag === 'DSIG' || tag === 'EBDT' || tag === 'EBLC' || tag === 'EBSC') continue;
       records.push({
         tag,
         checkSum: view.getUint32(recordOffset + 4, false),
@@ -7865,7 +7877,7 @@ async function processRTPZipFile(file, rtpInfo) {
   const statusDiv = document.getElementById('status');
 
   _rtpProgress.show(`${rtpInfo.name} を展開中...`);
-  statusDiv.textContent = `${rtpInfo.name}を読み込み中...`;
+  setStatusText(`${rtpInfo.name}を読み込み中...`);
 
   try {
     _rtpProgress.set(2, 'ファイルを読み込み中...');
@@ -7873,7 +7885,7 @@ async function processRTPZipFile(file, rtpInfo) {
     const fileName = file.name.toLowerCase();
 
     _rtpProgress.set(5, 'チェックサムを検証中...');
-    statusDiv.textContent = `${rtpInfo.name}: チェックサムを検証中...`;
+    setStatusText(`${rtpInfo.name}: チェックサムを検証中...`);
     await verifyRTPFileHash(arrayBuffer, file.name, rtpInfo.id);
 
     if (fileName.endsWith('.exe')) {
@@ -7888,7 +7900,7 @@ async function processRTPZipFile(file, rtpInfo) {
   } catch (error) {
     console.error('Error processing RTP ZIP:', error);
     _rtpProgress.hide();
-    statusDiv.textContent = 'エラー: ' + error.message;
+    setStatusText('エラー: ' + error.message);
     alert('RTPファイルの処理中にエラーが発生しました: ' + error.message);
   }
 }
@@ -7897,12 +7909,12 @@ async function processRTPZipFile(file, rtpInfo) {
 async function processRTPInstallerExe(exeData, exeFilename, rtpInfo) {
   const statusDiv = document.getElementById('status');
   const rtpDir = rtpInfo.dir || rtpInfo.id.replace('rtp', '');
-  statusDiv.textContent = `${rtpInfo.name}: インストーラーを展開中...`;
+  setStatusText(`${rtpInfo.name}: インストーラーを展開中...`);
   try {
     let extracted;
     // 展開フェーズ: 10→75%
     const onExtractProgress = (msg, filename) => {
-      statusDiv.textContent = `${rtpInfo.name}: ${msg}`;
+      setStatusText(`${rtpInfo.name}: ${msg}`);
       const m = msg.match(/\((\d+)\s*\/\s*(\d+)\)/);
       if (m) {
         const pct = 10 + (parseInt(m[1]) / parseInt(m[2])) * 65;
@@ -7927,10 +7939,10 @@ async function processRTPInstallerExe(exeData, exeFilename, rtpInfo) {
     if (rtpFiles.length === 0) throw new Error('RTP ファイルが見つかりませんでした。');
 
     _rtpProgress.set(78, `IndexedDB に保存中... (${rtpFiles.length} ファイル)`);
-    statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
+    setStatusText(`${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`);
     await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
 
-    statusDiv.textContent = '';
+    setStatusText('');
     _rtpProgress.done(
       `✅ ${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
       `ファイル数: ${rtpFiles.length}\n` +
@@ -7938,7 +7950,7 @@ async function processRTPInstallerExe(exeData, exeFilename, rtpInfo) {
     );
   } catch (error) {
     console.error('Error processing RTP installer:', error);
-    statusDiv.textContent = 'エラー: ' + error.message;
+    setStatusText('エラー: ' + error.message);
     throw error;
   }
 }
@@ -8119,9 +8131,7 @@ function returnToTopMenu(forceReload = false) {
   
   // 2. ステータス表示のリセット
   const statusDiv = document.getElementById('status');
-  if (statusDiv) {
-    statusDiv.textContent = 'ZIPファイルを選択してください...';
-  }
+  setStatusText('ZIPファイルを選択してください...');
   
   // 3. 多重起動防止フラグとボタン状態の解除
   isGameLoading = false;
@@ -8846,7 +8856,7 @@ async function processRarFile(file) {
   const startupDialog = document.getElementById('startup-dialog');
   const statusDiv = document.getElementById('status');
   
-  statusDiv.textContent = 'RARファイルを処理中...';
+  setStatusText('RARファイルを処理中...');
   
   alert(
     'RAR形式は現在サポートされていません。\n\n' +
@@ -8855,7 +8865,7 @@ async function processRarFile(file) {
     '2. 7-ZipやWinRARなどでZIPに変換できます'
   );
   
-  statusDiv.textContent = '';
+  setStatusText('');
 }
 
 
@@ -9645,7 +9655,7 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
   
   try {
     _rtpProgress.set(8, 'ZIP を解析中...');
-    statusDiv.textContent = `${rtpInfo.name}を展開中...`;
+    setStatusText(`${rtpInfo.name}を展開中...`);
 
     const zip = await JSZip.loadAsync(arrayBuffer);
     const entries = Object.keys(zip.files);
@@ -9665,7 +9675,7 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
 
     // 展開フェーズの onProgress（10→75%）
     const onExtractProgress = (msg, filename) => {
-      statusDiv.textContent = `${rtpInfo.name}: ${msg}`;
+      setStatusText(`${rtpInfo.name}: ${msg}`);
       const m = msg.match(/\((\d+)\s*\/\s*(\d+)\)/);
       if (m) {
         _rtpProgress.set(10 + (parseInt(m[1]) / parseInt(m[2])) * 65, msg, filename);
@@ -9677,7 +9687,7 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
     if (exeEntry && !hasMediaFiles) {
       // ─── インストーラー EXE パス ───
       _rtpProgress.set(10, 'インストーラーを検出しました。EXE を読み込み中...');
-      statusDiv.textContent = `${rtpInfo.name}: インストーラーを検出しました。展開中...`;
+      setStatusText(`${rtpInfo.name}: インストーラーを検出しました。展開中...`);
       console.log(`Installer detected: ${exeEntry}`);
 
       const exeData = await zip.files[exeEntry].async('uint8array');
@@ -9739,11 +9749,11 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
     console.log(`RTP files ready: ${rtpFiles.length} (installed to RTP/${rtpDir}/)`);
 
     _rtpProgress.set(78, `IndexedDB に保存中... (${rtpFiles.length} ファイル)`);
-    statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
+    setStatusText(`${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`);
     await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
 
     console.log(`RTP saved to IndexedDB: ${rtpInfo.id} -> RTP/${rtpDir}/`);
-    statusDiv.textContent = '';
+    setStatusText('');
     _rtpProgress.done(
       `✅ ${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
       `ファイル数: ${rtpFiles.length}\n` +
@@ -9752,7 +9762,7 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
 
   } catch (error) {
     console.error('Error processing RTP:', error);
-    statusDiv.textContent = 'エラー: ' + error.message;
+    setStatusText('エラー: ' + error.message);
     alert(`RTPの処理中にエラーが発生しました:\n${error.message}`);
   }
 }
@@ -10002,7 +10012,7 @@ async function processGameFolderFiles(fileList) {
 async function processRTPFolderFiles(fileList, rtpInfo) {
   const statusDiv = document.getElementById('status');
   _rtpProgress.show(`${rtpInfo.name} を読み込み中...`);
-  statusDiv.textContent = `${rtpInfo.name}を読み込み中...`;
+  setStatusText(`${rtpInfo.name}を読み込み中...`);
   try {
     const allFiles = Array.from(fileList);
     if (allFiles.length === 0) { _rtpProgress.hide(); return; }
@@ -10034,10 +10044,10 @@ async function processRTPFolderFiles(fileList, rtpInfo) {
 
     console.log(`RTP folder import: ${rtpFiles.length} files -> RTP/${rtpDir}/`);
     _rtpProgress.set(78, `IndexedDB に保存中... (${rtpFiles.length} ファイル)`);
-    statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
+    setStatusText(`${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`);
     await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
 
-    statusDiv.textContent = '';
+    setStatusText('');
     await loadRTPStatusList();
     _rtpProgress.done(
       `✅ ${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
@@ -10048,7 +10058,7 @@ async function processRTPFolderFiles(fileList, rtpInfo) {
   } catch (error) {
     console.error('Error processing RTP folder:', error);
     _rtpProgress.hide();
-    statusDiv.textContent = 'エラー: ' + error.message;
+    setStatusText('エラー: ' + error.message);
     alert(`RTPフォルダの処理中にエラーが発生しました:\n${error.message}`);
   }
 }
@@ -10113,13 +10123,33 @@ function sanitizeGameTitleForStorageKey(title) {
 }
 
 // ============================================================
+// グローバルステータス表示ヘルパー
+// #status-main (メインメッセージ) と #status-sub (サブ進捗) を更新する。
+// #status-main が存在しない場合は #status.textContent に直接書く (後方互換)。
+// ============================================================
+function setStatusText(main, sub = '') {
+  const statusMain = document.getElementById('status-main');
+  const statusSub  = document.getElementById('status-sub');
+  if (statusMain) {
+    statusMain.textContent = main;
+  } else {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) statusDiv.textContent = main;
+  }
+  if (statusSub) statusSub.textContent = sub;
+}
+
+// ============================================================
 // mkxp-z (XP/VX/VX Ace) 起動関数
 // Nostalgist.js + mkxp-z libretro コアを使用
 // ゲームファイルをメモリ上で .mkxpz (ZIP) にまとめて渡す
 // ============================================================
 async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 'auto') {
   const statusDiv = document.getElementById('status');
-  statusDiv.textContent = 'mkxp-z エンジンを起動中...';
+  const statusMain = document.getElementById('status-main');
+  const statusSub  = document.getElementById('status-sub');
+  const setStatus = (main, sub = '') => setStatusText(main, sub);
+  setStatus('mkxp-z エンジンを起動中...');
   const t0 = performance.now();
   const elapsed = () => `+${((performance.now() - t0) / 1000).toFixed(2)}s`;
   let stopMkxpGameExitWatch = null;
@@ -10127,7 +10157,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
   try {
     // Nostalgist.js を動的ロード（まだ読み込まれていない場合）
     if (!window.Nostalgist) {
-      statusDiv.textContent = 'Nostalgist.js を読み込み中...';
+      setStatus('Nostalgist.js を読み込み中...');
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = 'https://cdn.jsdelivr.net/npm/nostalgist@0.22.0/dist/nostalgist.umd.js';
@@ -10140,7 +10170,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
 
     // ゲームファイルをメモリ上の ZIP (= .mkxpz) にまとめる
     // JSZip を使ってストア圧縮（圧縮なし）で格納する
-    statusDiv.textContent = 'ゲームデータをパック中...';
+    setStatus('ゲームデータをパック中...');
     let mkxpZip = new JSZip();
     let packedCount = 0;
     for (const f of files) {
@@ -10187,7 +10217,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
 
     // ゲームの Game.ini から RTP 名を読み取る
     // RTP= または RTP1=/RTP2=/RTP3= に対応
-    statusDiv.textContent = 'RTP を確認中...';
+    setStatus('RTP を確認中...');
     const gameIniFile = files.find(f => /[/\\]?game\.ini$/i.test(f.path));
     const rtpNames = [];
     if (gameIniFile) {
@@ -10247,7 +10277,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     // RTP マウントの仕組みを迂回して、素材を直接ゲームと同じアーカイブに同梱する。
 
     for (const rtpName of rtpNames) {
-      statusDiv.textContent = `RTP "${rtpName}" を読み込み中...`;
+      setStatus('mkxp-z エンジンを起動中...', `RTP "${rtpName}" を読み込み中...`);
       const rtpId = RTP_NAME_TO_ID[rtpName.toLowerCase()];
       if (!rtpId) {
         console.warn(`[mkxp] Unknown RTP name: "${rtpName}" — skipping`);
@@ -10463,21 +10493,15 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           'end',
           '',
           '# Patch Bitmap#draw_text to convert Shift-JIS (CP932) strings to UTF-8.',
-          '# RGSS1/2 games store text as Shift-JIS; the mkxp-z renderer expects UTF-8.',
-          '# We use NKF with explicit CP932->UTF-8 conversion for reliability.',
-          '# String#to_utf8 (mkxp-z builtin) is used as fallback.',
-          'begin',
-          '  require "nkf"',
-          '  $__mkxpfont_nkf_ok = true',
-          'rescue LoadError',
-          '  $__mkxpfont_nkf_ok = false',
-          'end',
+          '# RGSS1/2 games store text as ASCII-8BIT (raw Shift-JIS bytes) in mkxp-z.',
+          '# We force-encode as Windows-31J then transcode to UTF-8.',
           '',
           'def _mkxpfont_sjis_to_utf8(str)',
-          '  if $__mkxpfont_nkf_ok',
-          '    NKF.nkf("-Sw", str)',
-          '  else',
-          '    str.to_utf8',
+          '  return str if str.respond_to?(:encoding) && str.encoding == Encoding::UTF_8 && str.valid_encoding?',
+          '  begin',
+          '    str.dup.force_encoding("Windows-31J").encode("UTF-8", invalid: :replace, undef: :replace)',
+          '  rescue',
+          '    str',
           '  end',
           'end',
           '',
@@ -10488,13 +10512,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           '      # Find the text argument: index 1 for (rect, str[, align]) or 4 for (x, y, w, h, str[, align])',
           '      str_idx = (args[0].is_a?(Rect) ? 1 : 4)',
           '      if args[str_idx].is_a?(String)',
-          '        str = args[str_idx]',
-          '        needs_conv = if str.respond_to?(:valid_encoding?)',
-          '          !str.valid_encoding?',
-          '        else',
-          '          true',
-          '        end',
-          '        args[str_idx] = _mkxpfont_sjis_to_utf8(str) if needs_conv',
+          '        args[str_idx] = _mkxpfont_sjis_to_utf8(args[str_idx])',
           '      end',
           '      _mkxpfont_draw_text_orig(*args)',
           '    end',
@@ -10521,7 +10539,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     // メモリ解放: ZIP生成後はmkxpZipを削除してGCを促す
     mkxpZip = null;
 
-    statusDiv.textContent = 'mkxp-z を起動中...';
+    setStatus('mkxp-z を起動中...', 'エンジンコアをフェッチ中...');
 
     // Nostalgist.js は element に HTMLCanvasElement が必要であり、
     // 渡した canvas の id を強制的に "canvas" に書き換える。
@@ -10540,6 +10558,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     // ※ "import.meta.url" という文字列そのものは残す必要がある
     //   （Nostalgist の isEsmScript 判定が js.includes("import.meta.url") のため）
     console.log(`[mkxp:timing] Before fetch coreJs ${elapsed()}`);
+    setStatus('mkxp-z を起動中...', 'エンジンコアをフェッチ中...');
     const coreJsUrl = new URL('mkxp-z/mkxp-z_libretro.js', location.href).href;
     const coreJsText = await fetch(coreJsUrl).then(r => r.text());
     console.log(`[mkxp:timing] coreJs fetched (${(coreJsText.length/1024).toFixed(0)}KB) ${elapsed()}`);
@@ -10561,6 +10580,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     const coreJsBlob = new Blob([patchedJs], { type: 'application/javascript' });
 
     console.log(`[mkxp:timing] Before Nostalgist.launch ${elapsed()}`);
+    setStatus('mkxp-z を起動中...', 'wasm を読み込み中...');
     stopMkxpGameExitWatch = watchMkxpGameExit(gameName);
     const nostalgist = await window.Nostalgist.launch({
       core: {
@@ -10607,7 +10627,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     window.MKXP_ACTIVE_NOSTALGIST = nostalgist;
     isGamePlaying = true;
     isGameLoading = false;
-    statusDiv.textContent = '';
+    setStatus('mkxp-z を起動中...', 'セーブデータを復元中...');
 
     // ------------------------------------------------------------------
     // mkxp-z セーブデータ管理
@@ -10761,7 +10781,11 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     // コア実行前に復元・監視設定を完了させ、起動時のセーブ読み込みに間に合わせる。
     await indexedDBToMkxpSaves();
     installMkxpSaveWriteHook();
+    setStatus('mkxp-z を起動中...', 'ゲームを開始中...');
     await nostalgist.launchEmulator();
+    if (statusSub) statusSub.textContent = '';
+    if (statusMain) statusMain.textContent = '';
+    else statusDiv.textContent = '';
 
     // ゲーム終了時にセーブを IndexedDB に保存
     window.__mkxpOnSaveExit = mkxpSavesToIndexedDB;
@@ -10769,7 +10793,7 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
   } catch (error) {
     if (stopMkxpGameExitWatch) stopMkxpGameExitWatch();
     console.error('[mkxp] Failed to launch:', error);
-    statusDiv.textContent = 'エラー: mkxp-z の起動に失敗しました';
+    setStatus('エラー: mkxp-z の起動に失敗しました');
     document.getElementById('startup-dialog').style.display = 'flex';
     isGameLoading = false;
     setGameButtonsDisabled(false);
@@ -10855,7 +10879,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   let mergedFiles = [...cleanFiles];
   
   try {
-    statusDiv.textContent = 'RTPを確認中...';
+    setStatusText('RTPを確認中...');
     
     let rtpConfig = 'auto';
     if (existingGameId) {
@@ -10923,7 +10947,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
       
       if (rtpData && rtpData.files && rtpData.files.length > 0) {
         console.log(`${rtpEntry.label} found: ${rtpData.files.length} files`);
-        statusDiv.textContent = `${rtpEntry.label}をマージ中... (${rtpData.files.length} ファイル)`;
+        setStatusText(`${rtpEntry.label}をマージ中... (${rtpData.files.length} ファイル)`);
         
         let rtpMergeCount = 0;
         
@@ -10960,7 +10984,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     // index.jsonが存在しない、またはRTPがマージされた場合は再生成する
     const hasIndexJson = mergedFiles.some(f => f.path.toLowerCase() === 'index.json');
     if (!hasIndexJson || totalRtpMergeCount > 0) {
-      statusDiv.textContent = 'index.jsonを生成中...';
+      setStatusText('index.jsonを生成中...');
       
       // 既存のindex.jsonを除去
       mergedFiles = mergedFiles.filter(f => f.path.toLowerCase() !== 'index.json');
@@ -11006,7 +11030,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
   window.EASYRPG_FILE_MAP = fileMap;
   
   console.log('Custom files set, count:', mergedFiles.length);
-  statusDiv.textContent = 'ゲームを起動中...';
+  setStatusText('ゲームを起動中...');
   
   // ゲーム起動前に IndexedDB へ設定やアセットを同期的に書き込み、クローズする
   try {
@@ -11023,7 +11047,7 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
     await engineScriptPromise;
   } catch (e) {
     console.error('[loadGameFiles] Failed to load index.js script:', e);
-    statusDiv.textContent = 'エンジンのロードに失敗しました';
+    setStatusText('エンジンのロードに失敗しました');
     return;
   }
   
@@ -11618,15 +11642,31 @@ if (checkbox) checkbox.checked = newState;
     const activePointers = new Map(); // pointerId -> ノード
     const canvas = document.getElementById('canvas');
 
-    function simulateKeyboardEvent(eventType, key) {
+    // data-key の code 値から KeyboardEvent.key 値へのマップ
+    const codeToKey = {
+      'KeyZ': 'z', 'KeyX': 'x', 'KeyC': 'c', 'KeyV': 'v',
+      'Enter': 'Enter', 'NumpadEnter': 'Enter',
+      'Escape': 'Escape', 'Space': ' ',
+      'ShiftLeft': 'Shift', 'ShiftRight': 'Shift',
+      'ArrowUp': 'ArrowUp', 'ArrowDown': 'ArrowDown',
+      'ArrowLeft': 'ArrowLeft', 'ArrowRight': 'ArrowRight',
+    };
+
+    function simulateKeyboardEvent(eventType, code) {
       if (!canvas) return;
-      const event = new KeyboardEvent(eventType, {
-        code: key,
+      // canvas にフォーカスを当ててからイベントを送る
+      if (document.activeElement !== canvas) canvas.focus({ preventScroll: true });
+      const key = codeToKey[code] || code;
+      const evt = new KeyboardEvent(eventType, {
+        code: code,
         key: key,
         bubbles: true,
-        cancelable: true
+        cancelable: true,
+        composed: true,
       });
-      canvas.dispatchEvent(event);
+      // Emscripten は #canvas に addEventListener でリスナーを登録している。
+      // canvas に直接ディスパッチすれば届く（bubbles: true で上位にも伝播）。
+      canvas.dispatchEvent(evt);
     }
 
     function pressNode(node) {
