@@ -415,6 +415,112 @@
       color: #f44336;
     }
 
+    /* RTP 進捗オーバーレイ */
+    #rtp-progress-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 9000;
+      align-items: center;
+      justify-content: center;
+    }
+    #rtp-progress-overlay.active {
+      display: flex;
+    }
+    #rtp-progress-box {
+      background: #2a2a2a;
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 1.5rem 2rem;
+      min-width: 340px;
+      max-width: 90vw;
+      text-align: center;
+    }
+    #rtp-progress-title {
+      font-size: 1rem;
+      font-weight: bold;
+      margin-bottom: 0.75rem;
+      color: #eee;
+    }
+    #rtp-progress-bar-wrap {
+      background: #444;
+      border-radius: 4px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 0.6rem;
+    }
+    #rtp-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #42a5f5;
+      border-radius: 4px;
+      transition: width 0.15s ease;
+    }
+    #rtp-progress-msg {
+      font-size: 0.8rem;
+      color: #aaa;
+      min-height: 1.2em;
+    }
+
+    #rtp-progress-file {
+      font-size: 0.72rem;
+      color: #777;
+      margin-top: 0.3rem;
+      min-height: 1em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+
+    #rtp-progress-done {
+      display: none;
+      margin-top: 0.9rem;
+      font-size: 0.85rem;
+      color: #c8e6c9;
+      white-space: pre-wrap;
+      text-align: left;
+      background: #1b3a1e;
+      border: 1px solid #2e7d32;
+      border-radius: 4px;
+      padding: 0.6rem 0.8rem;
+    }
+
+    #rtp-progress-close {
+      display: none;
+      margin-top: 0.75rem;
+      padding: 0.4rem 1.4rem;
+      background: #42a5f5;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    #rtp-progress-close:hover {
+      background: #1e88e5;
+    }
+
+    .rtp-upload-btn {
+      padding: 0.4rem 0.8rem;
+      background: #1565c0;
+      border: 1px solid #1565c0;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      margin-left: 0.5rem;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .rtp-upload-btn:hover {
+      background: white;
+      color: #1565c0;
+    }
+
     #rtp-file-input {
       margin: 1rem 0;
       font-size: 1rem;
@@ -1227,88 +1333,6 @@
             <h3>RTP</h3>
             <div id="rtp-status-list" class="rtp-status-list">
               <!-- RTPのステータスがここに表示されます -->
-            </div>
-            <div class="settings-inline" style="flex-wrap: wrap;">
-              <label>
-                RPGツクール2000 RTP (日本語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2000-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2000" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtp2000-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール2003 RTP (日本語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2003-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2003" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtp2003-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール2000 RTP (英語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2000en-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2000en" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtp2000en-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール2003 RTP (英語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtp2003en-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtp2003en" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtp2003en-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール XP RTP (日本語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtpxp-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtpxp" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtpxp-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール VX RTP (日本語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtpvx-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtpvx" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtpvx-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール VX Ace RTP (日本語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtpvxace-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtpvxace" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtpvxace-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール XP RTP (英語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtpxpen-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtpxpen" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtpxpen-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール VX RTP (英語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtpvxen-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtpvxen" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtpvxen-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
-              <label>
-                RPGツクール VX Ace RTP (英語)
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                  <input type="file" id="rtpvxaceen-file-input" accept=".zip,.exe" style="flex: 1; min-width: 0;" />
-                  <button type="button" class="rtp-folder-btn" data-rtp="rtpvxaceen" style="white-space: nowrap;">📁</button>
-                </div>
-                <input type="file" id="rtpvxaceen-folder-input" webkitdirectory directory multiple style="display:none;" />
-              </label>
             </div>
             <p style="font-size: 0.8rem; color: #888; margin-top: 0.75rem;">
               公式配布の ZIP・インストーラー EXE をそのままアップロードできます（InstallShield / NSIS 形式に対応）。<br>
@@ -3353,38 +3377,60 @@ class GameStorageManager {
   }
 
   async saveRTP(rtpId, rtpName, files) {
-    const transaction = this.db.transaction(['rtp', 'rtpFiles'], 'readwrite');
-    
-    // RTPメタデータを保存 (軽量な fileList を追加して高速ロードに対応)
+    // メタデータを先に保存
     const rtpData = {
       id: rtpId,
       name: rtpName,
       savedAt: new Date().toISOString(),
       fileCount: files.length,
-      totalSize: files.reduce((sum, f) => sum + f.data.length, 0),
+      totalSize: files.reduce((sum, f) => sum + (f.data ? (f.data.byteLength || f.data.length) : 0), 0),
       fileList: files.map(f => ({
         path: f.path,
-        size: f.data ? f.data.length || f.data.byteLength : 0
+        size: f.data ? (f.data.byteLength || f.data.length) : 0
       }))
     };
-    
-    await transaction.objectStore('rtp').put(rtpData);
-    
-    // RTPファイルを保存
-    const fileData = {
-      rtpId: rtpId,
-      files: files.map(f => ({
-        path: f.path,
-        data: f.data // Uint8Arrayをそのまま保存
-      }))
-    };
-    
-    await transaction.objectStore('rtpFiles').put(fileData);
-    
-    return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+    await new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['rtp'], 'readwrite');
+      tx.objectStore('rtp').put(rtpData);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
     });
+
+    // 旧V2レコードを削除（再インストール時の重複防止）
+    await new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['rtpFilesV2'], 'readwrite');
+      const store = tx.objectStore('rtpFilesV2');
+      const req = store.index('rtpId').openCursor(IDBKeyRange.only(rtpId));
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) { cursor.delete(); cursor.continue(); }
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+
+    // V2ストアへ1ファイル1レコードで分割保存（メインスレッドを定期的に解放）
+    const BATCH = 20;
+    const totalBatches = Math.ceil(files.length / BATCH);
+    for (let i = 0; i < files.length; i += BATCH) {
+      const batchIdx = i / BATCH;
+      const pct = 78 + (batchIdx / totalBatches) * 20;
+      if (typeof _rtpProgress !== 'undefined') {
+        _rtpProgress.set(pct, `IndexedDB に保存中... (${Math.min(i + BATCH, files.length)} / ${files.length})`);
+      }
+      const batch = files.slice(i, i + BATCH);
+      await new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['rtpFilesV2'], 'readwrite');
+        const store = tx.objectStore('rtpFilesV2');
+        for (const f of batch) {
+          store.add({ rtpId, path: f.path, data: f.data });
+        }
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      // メインスレッドを解放
+      await new Promise(r => setTimeout(r, 0));
+    }
   }
   
   async getRTP(rtpId) {
@@ -3424,14 +3470,27 @@ class GameStorageManager {
   }
   
   async deleteRTP(rtpId) {
-    const transaction = this.db.transaction(['rtp', 'rtpFiles'], 'readwrite');
-    
-    await transaction.objectStore('rtp').delete(rtpId);
-    await transaction.objectStore('rtpFiles').delete(rtpId);
-    
-    return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+    // V1 と メタデータを削除
+    await new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['rtp', 'rtpFiles'], 'readwrite');
+      tx.objectStore('rtp').delete(rtpId);
+      tx.objectStore('rtpFiles').delete(rtpId);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+
+    // V2 ストアから rtpId に一致する全レコードを削除
+    await new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['rtpFilesV2'], 'readwrite');
+      const store = tx.objectStore('rtpFilesV2');
+      const index = store.index('rtpId');
+      const req = index.openCursor(IDBKeyRange.only(rtpId));
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) { cursor.delete(); cursor.continue(); }
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
     });
   }
 
@@ -3943,20 +4002,17 @@ async function loadRTPStatusList() {
   
   const installedIds = new Set(installedRTPs.map(r => r.id));
   
-  // 既知のRTPのステータスを表示
-  knownRTPs.forEach(rtp => {
-    const installed = installedIds.has(rtp.id);
-    const installedData = installedRTPs.find(r => r.id === rtp.id);
-    
+  // rtp-item を生成してアップロード UI を wire するヘルパー
+  function buildRTPItem(rtp, installed, installedData) {
     const item = document.createElement('div');
     item.className = 'rtp-item';
-    
+
     let detailText = '';
     if (installed && installedData) {
       const sizeInMB = (installedData.totalSize / 1024 / 1024).toFixed(2);
       detailText = `${installedData.fileCount} ファイル / ${sizeInMB} MB`;
     }
-    
+
     item.innerHTML = `
       <div class="rtp-item-info">
         <div class="rtp-item-name">${escapeHtml(rtp.name)}</div>
@@ -3967,31 +4023,87 @@ async function loadRTPStatusList() {
           ${detailText ? ' — ' + detailText : ''}
         </div>
       </div>
-      ${installed ? `<button class="rtp-delete-btn" onclick="deleteRTP('${rtp.id}')">削除</button>` : ''}
+      <div class="rtp-item-actions" style="display:flex;align-items:center;gap:0;flex-shrink:0;">
+      </div>
     `;
-    
-    container.appendChild(item);
+
+    const actions = item.querySelector('.rtp-item-actions');
+
+    // ファイル input（ZIP/EXE）
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.zip,.exe';
+    fileInput.style.display = 'none';
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const fn = file.name.toLowerCase();
+        if (fn.endsWith('.zip') || fn.endsWith('.exe')) {
+          await processRTPZipFile(file, rtp);
+        } else {
+          alert('ZIP ファイルまたは EXE インストーラーを選択してください。');
+        }
+        fileInput.value = '';
+      }
+    });
+    item.appendChild(fileInput);
+
+    // フォルダ input
+    const folderInput = document.createElement('input');
+    folderInput.type = 'file';
+    folderInput.setAttribute('webkitdirectory', '');
+    folderInput.setAttribute('directory', '');
+    folderInput.multiple = true;
+    folderInput.style.display = 'none';
+    folderInput.addEventListener('change', async (e) => {
+      if (e.target.files.length > 0) {
+        await processRTPFolderFiles(e.target.files, rtp);
+        folderInput.value = '';
+      }
+    });
+    item.appendChild(folderInput);
+
+    // アップロードボタン
+    const uploadBtn = document.createElement('button');
+    uploadBtn.type = 'button';
+    uploadBtn.className = 'rtp-upload-btn';
+    uploadBtn.textContent = '⬆ アップロード';
+    uploadBtn.addEventListener('click', () => fileInput.click());
+    actions.appendChild(uploadBtn);
+
+    // フォルダボタン
+    const folderBtn = document.createElement('button');
+    folderBtn.type = 'button';
+    folderBtn.className = 'rtp-upload-btn';
+    folderBtn.textContent = '📁';
+    folderBtn.style.marginLeft = '0.3rem';
+    folderBtn.addEventListener('click', () => folderInput.click());
+    actions.appendChild(folderBtn);
+
+    // 削除ボタン（アップロード・フォルダの右端）
+    if (installed) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'rtp-delete-btn';
+      deleteBtn.textContent = '削除';
+      deleteBtn.addEventListener('click', () => deleteRTP(rtp.id));
+      actions.appendChild(deleteBtn);
+    }
+
+    return item;
+  }
+
+  // 既知のRTPのステータスを表示
+  knownRTPs.forEach(rtp => {
+    const installed = installedIds.has(rtp.id);
+    const installedData = installedRTPs.find(r => r.id === rtp.id);
+    container.appendChild(buildRTPItem(rtp, installed, installedData));
     installedIds.delete(rtp.id);
   });
-  
+
   // 既知リストにない追加のインストール済みRTP
   installedRTPs.filter(r => installedIds.has(r.id)).forEach(rtp => {
-    const item = document.createElement('div');
-    item.className = 'rtp-item';
-    
-    const sizeInMB = (rtp.totalSize / 1024 / 1024).toFixed(2);
-    
-    item.innerHTML = `
-      <div class="rtp-item-info">
-        <div class="rtp-item-name">${escapeHtml(rtp.name)}</div>
-        <div class="rtp-item-detail">
-          <span class="rtp-badge installed">✅ インストール済み</span>
-          — ${rtp.fileCount} ファイル / ${sizeInMB} MB
-        </div>
-      </div>
-      <button class="rtp-delete-btn" onclick="deleteRTP('${rtp.id}')">削除</button>
-    `;
-    
+    const item = buildRTPItem(rtp, true, rtp);
     container.appendChild(item);
   });
   
@@ -7643,25 +7755,25 @@ function _initExplorerEvents() {
 // 許可リストにない場合は Error を throw する。
 // @param {ArrayBuffer} arrayBuffer
 // @param {string} label  エラーメッセージ用のファイル名
-async function verifyRTPFileHash(arrayBuffer, label) {
+async function verifyRTPFileHash(arrayBuffer, label, rtpId) {
   // ── 許可リスト ──
-  // ZIP 全体または単体 EXE のハッシュ。
-  // ZIP 内の EXE/BIN は検証しない（ZIP ハッシュで十分）。
+  // { label, ids } — ids: このファイルを受け付ける rtpInfo.id の集合
+  // ZIP 全体または単体 EXE のハッシュ。ZIP 内の EXE/BIN は検証しない（ZIP ハッシュで十分）。
   const ALLOWED_HASHES = new Map([
     // ── 2000 / 2003 (InstallShield / NSIS) ──
-    ['70a24f2cf5563b2a87e0c15f1529877cba7023abd13e6fb938a47d33f5c66d74', 'RPGツクール2000 RTP (日本語版 RPG2000RTP.exe)'],
-    ['ef341b694a00d5df0e0a70f372ea0684358cb0742c36ba40e7c99bf9e3f6a149', 'RPGツクール2003 RTP (日本語版 RPG2003RTP.exe)'],
-    ['ec82b92da65ca6fdb2d3df25dfbcd7f2bb716e4fe63a079e8e5e396e91fa5e29', 'RPGツクール2000 RTP (英語版 rpg2000_rtp_installer.exe)'],
-    ['dc18dc22bb4f2e9cca223a2df3f1aef1dc08f5ab8616e028200a1f381a6d1354', 'RPGツクール2003 RTP (英語版 rpg2003_rtp_installer.exe)'],
+    ['c130f0078c0d6ecc3404f94af8258e4557ab85c3b204397c7f21dbc57efeef8e', { label: 'RPGツクール2000 RTP (日本語版 2000rtp.zip)',              ids: new Set(['rtp2000']) }],
+    ['d388b183cc3a8206db53f58db4ea88c6661c9cf289c03aea1bf9ccd425f49cd1', { label: 'RPGツクール2003 RTP (日本語版 2003rtp.zip)',              ids: new Set(['rtp2003']) }],
+    ['ec82b92da65ca6fdb2d3df25dfbcd7f2bb716e4fe63a079e8e5e396e91fa5e29', { label: 'RPGツクール2000 RTP (英語版 rpg2000_rtp_installer.exe)', ids: new Set(['rtp2000en']) }],
+    ['dc18dc22bb4f2e9cca223a2df3f1aef1dc08f5ab8616e028200a1f381a6d1354', { label: 'RPGツクール2003 RTP (英語版 rpg2003_rtp_installer.exe)', ids: new Set(['rtp2003en']) }],
     // ── XP (Inno Setup) ──
-    ['96f00a114c541f527171b4f581cba1b3aa321468e3417e68e6cd6edecb95736f', 'RPGツクール XP RTP (日本語版 xp_rtp103.zip)'],
-    ['b3bd20ad7f413b40ac233aafd2e061de1dc429c2eadb59d0b3157ba3c47f16b2', 'RPGツクール XP RTP (英語版 xp_rtp104e.exe)'],
+    ['96f00a114c541f527171b4f581cba1b3aa321468e3417e68e6cd6edecb95736f', { label: 'RPGツクール XP RTP (日本語版 xp_rtp103.zip)',             ids: new Set(['rtpxp']) }],
+    ['b3bd20ad7f413b40ac233aafd2e061de1dc429c2eadb59d0b3157ba3c47f16b2', { label: 'RPGツクール XP RTP (英語版 xp_rtp104e.exe)',             ids: new Set(['rtpxpen']) }],
     // ── VX (Inno Setup) ──
-    ['ac668cd1ea09abd6fcd66fc67f8203a2ae8a0c4e696389241549973dcdde42d0', 'RPGツクール VX RTP (日本語版 vx_rtp202.zip)'],
-    ['8c82c02c876391d9585934454a629748d71b421c4957ada1dff8dc4b013ce403', 'RPGツクール VX RTP (英語版 vx_rtp102e.zip)'],
+    ['ac668cd1ea09abd6fcd66fc67f8203a2ae8a0c4e696389241549973dcdde42d0', { label: 'RPGツクール VX RTP (日本語版 vx_rtp202.zip)',             ids: new Set(['rtpvx']) }],
+    ['8c82c02c876391d9585934454a629748d71b421c4957ada1dff8dc4b013ce403', { label: 'RPGツクール VX RTP (英語版 vx_rtp102e.zip)',             ids: new Set(['rtpvxen']) }],
     // ── VX Ace (Inno Setup) ──
-    ['b3dad56dc143ed3ccd911f73a706a5707484e70c89dca67a55a70c3fabe00730', 'RPGツクール VX Ace RTP (日本語版 vxace_rtp100.zip)'],
-    ['7e93d0ead93a686218b7c671bf099ef42f09f536083bd0b2f0fa6423a39fc19b', 'RPGツクール VX Ace RTP (英語版 RPGVXAce_RTP.zip)'],
+    ['b3dad56dc143ed3ccd911f73a706a5707484e70c89dca67a55a70c3fabe00730', { label: 'RPGツクール VX Ace RTP (日本語版 vxace_rtp100.zip)',      ids: new Set(['rtpvxace']) }],
+    ['7e93d0ead93a686218b7c671bf099ef42f09f536083bd0b2f0fa6423a39fc19b', { label: 'RPGツクール VX Ace RTP (英語版 RPGVXAce_RTP.zip)',      ids: new Set(['rtpvxaceen']) }],
   ]);
 
   const hashBuf = await crypto.subtle.digest('SHA-256', arrayBuffer);
@@ -7674,38 +7786,108 @@ async function verifyRTPFileHash(arrayBuffer, label) {
       `"${label}" は公式 RTP インストーラーとして認識できませんでした。\n` +
       `SHA-256: ${hashHex}\n\n` +
       `対応しているのは以下の公式ファイルのみです：\n` +
-      [...ALLOWED_HASHES.values()].map(v => `・${v}`).join('\n')
+      [...ALLOWED_HASHES.values()].map(v => `・${v.label}`).join('\n')
     );
   }
-  console.log(`[RTP] Checksum verified: ${match} (${hashHex})`);
+  if (rtpId && !match.ids.has(rtpId)) {
+    // このスロット向けに許可されているファイルの名称一覧
+    const allowed = [...ALLOWED_HASHES.values()]
+      .filter(v => v.ids.has(rtpId))
+      .map(v => `・${v.label}`).join('\n') || '（なし）';
+    throw new Error(
+      `"${label}" はこのスロット向けのファイルではありません。\n` +
+      `（${match.label} として認識されました）\n\n` +
+      `このスロットに対応しているファイル：\n${allowed}`
+    );
+  }
+  console.log(`[RTP] Checksum verified: ${match.label} (${hashHex})`);
 }
+
+// ── RTP 進捗オーバーレイ制御 ──
+const _rtpProgress = {
+  _overlay: null,
+  _title:   null,
+  _bar:     null,
+  _msg:     null,
+  _file:    null,
+  _done:    null,
+  _close:   null,
+  _init() {
+    if (this._overlay) return;
+    this._overlay = document.getElementById('rtp-progress-overlay');
+    this._title   = document.getElementById('rtp-progress-title');
+    this._bar     = document.getElementById('rtp-progress-bar');
+    this._msg     = document.getElementById('rtp-progress-msg');
+    this._file    = document.getElementById('rtp-progress-file');
+    this._done    = document.getElementById('rtp-progress-done');
+    this._close   = document.getElementById('rtp-progress-close');
+    this._close.addEventListener('click', () => this._overlay.classList.remove('active'));
+  },
+  show(titleText) {
+    this._init();
+    this._title.textContent = titleText || 'RTPを展開中...';
+    this._bar.style.width = '0%';
+    this._msg.textContent = '';
+    this._file.textContent = '';
+    this._done.style.display = 'none';
+    this._done.textContent = '';
+    this._close.style.display = 'none';
+    this._overlay.classList.add('active');
+  },
+  // pct: 進捗率(0-100) または null（バー据え置き）, msg: メイン文字列, filename: ファイル名（省略可）
+  set(pct, msg, filename) {
+    this._init();
+    if (pct !== null && pct !== undefined) {
+      this._bar.style.width = Math.min(100, Math.max(0, pct)).toFixed(1) + '%';
+    }
+    if (msg !== undefined) this._msg.textContent = msg;
+    if (filename !== undefined) this._file.textContent = filename;
+  },
+  // 完了メッセージを表示して閉じるボタンを出す（alert の代替）
+  done(message) {
+    this._init();
+    this._bar.style.width = '100%';
+    this._msg.textContent = '';
+    this._file.textContent = '';
+    this._done.textContent = message;
+    this._done.style.display = 'block';
+    this._close.style.display = 'inline-block';
+  },
+  // エラー時など即時非表示
+  hide() {
+    this._init();
+    this._overlay.classList.remove('active');
+  },
+};
 
 // RTPタブからのZIPファイル処理
 async function processRTPZipFile(file, rtpInfo) {
   const statusDiv = document.getElementById('status');
-  
+
+  _rtpProgress.show(`${rtpInfo.name} を展開中...`);
   statusDiv.textContent = `${rtpInfo.name}を読み込み中...`;
-  
+
   try {
+    _rtpProgress.set(2, 'ファイルを読み込み中...');
     const arrayBuffer = await file.arrayBuffer();
     const fileName = file.name.toLowerCase();
 
-    // アップロードされたファイルのハッシュを検証
+    _rtpProgress.set(5, 'チェックサムを検証中...');
     statusDiv.textContent = `${rtpInfo.name}: チェックサムを検証中...`;
-    await verifyRTPFileHash(arrayBuffer, file.name);
+    await verifyRTPFileHash(arrayBuffer, file.name, rtpInfo.id);
 
     if (fileName.endsWith('.exe')) {
-      // EXE ファイルを直接インストーラーとして処理
       await processRTPInstallerExe(new Uint8Array(arrayBuffer), file.name, rtpInfo);
     } else {
       await processRTPFile(file, arrayBuffer, rtpInfo);
     }
-    
-    // RTPステータスリストを更新
+
+    // RTPステータスリストを更新（done() 表示はそのまま残す）
     await loadRTPStatusList();
-    
+
   } catch (error) {
     console.error('Error processing RTP ZIP:', error);
+    _rtpProgress.hide();
     statusDiv.textContent = 'エラー: ' + error.message;
     alert('RTPファイルの処理中にエラーが発生しました: ' + error.message);
   }
@@ -7718,15 +7900,23 @@ async function processRTPInstallerExe(exeData, exeFilename, rtpInfo) {
   statusDiv.textContent = `${rtpInfo.name}: インストーラーを展開中...`;
   try {
     let extracted;
+    // 展開フェーズ: 10→75%
+    const onExtractProgress = (msg, filename) => {
+      statusDiv.textContent = `${rtpInfo.name}: ${msg}`;
+      const m = msg.match(/\((\d+)\s*\/\s*(\d+)\)/);
+      if (m) {
+        const pct = 10 + (parseInt(m[1]) / parseInt(m[2])) * 65;
+        _rtpProgress.set(pct, msg, filename);
+      } else {
+        _rtpProgress.set(null, msg, filename);
+      }
+    };
     if (isInnoSetupExe(exeData)) {
-      // Inno Setup 形式 (XP / VX / VX Ace 単一 EXE)
       extracted = await extractInnoSetupInstaller(
-        exeData, null, exeFilename, null,
-        msg => { statusDiv.textContent = `${rtpInfo.name}: ${msg}`; }
+        exeData, null, exeFilename, null, onExtractProgress
       );
     } else {
-      extracted = await extractInstallerExe(exeData, rtpInfo,
-        msg => { statusDiv.textContent = `${rtpInfo.name}: ${msg}`; });
+      extracted = await extractInstallerExe(exeData, rtpInfo, onExtractProgress);
     }
 
     const rtpFiles = extracted.map(f => ({
@@ -7736,15 +7926,16 @@ async function processRTPInstallerExe(exeData, exeFilename, rtpInfo) {
 
     if (rtpFiles.length === 0) throw new Error('RTP ファイルが見つかりませんでした。');
 
+    _rtpProgress.set(78, `IndexedDB に保存中... (${rtpFiles.length} ファイル)`);
     statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
     await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
 
-    alert(
-      `${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
+    statusDiv.textContent = '';
+    _rtpProgress.done(
+      `✅ ${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
       `ファイル数: ${rtpFiles.length}\n` +
       `RTPを必要とするゲームで自動的に使用されます。`
     );
-    statusDiv.textContent = '';
   } catch (error) {
     console.error('Error processing RTP installer:', error);
     statusDiv.textContent = 'エラー: ' + error.message;
@@ -8729,11 +8920,12 @@ async function parseMsCabinet(cabData) {
   const folderStreams = [];
   for (const folder of folders) {
     const ismszip = (folder.compress & 0x00ff) === 0x0001;
-    let allUncomp = new Uint8Array(0);
+    const chunks = [];
     let offset = folder.dataOff;
+    // MSZip: 前ブロックの末尾 32KB を辞書として引き継ぐ
+    let prevTail = null; // Uint8Array | null
 
     for (let bi = 0; bi < folder.numDataBlks; bi++) {
-      const checksum  = v.getUint32(offset, true);
       const compSize  = v.getUint16(offset + 4, true);
       const uncompSz  = v.getUint16(offset + 6, true);
       const blkData   = cabData.slice(offset + 8 + resDataSize, offset + 8 + resDataSize + compSize);
@@ -8741,35 +8933,66 @@ async function parseMsCabinet(cabData) {
 
       let uncompBlock;
       if (ismszip && blkData[0] === 0x43 && blkData[1] === 0x4B) {
-        // MSZip: skip 2-byte 'CK' signature then raw-deflate
-        const deflateData = blkData.slice(2);
+        // MSZip: 'CK' を skip して raw-deflate を展開
+        // ただし各ブロックは前ブロックの辞書（末尾32KB）を参照できる。
+        // DecompressionStream('deflate-raw') には辞書を渡せないため、
+        // 前ブロックの末尾を非圧縮ストアードブロックとして先頭に付けて展開し、
+        // 末尾 uncompSz バイトのみ取り出す。
+        const deflateData = blkData.subarray(2);
+        let input;
+        if (prevTail !== null) {
+          // ストアードブロックヘッダ: BFINAL=0, BTYPE=00 (byte 0x00) +
+          // LEN(2LE) + NLEN(2LE) + data
+          const n = prevTail.length;
+          const nlen = (~n) & 0xffff;
+          const stored = new Uint8Array(5 + n);
+          stored[0] = 0x00;
+          stored[1] = n & 0xff;
+          stored[2] = (n >> 8) & 0xff;
+          stored[3] = nlen & 0xff;
+          stored[4] = (nlen >> 8) & 0xff;
+          stored.set(prevTail, 5);
+          input = new Uint8Array(stored.length + deflateData.length);
+          input.set(stored);
+          input.set(deflateData, stored.length);
+        } else {
+          input = deflateData;
+        }
+
         const ds = new DecompressionStream('deflate-raw');
         const writer = ds.writable.getWriter();
         const reader = ds.readable.getReader();
-        writer.write(deflateData);
+        writer.write(input);
         writer.close();
-        const chunks = [];
-        let done = false;
-        while (!done) {
+        const outChunks = [];
+        while (true) {
           const { value, done: d } = await reader.read();
-          if (value) chunks.push(value);
-          done = d;
+          if (value) outChunks.push(value);
+          if (d) break;
         }
-        const total = chunks.reduce((s, c) => s + c.length, 0);
-        uncompBlock = new Uint8Array(total);
+        const totalLen = outChunks.reduce((s, c) => s + c.length, 0);
+        const full = new Uint8Array(totalLen);
         let pos2 = 0;
-        for (const c of chunks) { uncompBlock.set(c, pos2); pos2 += c.length; }
+        for (const c of outChunks) { full.set(c, pos2); pos2 += c.length; }
+
+        // 末尾 uncompSz バイトが実際の展開結果
+        uncompBlock = full.slice(full.length - uncompSz);
+        // 次ブロックの辞書として末尾 32KB を保持
+        prevTail = uncompBlock.length > 32768 ? uncompBlock.slice(uncompBlock.length - 32768) : uncompBlock;
       } else {
         // No compression
         uncompBlock = blkData.slice(0);
+        prevTail = null;
       }
 
-      // append
-      const merged = new Uint8Array(allUncomp.length + uncompBlock.length);
-      merged.set(allUncomp);
-      merged.set(uncompBlock, allUncomp.length);
-      allUncomp = merged;
+      chunks.push(uncompBlock);
     }
+
+    // 全ブロックを結合
+    const totalBytes = chunks.reduce((s, c) => s + c.length, 0);
+    const allUncomp = new Uint8Array(totalBytes);
+    let writePos = 0;
+    for (const c of chunks) { allUncomp.set(c, writePos); writePos += c.length; }
     folderStreams.push(allUncomp);
   }
 
@@ -8818,7 +9041,7 @@ function getUnshieldModule() {
       return Promise.reject(new Error('UnshieldModule が読み込まれていません'));
     }
     _unshieldModulePromise = UnshieldModule({
-      locateFile: (name) => 'unshield/' + name,
+      locateFile: (name) => new URL('unshield/' + name, location.href).href,
     });
   }
   return _unshieldModulePromise;
@@ -8850,37 +9073,61 @@ async function extractInstallShieldCab(cabFiles, onProgress) {
     return ptr;
   }
 
+  // WASM メモリから Shift-JIS バイト列を読み取り、文字列にデコードするヘルパー
+  function readSjisStr(ptr) {
+    if (!ptr) return '';
+    const bytes = [];
+    for (let p = ptr; ; p++) {
+      const b = M.getValue(p, 'i8') & 0xff;
+      if (b === 0) break;
+      bytes.push(b);
+    }
+    try {
+      return new TextDecoder('shift-jis').decode(new Uint8Array(bytes));
+    } catch(e) {
+      return new TextDecoder('ascii').decode(new Uint8Array(bytes));
+    }
+  }
+
   const cabPathPtr = mallocStr('/data1.cab');
   const handle = M._wasm_unshield_open(cabPathPtr);
   M._free(cabPathPtr);
   if (handle < 0) throw new Error('InstallShield CAB を開けませんでした');
 
   const count = M._wasm_unshield_file_count(handle);
-  onProgress && onProgress(`InstallShield CAB: ${count} ファイルを展開中...`);
+  onProgress && onProgress(`InstallShield CAB: ${count} ファイルを展開中...`, '');
 
   const result = [];
+
   for (let i = 0; i < count; i++) {
-    const namePtr = M._wasm_unshield_file_name(handle, i);
-    const rawName = M.UTF8ToString(namePtr);
-    // ファイル名が Shift-JIS で格納されている場合は latin-1 経由でデコード
-    let decodedName = rawName;
-    try {
-      const bytes = new Uint8Array(rawName.length);
-      for (let k = 0; k < rawName.length; k++) bytes[k] = rawName.charCodeAt(k);
-      decodedName = new TextDecoder('shift-jis').decode(bytes);
-    } catch(e) {}
+    // ファイル名とディレクトリ名を個別に取得してパスを構築
+    const fileName = readSjisStr(M._wasm_unshield_file_name(handle, i));
+    const dirIdx = M._wasm_unshield_file_directory(handle, i);
+    const dirName = dirIdx >= 0 ? readSjisStr(M._wasm_unshield_directory_name(handle, dirIdx)) : '';
+
+    // 20ファイルごとにメインスレッドを解放してフリーズ防止
+    if (i > 0 && i % 20 === 0) {
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    // 進捗コールバック（毎ファイル）
+    onProgress && onProgress(`展開中... (${i + 1} / ${count})`, fileName);
 
     const outPath = `/out_${i}`;
     const outPathPtr = mallocStr(outPath);
     const ok = M._wasm_unshield_extract_file(handle, i, outPathPtr);
     M._free(outPathPtr);
-    if (!ok) { console.warn(`unshield: failed to extract file ${i}: ${rawName}`); continue; }
+    if (!ok) { console.warn(`unshield: failed to extract file ${i}: ${dirName}\\${fileName}`); continue; }
 
     const data = FS.readFile(outPath);
     try { FS.unlink(outPath); } catch(e) {}
 
-    // パスを正規化（ディレクトリ区切り・フォルダプレフィックス除去）
-    const normalized = decodedName.replace(/\\/g, '/').replace(/^[^/]*\/RTP\//, '');
+    // バックスラッシュを / に変換後、"RTP" セグメントより前を除去する
+    const dirSlash = dirName.replace(/\\/g, '/');
+    const rtpMatch = dirSlash.match(/(?:^|\/)RTP(?:\/(.+))?$/i);
+    if (!rtpMatch) continue;  // RTP 以下のパスでないファイルはスキップ
+    const subDir = rtpMatch[1] || '';
+    const normalized = subDir ? `${subDir}/${fileName}` : fileName;
     result.push({ path: normalized, data });
   }
 
@@ -9397,19 +9644,15 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
   const rtpDir = rtpInfo.dir || rtpInfo.id.replace('rtp', '');
   
   try {
+    _rtpProgress.set(8, 'ZIP を解析中...');
     statusDiv.textContent = `${rtpInfo.name}を展開中...`;
-    
+
     const zip = await JSZip.loadAsync(arrayBuffer);
     const entries = Object.keys(zip.files);
     console.log(`RTP ZIP loaded with ${entries.length} entries`);
 
-    // ZIP 内の .exe / .bin エントリを確認
     const exeEntry = entries.find(e => !zip.files[e].dir && e.toLowerCase().endsWith('.exe'));
-    // Inno Setup の外部スライスファイル（Setup-1.bin など）
     const binEntry = entries.find(e => !zip.files[e].dir && /setup-\d+\.bin$/i.test(e));
-    // Shift-JIS ZIPをJSZipで読むとファイル名が文字化けするため、拡張子の文字列比較が壊れる。
-    // そのため「メディアファイルが含まれていない」という判定方法を用いる：
-    // 実際の RTP アセット（画像・音声・MIDI）が存在しなければインストーラーZIPとみなす。
     const MEDIA_EXTS = new Set(['png','bmp','jpg','jpeg','gif','wav','ogg','mp3','mid','midi','wma','xm','it','s3m','mod']);
     const hasMediaFiles = entries.some(e => {
       if (zip.files[e].dir) return false;
@@ -9420,18 +9663,28 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
 
     let rtpFiles = [];
 
+    // 展開フェーズの onProgress（10→75%）
+    const onExtractProgress = (msg, filename) => {
+      statusDiv.textContent = `${rtpInfo.name}: ${msg}`;
+      const m = msg.match(/\((\d+)\s*\/\s*(\d+)\)/);
+      if (m) {
+        _rtpProgress.set(10 + (parseInt(m[1]) / parseInt(m[2])) * 65, msg, filename);
+      } else {
+        _rtpProgress.set(null, msg, filename);
+      }
+    };
+
     if (exeEntry && !hasMediaFiles) {
       // ─── インストーラー EXE パス ───
+      _rtpProgress.set(10, 'インストーラーを検出しました。EXE を読み込み中...');
       statusDiv.textContent = `${rtpInfo.name}: インストーラーを検出しました。展開中...`;
       console.log(`Installer detected: ${exeEntry}`);
 
       const exeData = await zip.files[exeEntry].async('uint8array');
       const exeFilename = exeEntry.split('/').pop();
 
-      // Inno Setup EXE かどうかを判定
       if (isInnoSetupExe(exeData)) {
         console.log(`Inno Setup installer detected: ${exeFilename}`);
-        // VX Ace などの外部スライスファイルを取得
         let binData = null;
         let binFilename = null;
         if (binEntry) {
@@ -9440,19 +9693,19 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
           console.log(`External slice: ${binFilename} (${(binData.length / 1024 / 1024).toFixed(1)} MB)`);
         }
         rtpFiles = await extractInnoSetupInstaller(
-          exeData, binData, exeFilename, binFilename,
-          msg => { statusDiv.textContent = `${rtpInfo.name}: ${msg}`; }
+          exeData, binData, exeFilename, binFilename, onExtractProgress
         );
       } else {
-        // InstallShield / NSIS (2000/2003用)
-        rtpFiles = await extractInstallerExe(exeData, rtpInfo,
-          msg => { statusDiv.textContent = `${rtpInfo.name}: ${msg}`; });
+        rtpFiles = await extractInstallerExe(exeData, rtpInfo, onExtractProgress);
       }
 
     } else {
       // ─── 通常 ZIP（展開済み RTP アセット）パス ───
-      for (const fileName of entries) {
-        if (zip.files[fileName].dir) continue;
+      const fileEntries = entries.filter(e => !zip.files[e].dir);
+      for (let i = 0; i < fileEntries.length; i++) {
+        const fileName = fileEntries[i];
+        const pct = 10 + (i / fileEntries.length) * 65;
+        if (i % 50 === 0) _rtpProgress.set(pct, `ZIP 展開中... (${i} / ${fileEntries.length})`);
         const content = await zip.files[fileName].async('uint8array');
         rtpFiles.push({ path: fileName.replace(/\\/g, '/'), data: content });
       }
@@ -9461,7 +9714,6 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
         throw new Error('ZIPファイル内にファイルが見つかりませんでした。');
       }
 
-      // 共通のルートフォルダを検出して除去
       const filePaths = rtpFiles.map(f => f.path);
       if (filePaths.length > 0) {
         const firstPath = filePaths[0];
@@ -9479,32 +9731,25 @@ async function processRTPFile(file, arrayBuffer, rtpInfo) {
       }
     }
 
-    // インストール先ディレクトリ (RTP/2000/ または RTP/2003/) をパスに付与
     rtpFiles = rtpFiles.map(f => ({
       path: `RTP/${rtpDir}/${f.path}`,
       data: f.data
     }));
-    
+
     console.log(`RTP files ready: ${rtpFiles.length} (installed to RTP/${rtpDir}/)`);
-    
-    // IndexedDBに保存
+
+    _rtpProgress.set(78, `IndexedDB に保存中... (${rtpFiles.length} ファイル)`);
     statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
     await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
-    
+
     console.log(`RTP saved to IndexedDB: ${rtpInfo.id} -> RTP/${rtpDir}/`);
-    
-    // 完了メッセージ（ダイアログは閉じずにRTPステータスを更新）
-    alert(
-      `${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
+    statusDiv.textContent = '';
+    _rtpProgress.done(
+      `✅ ${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
       `ファイル数: ${rtpFiles.length}\n` +
       `RTPを必要とするゲームで自動的に使用されます。`
     );
-    
-    statusDiv.textContent = '';
-    
-    // RTPステータスリストを更新
-    await loadRTPStatusList();
-    
+
   } catch (error) {
     console.error('Error processing RTP:', error);
     statusDiv.textContent = 'エラー: ' + error.message;
@@ -9756,20 +10001,24 @@ async function processGameFolderFiles(fileList) {
 // フォルダ選択から RTP をインストールする関数
 async function processRTPFolderFiles(fileList, rtpInfo) {
   const statusDiv = document.getElementById('status');
+  _rtpProgress.show(`${rtpInfo.name} を読み込み中...`);
   statusDiv.textContent = `${rtpInfo.name}を読み込み中...`;
   try {
     const allFiles = Array.from(fileList);
-    if (allFiles.length === 0) return;
+    if (allFiles.length === 0) { _rtpProgress.hide(); return; }
 
     const rtpDir = rtpInfo.dir || rtpInfo.id.replace('rtp', '');
 
-    // ルートフォルダ名を除いた相対パスでファイルを収集
     const rootFolder = allFiles[0].webkitRelativePath.split('/')[0];
     let rtpFiles = [];
-    for (const file of allFiles) {
+    for (let idx = 0; idx < allFiles.length; idx++) {
+      const file = allFiles[idx];
       const relativePath = file.webkitRelativePath.substring(rootFolder.length + 1);
       if (!relativePath) continue;
       if (relativePath.split('/').some(part => part.startsWith('.'))) continue;
+      if (idx % 50 === 0) {
+        _rtpProgress.set(10 + (idx / allFiles.length) * 65, `ファイルを読み込み中... (${idx} / ${allFiles.length})`);
+      }
       const data = new Uint8Array(await file.arrayBuffer());
       rtpFiles.push({ path: relativePath.replace(/\\/g, '/'), data });
     }
@@ -9778,26 +10027,27 @@ async function processRTPFolderFiles(fileList, rtpInfo) {
       throw new Error('フォルダ内にファイルが見つかりませんでした。');
     }
 
-    // インストール先ディレクトリを付与
     rtpFiles = rtpFiles.map(f => ({
       path: `RTP/${rtpDir}/${f.path}`,
       data: f.data
     }));
 
     console.log(`RTP folder import: ${rtpFiles.length} files -> RTP/${rtpDir}/`);
+    _rtpProgress.set(78, `IndexedDB に保存中... (${rtpFiles.length} ファイル)`);
     statusDiv.textContent = `${rtpInfo.name}を RTP/${rtpDir}/ にインストール中... (${rtpFiles.length} ファイル)`;
     await storageManager.saveRTP(rtpInfo.id, rtpInfo.name, rtpFiles);
 
-    alert(
-      `${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
+    statusDiv.textContent = '';
+    await loadRTPStatusList();
+    _rtpProgress.done(
+      `✅ ${rtpInfo.name}を RTP/${rtpDir}/ にインストールしました！\n\n` +
       `ファイル数: ${rtpFiles.length}\n` +
       `RTPを必要とするゲームで自動的に使用されます。`
     );
-    statusDiv.textContent = '';
-    await loadRTPStatusList();
 
   } catch (error) {
     console.error('Error processing RTP folder:', error);
+    _rtpProgress.hide();
     statusDiv.textContent = 'エラー: ' + error.message;
     alert(`RTPフォルダの処理中にエラーが発生しました:\n${error.message}`);
   }
@@ -10165,17 +10415,15 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
             mkxpJsonObj = {};
           }
         } catch (error) {
-          console.warn('[mkxp] Existing mkxp.json is invalid; keeping it unchanged:', error);
-          mkxpJsonObj = null;
+          console.warn('[mkxp] Existing mkxp.json is invalid; replacing with generated config:', error);
+          mkxpJsonObj = {};
         }
       }
       if (fontSubEntries.length > 0) {
-        if (mkxpJsonObj) {
-          const existingFontSub = Array.isArray(mkxpJsonObj.fontSub) ? mkxpJsonObj.fontSub : [];
-          mkxpJsonObj.fontSub = [...new Set([...existingFontSub, ...fontSubEntries])];
-        }
+        const existingFontSub = Array.isArray(mkxpJsonObj.fontSub) ? mkxpJsonObj.fontSub : [];
+        mkxpJsonObj.fontSub = [...new Set([...existingFontSub, ...fontSubEntries])];
       }
-      if (installedJpFamilies.length > 0 && mkxpJsonObj) {
+      if (installedJpFamilies.length > 0) {
         // ZIP内に置くだけでは実行されないため、両タイミングに明示登録する。
         mkxpJsonObj.preloadScript = [...new Set([
           ...(Array.isArray(mkxpJsonObj.preloadScript) ? mkxpJsonObj.preloadScript : []),
@@ -10186,10 +10434,10 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           'Scripts/Preload/font_fix.rb',
         ])];
       }
-      if (settings.soundfont && mkxpJsonObj) {
+      if (settings.soundfont) {
         mkxpJsonObj.midiSoundFont = `SoundFonts/${settings.soundfont}`;
       }
-      if (mkxpJsonObj && Object.keys(mkxpJsonObj).length > 0) {
+      if (Object.keys(mkxpJsonObj).length > 0) {
         mkxpZip.file('mkxp.json', JSON.stringify(mkxpJsonObj, null, 2), { compression: 'STORE' });
       }
 
@@ -10204,10 +10452,54 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           || installedJpFamilies[0];
         // Font.default_name には文字列または配列を渡せる
         // 日本語フォントを先頭に、元のデフォルト名を fallback として並べる
-        const rubyNames = JSON.stringify([jpTarget, 'Arial', 'MS Gothic', 'MS PGothic']);
+        const rubyNames = JSON.stringify([...new Set([jpTarget, 'Arial', 'MS Gothic', 'MS PGothic'])]);
         const rubyScript = [
           '# Auto-generated: set Japanese font as default',
           `Font.default_name = ${rubyNames}`,
+          'begin',
+          '  $stderr.puts "[font_fix] Font.default_name => " + Font.default_name.inspect',
+          'rescue => e',
+          '  $stderr.puts "[font_fix] Font.default_name error: " + e.to_s',
+          'end',
+          '',
+          '# Patch Bitmap#draw_text to convert Shift-JIS (CP932) strings to UTF-8.',
+          '# RGSS1/2 games store text as Shift-JIS; the mkxp-z renderer expects UTF-8.',
+          '# We use NKF with explicit CP932->UTF-8 conversion for reliability.',
+          '# String#to_utf8 (mkxp-z builtin) is used as fallback.',
+          'begin',
+          '  require "nkf"',
+          '  $__mkxpfont_nkf_ok = true',
+          'rescue LoadError',
+          '  $__mkxpfont_nkf_ok = false',
+          'end',
+          '',
+          'def _mkxpfont_sjis_to_utf8(str)',
+          '  if $__mkxpfont_nkf_ok',
+          '    NKF.nkf("-Sw", str)',
+          '  else',
+          '    str.to_utf8',
+          '  end',
+          'end',
+          '',
+          'if defined?(Bitmap) && Bitmap.method_defined?(:draw_text)',
+          '  class Bitmap',
+          '    alias_method :_mkxpfont_draw_text_orig, :draw_text',
+          '    def draw_text(*args)',
+          '      # Find the text argument: index 1 for (rect, str[, align]) or 4 for (x, y, w, h, str[, align])',
+          '      str_idx = (args[0].is_a?(Rect) ? 1 : 4)',
+          '      if args[str_idx].is_a?(String)',
+          '        str = args[str_idx]',
+          '        needs_conv = if str.respond_to?(:valid_encoding?)',
+          '          !str.valid_encoding?',
+          '        else',
+          '          true',
+          '        end',
+          '        args[str_idx] = _mkxpfont_sjis_to_utf8(str) if needs_conv',
+          '      end',
+          '      _mkxpfont_draw_text_orig(*args)',
+          '    end',
+          '  end',
+          'end',
         ].join("\n");
         const rubyBytes = new TextEncoder().encode(rubyScript);
         // preload スクリプト（ゲームスクリプト実行前）
@@ -11097,8 +11389,6 @@ async function loadGameFiles(files, gameName, existingGameId = null) {
 
 window.addEventListener('load', () => {
   const fileInput = document.getElementById('game-file-input');
-  const rtp2000FileInput = document.getElementById('rtp2000-file-input');
-  const rtp2003FileInput = document.getElementById('rtp2003-file-input');
   const canvas = document.getElementById('canvas');
   
   // ゲームファイル選択イベント（ZIP）
@@ -11127,70 +11417,6 @@ window.addEventListener('load', () => {
     });
   }
   
-  // RTPファイル選択イベント（ZIP）
-  function wireRTPFileInput(inputEl, rtpInfo) {
-    inputEl.addEventListener('change', async (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        const fileName = file.name.toLowerCase();
-        if (fileName.endsWith('.zip') || fileName.endsWith('.exe')) {
-          await processRTPZipFile(file, rtpInfo);
-        } else {
-          alert('ZIP ファイルまたは EXE インストーラーを選択してください。');
-        }
-        // 入力をリセット
-        inputEl.value = '';
-      }
-    });
-  }
-
-  // RTP フォルダ選択ボタン → hidden input をクリック
-  const rtpMeta = [
-    { id: 'rtp2000',   name: 'RPGツクール2000 RTP (日本語)' },
-    { id: 'rtp2003',   name: 'RPGツクール2003 RTP (日本語)' },
-    { id: 'rtp2000en', name: 'RPGツクール2000 RTP (英語)' },
-    { id: 'rtp2003en', name: 'RPGツクール2003 RTP (英語)' },
-    { id: 'rtpxp',     name: 'RPGツクール XP RTP (日本語)' },
-    { id: 'rtpvx',     name: 'RPGツクール VX RTP (日本語)' },
-    { id: 'rtpvxace',  name: 'RPGツクール VX Ace RTP (日本語)' },
-    { id: 'rtpxpen',   name: 'RPGツクール XP RTP (英語)' },
-    { id: 'rtpvxen',   name: 'RPGツクール VX RTP (英語)' },
-    { id: 'rtpvxaceen',name: 'RPGツクール VX Ace RTP (英語)' },
-  ];
-  document.querySelectorAll('.rtp-folder-btn').forEach(btn => {
-    const rtpId = btn.dataset.rtp;
-    const rtpInfo = rtpMeta.find(r => r.id === rtpId);
-    const folderInput = document.getElementById(`${rtpId}-folder-input`);
-    if (!rtpInfo || !folderInput) return;
-    btn.addEventListener('click', () => folderInput.click());
-    folderInput.addEventListener('change', async (event) => {
-      if (event.target.files.length > 0) {
-        await processRTPFolderFiles(event.target.files, rtpInfo);
-        event.target.value = '';
-      }
-    });
-  });
-  
-  const rtp2000enFileInput  = document.getElementById('rtp2000en-file-input');
-  const rtp2003enFileInput  = document.getElementById('rtp2003en-file-input');
-  const rtpxpFileInput      = document.getElementById('rtpxp-file-input');
-  const rtpxpenFileInput    = document.getElementById('rtpxpen-file-input');
-  const rtpvxFileInput      = document.getElementById('rtpvx-file-input');
-  const rtpvxenFileInput    = document.getElementById('rtpvxen-file-input');
-  const rtpvxaceFileInput   = document.getElementById('rtpvxace-file-input');
-  const rtpvxaceenFileInput = document.getElementById('rtpvxaceen-file-input');
-
-  if (rtp2000FileInput)    wireRTPFileInput(rtp2000FileInput,    { id: 'rtp2000',    name: 'RPGツクール2000 RTP (日本語)' });
-  if (rtp2003FileInput)    wireRTPFileInput(rtp2003FileInput,    { id: 'rtp2003',    name: 'RPGツクール2003 RTP (日本語)' });
-  if (rtp2000enFileInput)  wireRTPFileInput(rtp2000enFileInput,  { id: 'rtp2000en',  name: 'RPGツクール2000 RTP (英語)' });
-  if (rtp2003enFileInput)  wireRTPFileInput(rtp2003enFileInput,  { id: 'rtp2003en',  name: 'RPGツクール2003 RTP (英語)' });
-  if (rtpxpFileInput)      wireRTPFileInput(rtpxpFileInput,      { id: 'rtpxp',      name: 'RPGツクール XP RTP (日本語)' });
-  if (rtpxpenFileInput)    wireRTPFileInput(rtpxpenFileInput,    { id: 'rtpxpen',    name: 'RPGツクール XP RTP (英語)' });
-  if (rtpvxFileInput)      wireRTPFileInput(rtpvxFileInput,      { id: 'rtpvx',      name: 'RPGツクール VX RTP (日本語)' });
-  if (rtpvxenFileInput)    wireRTPFileInput(rtpvxenFileInput,    { id: 'rtpvxen',    name: 'RPGツクール VX RTP (英語)' });
-  if (rtpvxaceFileInput)   wireRTPFileInput(rtpvxaceFileInput,   { id: 'rtpvxace',   name: 'RPGツクール VX Ace RTP (日本語)' });
-  if (rtpvxaceenFileInput) wireRTPFileInput(rtpvxaceenFileInput, { id: 'rtpvxaceen', name: 'RPGツクール VX Ace RTP (英語)' });
-
   // サウンドフォント/フォントの追加（ファイル選択→保存）
   function wireAssetFileInput(inputId, type) {
     const inputEl = document.getElementById(inputId);
@@ -12159,6 +12385,18 @@ async function syncConfigIniToSettings(targetFS, explicitPath = null) {
     });
   })();
 </script>
+<!-- RTP 展開進捗オーバーレイ -->
+<div id="rtp-progress-overlay" role="dialog" aria-modal="true" aria-labelledby="rtp-progress-title">
+  <div id="rtp-progress-box">
+    <div id="rtp-progress-title">RTPを展開中...</div>
+    <div id="rtp-progress-bar-wrap"><div id="rtp-progress-bar"></div></div>
+    <div id="rtp-progress-msg"></div>
+    <div id="rtp-progress-file"></div>
+    <div id="rtp-progress-done"></div>
+    <button id="rtp-progress-close" type="button">閉じる</button>
+  </div>
+</div>
+
 </body>
 
 </html>
