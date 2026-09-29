@@ -10351,18 +10351,23 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     setStatus('ゲームデータをパック中...');
     let mkxpZip = new JSZip();
     let packedCount = 0;
-    for (const f of files) {
-      let data = f.data;
-      // lazy ファイルは IndexedDB から取得
-      if (!data && f.lazy) {
+
+    // lazy ファイルを並列フェッチしてデータを解決する
+    const resolvedFiles = await Promise.all(files.map(async f => {
+      if (f.data) return f;
+      if (f.lazy && f.gameId) {
         try {
-          if (f.gameId) {
-            data = await storageManager.getGameFile(f.gameId, f.path);
-          }
+          const data = await storageManager.getGameFile(f.gameId, f.path);
+          return { ...f, data };
         } catch (e) {
           console.warn('[mkxp] Failed to fetch lazy file:', f.path, e);
         }
       }
+      return f;
+    }));
+
+    for (const f of resolvedFiles) {
+      const data = f.data;
       if (!data) continue;
       const relPath = f.path.replace(/^games\/[^/]+\//i, '');
 
@@ -10380,7 +10385,6 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
               packedCount++;
             }
           }
-          // アーカイブ本体は ZIP に含めない（展開済みのため不要）
           continue;
         } else {
           console.warn(`[mkxp] Failed to extract RGSS archive: ${relPath}, falling through`);
@@ -10485,22 +10489,19 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       }
 
       console.log(`[mkxp:timing] RTP loaded: ${rtpName} ${elapsed()}`);
-      // RTP ファイルをゲーム ZIP に直接追加（ゲームファイルで同名のものがあれば上書きしない）
+      // Blob→Uint8Array 変換を並列実行してから ZIP に追加
+      const rtpEntries = rtpData.files
+        .map(f => ({ filePart: f.path.replace(/^RTP\/[^/]+\//i, ''), data: f.data }))
+        .filter(e => e.filePart && !mkxpZip.file(e.filePart));
+      const resolved = await Promise.all(rtpEntries.map(async e => {
+        if (e.data instanceof Uint8Array) return e;
+        if (e.data instanceof Blob) return { ...e, data: new Uint8Array(await e.data.arrayBuffer()) };
+        return null;
+      }));
       let added = 0;
-      for (const f of rtpData.files) {
-        const filePart = f.path.replace(/^RTP\/[^/]+\//i, '');
-        if (!filePart) continue;
-        // ゲーム側に同名ファイルがある場合はスキップ（ゲーム優先）
-        if (mkxpZip.file(filePart)) continue;
-        let fileData = f.data;
-        if (!(fileData instanceof Uint8Array)) {
-          if (fileData instanceof Blob) {
-            fileData = new Uint8Array(await fileData.arrayBuffer());
-          } else {
-            continue;
-          }
-        }
-        mkxpZip.file(filePart, fileData, { compression: 'STORE' });
+      for (const e of resolved) {
+        if (!e) continue;
+        mkxpZip.file(e.filePart, e.data, { compression: 'STORE' });
         added++;
       }
     }
@@ -10546,18 +10547,20 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       }
 
       const fontAssetsMeta = allAssetsMeta.filter(a => a.type === 'mkxpfont');
-      // フォントをゲームZIPの Fonts/ に配置し、mkxp-z が通常の探索経路で読めるようにする。
+      // フォントを並列ロード・展開してからゲームZIPの Fonts/ に配置する
       let bundledFontCount = 0;
       const bundledFontNames = [];
-      for (const meta of fontAssetsMeta) {
+      const fontResults = await Promise.all(fontAssetsMeta.map(async meta => {
         const asset = await storageManager.getAssetById(meta.id);
-        if (!asset || !asset.data) continue;
+        if (!asset || !asset.data) return [];
         const data = asset.data instanceof Uint8Array ? asset.data
           : asset.data instanceof ArrayBuffer ? new Uint8Array(asset.data)
           : asset.data instanceof Blob ? new Uint8Array(await asset.data.arrayBuffer())
           : null;
-        if (!data) continue;
-        const faces = await expandMkxpFontAsset(asset.name, data);
+        if (!data) return [];
+        return expandMkxpFontAsset(asset.name, data);
+      }));
+      for (const faces of fontResults) {
         for (const face of faces) {
           mkxpZip.file(`Fonts/${face.name}`, face.data, { compression: 'STORE' });
           bundledFontNames.push(face.name);
@@ -10774,53 +10777,43 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       console.warn('[mkxp] Failed to load font assets:', e);
     }
 
-    // ゲームファイル + mkxp.json をまとめて ZIP → Blob に変換
+    // generateAsync と coreJs fetch を並列実行して起動時間を短縮する。
+    // coreJs は毎回 fetch するとコストが高いため Blob URL をキャッシュする。
+    const coreJsUrl = new URL('mkxp-z/mkxp-z_libretro.js', location.href).href;
+
+    const getCoreJsBlob = async () => {
+      if (loadMkxpGame._cachedCoreJsBlob) return loadMkxpGame._cachedCoreJsBlob;
+      console.log(`[mkxp:timing] Before fetch coreJs ${elapsed()}`);
+      const text = await fetch(coreJsUrl).then(r => r.text());
+      console.log(`[mkxp:timing] coreJs fetched (${(text.length/1024).toFixed(0)}KB) ${elapsed()}`);
+      const patched = text
+        .replace(
+          /new URL\("mkxp-z_libretro\.js"\s*,\s*import\.meta\.url\)/g,
+          `new URL(${JSON.stringify(coreJsUrl)})`
+        )
+        .replace(
+          'RPE.sentinelPromise=navigator.wakeLock.request("screen")',
+          'RPE.sentinelPromise=navigator.wakeLock.request("screen").catch(()=>{})'
+        );
+      loadMkxpGame._cachedCoreJsBlob = new Blob([patched], { type: 'application/javascript' });
+      return loadMkxpGame._cachedCoreJsBlob;
+    };
+
+    // ZIP生成とcoreJsフェッチを並列実行
+    setStatus('mkxp-z を起動中...', 'ゲームデータをパック中...');
     console.log(`[mkxp:timing] Before generateAsync ${elapsed()}`);
-    const mkxpzBlob = await mkxpZip.generateAsync({ type: 'blob', compression: 'STORE' });
+    const [mkxpzBlob, coreJsBlob] = await Promise.all([
+      mkxpZip.generateAsync({ type: 'blob', compression: 'STORE' }),
+      getCoreJsBlob(),
+    ]);
     console.log(`[mkxp:timing] generateAsync done (${(mkxpzBlob.size/1024/1024).toFixed(1)}MB) ${elapsed()}`);
-    
+
     // メモリ解放: ZIP生成後はmkxpZipを削除してGCを促す
     mkxpZip = null;
 
-    setStatus('mkxp-z を起動中...', 'エンジンコアをフェッチ中...');
-
     // Nostalgist.js は element に HTMLCanvasElement が必要であり、
     // 渡した canvas の id を強制的に "canvas" に書き換える。
-    // そのため既存の <canvas id="canvas"> をそのまま渡す。
-    // （専用 canvas を作っても id が上書きされ getElementById('mkxp-canvas') が null になる）
     const mkxpCanvas = document.getElementById('canvas');
-
-    // mkxp-z_libretro.js は PROXY_TO_PTHREAD でビルドされた ESM。
-    // Nostalgist.js は JS テキストを Blob URL として動的 import() するが、
-    // そのコンテキストでは import.meta.url = "blob:..." になるため、
-    // Worker 生成時の new URL("mkxp-z_libretro.js", import.meta.url) が失敗する。
-    //
-    // 対策: JS テキストを fetch し、Worker 生成に使う
-    //   new URL("mkxp-z_libretro.js", import.meta.url)
-    // の部分だけを絶対 URL に展開した Blob を core.js として渡す。
-    // ※ "import.meta.url" という文字列そのものは残す必要がある
-    //   （Nostalgist の isEsmScript 判定が js.includes("import.meta.url") のため）
-    console.log(`[mkxp:timing] Before fetch coreJs ${elapsed()}`);
-    setStatus('mkxp-z を起動中...', 'エンジンコアをフェッチ中...');
-    const coreJsUrl = new URL('mkxp-z/mkxp-z_libretro.js', location.href).href;
-    const coreJsText = await fetch(coreJsUrl).then(r => r.text());
-    console.log(`[mkxp:timing] coreJs fetched (${(coreJsText.length/1024).toFixed(0)}KB) ${elapsed()}`);
-    // Worker 生成箇所だけを絶対 URL で書き換える。
-    // 例: new URL("mkxp-z_libretro.js",import.meta.url) → new URL("https://.../mkxp-z_libretro.js")
-    const patchedJs = coreJsText
-      // Worker 生成箇所を絶対 URL で書き換え（Blob URL コンテキストで失敗するのを防ぐ）
-      .replace(
-        /new URL\("mkxp-z_libretro\.js"\s*,\s*import\.meta\.url\)/g,
-        `new URL(${JSON.stringify(coreJsUrl)})`
-      )
-      // WakeLock API の呼び出しを無効化
-      // document.hidden の状態によっては DOMException が throw されるため catch で握りつぶす
-      .replace(
-        'RPE.sentinelPromise=navigator.wakeLock.request("screen")',
-        'RPE.sentinelPromise=navigator.wakeLock.request("screen").catch(()=>{})'
-      )
-      ;
-    const coreJsBlob = new Blob([patchedJs], { type: 'application/javascript' });
 
     console.log(`[mkxp:timing] Before Nostalgist.launch ${elapsed()}`);
     setStatus('mkxp-z を起動中...', 'wasm を読み込み中...');
@@ -11082,32 +11075,30 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
     // Ruby パッチが /Save/__save_notify__ を書いた際に即座に IndexedDB へ同期する。
     // (font_fix.rb の Marshal.dump パッチがセーブデータのシリアライズを検知してこのファイルを作る)
     // PROXY_TO_PTHREAD ビルドでは fs.close フックが動作しないためこの方式を採用。
-    // フォールバックとして 3秒ごとの定期ポーリングも併用する。
+    // フォールバックとして 5秒ごとの定期ポーリングも併用する。
     let mkxpSaveSyncing = false;
-    const mkxpSaveNotifyPath = () => {
-      const sd = window.MKXP_SAVE_DIR;
-      return sd ? `${sd}/__save_notify__` : null;
-    };
     const mkxpSaveNotifyInterval = setInterval(async () => {
       if (!isGamePlaying) { clearInterval(mkxpSaveNotifyInterval); return; }
       if (mkxpSaveSyncing) return;
+      const sd = window.MKXP_SAVE_DIR;
+      if (!sd) return; // MKXP_SAVE_DIR 未確定の場合はスキップ（fs.stat 呼び出し不要）
+      const notifyPath = `${sd}/__save_notify__`;
+      let notified = false;
       try {
         const fs = nostalgist.getEmscripten().Module.FS;
-        const notifyPath = mkxpSaveNotifyPath();
-        if (notifyPath) {
-          try { fs.stat(notifyPath); } catch { return; } // ファイルが存在しなければスキップ
-          try { fs.unlink(notifyPath); } catch {}
-          console.log('[mkxp] Save notify detected; syncing to IndexedDB...');
-        }
-      } catch {}
+        try { fs.stat(notifyPath); notified = true; } catch { return; }
+        try { fs.unlink(notifyPath); } catch {}
+        console.log('[mkxp] Save notify detected; syncing to IndexedDB...');
+      } catch { return; }
+      if (!notified) return;
       mkxpSaveSyncing = true;
       try { await mkxpSavesToIndexedDB(); } finally { mkxpSaveSyncing = false; }
     }, 500);
-    // フォールバック: 3秒ごとの定期ポーリング（通知ファイルが作られなかった場合の保険）
+    // フォールバック: 5秒ごとの定期ポーリング（通知ファイルが作られなかった場合の保険）
     const mkxpSavePollInterval = setInterval(() => {
       if (!isGamePlaying) { clearInterval(mkxpSavePollInterval); return; }
-      if (!mkxpSaveSyncing) mkxpSavesToIndexedDB();
-    }, 3000);
+      if (!mkxpSaveSyncing && window.MKXP_SAVE_DIR) mkxpSavesToIndexedDB();
+    }, 5000);
     // ゲーム終了時にポーリングを停止
     const origOnSaveExit = window.__mkxpOnSaveExit;
     window.__mkxpOnSaveExit = async () => {
