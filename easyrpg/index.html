@@ -10593,17 +10593,16 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
         const existingFontSub = Array.isArray(mkxpJsonObj.fontSub) ? mkxpJsonObj.fontSub : [];
         mkxpJsonObj.fontSub = [...new Set([...existingFontSub, ...fontSubEntries])];
       }
-      if (installedJpFamilies.length > 0) {
-        // ZIP内に置くだけでは実行されないため、両タイミングに明示登録する。
-        mkxpJsonObj.preloadScript = [...new Set([
-          ...(Array.isArray(mkxpJsonObj.preloadScript) ? mkxpJsonObj.preloadScript : []),
-          'Scripts/Preload/font_fix.rb',
-        ])];
-        mkxpJsonObj.postloadScript = [...new Set([
-          ...(Array.isArray(mkxpJsonObj.postloadScript) ? mkxpJsonObj.postloadScript : []),
-          'Scripts/Preload/font_fix.rb',
-        ])];
-      }
+      // font_fix.rb は日本語フォントの有無に関係なく常に登録する。
+      // Shift-JIS→UTF-8 変換パッチはフォント未インストール環境（iPhoneなど）でも必要。
+      mkxpJsonObj.preloadScript = [...new Set([
+        ...(Array.isArray(mkxpJsonObj.preloadScript) ? mkxpJsonObj.preloadScript : []),
+        'Scripts/Preload/font_fix.rb',
+      ])];
+      mkxpJsonObj.postloadScript = [...new Set([
+        ...(Array.isArray(mkxpJsonObj.postloadScript) ? mkxpJsonObj.postloadScript : []),
+        'Scripts/Preload/font_fix.rb',
+      ])];
       if (settings.soundfont) {
         mkxpJsonObj.midiSoundFont = `SoundFonts/${settings.soundfont}`;
       }
@@ -10611,31 +10610,31 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
         mkxpZip.file('mkxp.json', JSON.stringify(mkxpJsonObj, null, 2), { compression: 'STORE' });
       }
 
-      // mkxp.json の fontSub に加え、preload / postload スクリプトでも Font.default_name を設定する。
+      // font_fix.rb を常に生成・ZIPに追加する。
+      // フォントがある場合は Font.default_name も設定し、ない場合はパッチのみ。
       // - preload: ゲームスクリプト実行前に実行（初期値を日本語フォントに設定）
       // - postload: ゲームスクリプト実行後に実行（ゲームが上書きした場合も確実に上書き返す）
-      // bios パス: "mkxp-z/Scripts/Preload/font_fix.rb"
-      //            "mkxp-z/Scripts/Postload/font_fix.rb"
-      if (installedJpFamilies.length > 0) {
+      {
         const preferredJp = ['ms gothic', 'ms pgothic', 'ms ui gothic', 'meiryo', 'yu gothic'];
         const jpTarget = installedJpFamilies.find(f => preferredJp.includes(normalizeFontFamilyName(f)))
           || installedJpFamilies[0];
-        // Font.default_name には文字列または配列を渡せる
-        // 日本語フォントを先頭に、元のデフォルト名を fallback として並べる
-        const rubyNames = JSON.stringify([...new Set([jpTarget, 'Arial', 'MS Gothic', 'MS PGothic'])]);
-        const rubyScript = [
+        // フォントがある場合のみ Font.default_name 設定行を生成
+        const fontLines = jpTarget ? [
           '# Auto-generated: set Japanese font as default',
-          `Font.default_name = ${rubyNames}`,
+          `Font.default_name = ${JSON.stringify([...new Set([jpTarget, 'Arial', 'MS Gothic', 'MS PGothic'])])}`,
           'begin',
           '  $stderr.puts "[font_fix] Font.default_name => " + Font.default_name.inspect',
           'rescue => e',
           '  $stderr.puts "[font_fix] Font.default_name error: " + e.to_s',
           'end',
           '',
+        ] : [];
+        const rubyScript = [
+          ...fontLines,
           '# Patch Bitmap#draw_text to convert Shift-JIS (CP932) strings to UTF-8.',
           '# mkxp-z marks all strings as UTF-8 after Marshal.load, but RGSS1/2 games',
           '# may store raw Shift-JIS bytes that were re-labelled UTF-8 by the runtime.',
-          '# Strategy: re-check the raw bytes as BINARY (ASCII-8BIT).',
+          '# Strategy: re-check the raw bytes as UTF-8.',
           '# If they form valid UTF-8, the string is already correct — return as-is.',
           '# Otherwise treat the bytes as Windows-31J (CP932) and transcode to UTF-8.',
           '',
@@ -10673,16 +10672,6 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
           '        end',
           '      end',
           '      _mkxpfont_draw_text_orig(*args)',
-          '    end',
-          '    # Patch text_size to use the same UTF-8 conversion as draw_text.',
-          '    # process_normal_character calls text_size(c) to measure width, then draw_text(c).',
-          '    # Without this patch text_size receives raw Shift-JIS bytes and returns the wrong',
-          '    # width, causing centred / right-aligned text to be placed at the wrong x position.',
-          '    alias_method :_mkxpfont_text_size_orig, :text_size',
-          '    def text_size(str)',
-          '      _mkxpfont_text_size_orig(',
-          '        str.is_a?(String) ? _mkxpfont_sjis_to_utf8(str) : str',
-          '      )',
           '    end',
           '  end',
           'end',
