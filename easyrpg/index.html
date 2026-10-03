@@ -10653,8 +10653,8 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
 
       const fontSubEntries = [];
       if (installedJpFamilies.length > 0) {
-        // 置換先は最初に見つかった日本語フォント（優先: MS Gothic > MS PGothic > ...）
-        const preferredJp = ['ms gothic', 'ms pgothic', 'ms ui gothic', 'meiryo', 'yu gothic'];
+        // 置換先は最初に見つかった日本語フォント（プロポーショナル優先: MS PGothic > MS Gothic > ...）
+        const preferredJp = ['ms pgothic', 'ms ｐゴシック', 'ms pゴシック', 'ms gothic', 'ms ゴシック', 'ms ui gothic', 'meiryo', 'yu gothic'];
         const jpTarget = installedJpFamilies.find(f => preferredJp.includes(normalizeFontFamilyName(f)))
           || installedJpFamilies[0];
         // NON_JP_DEFAULTS は日本語グリフを持たないことが確定しているデフォルト名。
@@ -10706,14 +10706,19 @@ async function loadMkxpGame(files, gameName, existingGameId = null, rtpConfig = 
       // - preload: ゲームスクリプト実行前に実行（初期値を日本語フォントに設定）
       // - postload: ゲームスクリプト実行後に実行（ゲームが上書きした場合も確実に上書き返す）
       {
-        const preferredJp = ['ms gothic', 'ms pgothic', 'ms ui gothic', 'meiryo', 'yu gothic'];
+        const preferredJp = ['ms pgothic', 'ms ｐゴシック', 'ms pゴシック', 'ms gothic', 'ms ゴシック', 'ms ui gothic', 'meiryo', 'yu gothic'];
         const jpTarget = installedJpFamilies.find(f => preferredJp.includes(normalizeFontFamilyName(f)))
           || installedJpFamilies[0];
         // フォントがある場合のみ Font.default_name 設定行を生成
+        const fontCandidates = jpTarget
+          ? [...new Set([jpTarget, 'MS PGothic', 'ＭＳ Ｐゴシック', 'MS Gothic', 'ＭＳ ゴシック', 'Arial'])]
+          : [];
         const fontLines = jpTarget ? [
           '# Auto-generated: set Japanese font as default',
-          `Font.default_name = ${JSON.stringify([...new Set([jpTarget, 'Arial', 'MS Gothic', 'MS PGothic'])])}`,
           'begin',
+          '  cur = Array(Font.default_name).compact',
+          `  targets = ${JSON.stringify(fontCandidates)}`,
+          '  Font.default_name = (cur + targets).uniq',
           '  $stderr.puts "[font_fix] Font.default_name => " + Font.default_name.inspect',
           'rescue => e',
           '  $stderr.puts "[font_fix] Font.default_name error: " + e.to_s',
