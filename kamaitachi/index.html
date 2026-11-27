@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>しおり達成状況確認ツール</title>
+<style>
+  :root {
+    --gold: #b36b00;
+    --fg: #000000;
+    --read: #008800;
+    --unread: #cc0000;
+  }
+  body {
+    background-color: #ffffff;
+    color: #000000;
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "MS PGothic", sans-serif;
+    margin: 16px;
+    line-height: 1.5;
+    transition: background-color 0.3s ease;
+  }
+  body.bg-pink {
+    background-color: #ffd9e8;
+  }
+  body.bg-gold {
+    background-color: #faecc2;
+  }
+  .center {
+    text-align: center;
+  }
+  h1 {
+    font-size: 24px;
+    margin: 8px 0 4px;
+  }
+  .sub {
+    font-size: 13px;
+    color: #333333;
+    margin-bottom: 16px;
+  }
+  /* 入力フォームテーブル */
+  table.form-table {
+    margin: 0 auto 12px;
+    background: #ffffff;
+    border-collapse: collapse;
+    border: 1px solid #999999;
+  }
+  table.form-table td, table.form-table th {
+    border: 1px solid #cccccc;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  table.form-table th {
+    background: #f2f2f2;
+    text-align: left;
+    white-space: nowrap;
+  }
+  input[type=file], select, button {
+    font-size: 13px;
+  }
+  button#run {
+    padding: 3px 18px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #status {
+    font-size: 13px;
+    color: #222222;
+    margin: 8px 0;
+  }
+  /* 集計テーブル */
+  table.stats-table {
+    margin: 8px auto;
+    background: #ffffff;
+    border-collapse: collapse;
+    border: 1px solid #999999;
+  }
+  table.stats-table th, table.stats-table td {
+    border: 1px solid #cccccc;
+    padding: 4px 14px;
+    font-size: 13px;
+    text-align: center;
+  }
+  table.stats-table th {
+    background: #f2f2f2;
+  }
+  .gold {
+    font-weight: bold;
+    font-size: 15px;
+    margin: 8px 0 4px;
+  }
+  .bar {
+    width: 280px;
+    height: 14px;
+    border: 1px solid #555555;
+    background: #ffffff;
+    margin: 4px auto;
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    background: #2e8b57;
+  }
+  .hint {
+    font-size: 12px;
+    color: #444444;
+    max-width: 820px;
+    margin: 6px auto;
+    text-align: left;
+    background: #fafafa;
+    border: 1px dashed #aaaaaa;
+    padding: 6px 10px;
+    white-space: pre-wrap;
+  }
+  /* 切り替えタブ */
+  .tabs {
+    margin: 16px 0 10px;
+  }
+  .chip {
+    padding: 4px 14px;
+    margin: 0 3px;
+    border: 1px solid #888888;
+    background: #eeeeee;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .chip.on {
+    background: #ffffff;
+    font-weight: bold;
+    border-bottom: 2px solid #000000;
+  }
+  /* データテーブル */
+  .data-container {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    border: 1px solid #888888;
+  }
+  table.data-table th, table.data-table td {
+    border: 1px solid #aaaaaa;
+    padding: 5px 8px;
+    font-size: 13px;
+  }
+  table.data-table th {
+    background: #e8e8e8;
+  }
+  td.id {
+    font-family: monospace;
+    text-align: center;
+    color: #444444;
+  }
+  .badge {
+    font-size: 12px;
+    font-weight: bold;
+    padding: 0 4px;
+  }
+  .badge.on {
+    color: #008800;
+  }
+  .badge.off {
+    color: #cc0000;
+  }
+  .star {
+    color: #cc0066;
+    margin-left: 4px;
+  }
+  .ctx {
+    font-size: 12px;
+    color: #555555;
+    margin-top: 3px;
+    border-left: 3px solid #cccccc;
+    padding-left: 6px;
+    white-space: pre-wrap;
+  }
+  .opts {
+    margin-top: 4px;
+  }
+  .opts > div {
+    padding-left: 6px;
+    white-space: pre-wrap;
+  }
+  .opts .badge {
+    margin-left: 6px;
+  }
+  /* フローチャート */
+  .fc-box {
+    background: #ffffff;
+    border: 1px solid #888888;
+    padding: 10px;
+  }
+  .fc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .fc-toolbar .btns {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+  }
+  .fc-toolbar button {
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+  .fc-scroll {
+    overflow: auto;
+    max-height: 70vh;
+    border: 1px solid #555555;
+    background: #06060c;
+  }
+  .fc-scroll svg {
+    display: block;
+  }
+  .fc-detail {
+    margin-top: 8px;
+    border: 1px solid #aaaaaa;
+    padding: 8px 10px;
+    background: #f9f9f9;
+    font-size: 13px;
+  }
+  .fc-detail:empty {
+    display: none;
+  }
+  .fc-detail .t {
+    font-weight: bold;
+    margin-bottom: 3px;
+  }
+  .fc-detail .ctx {
+    color: #555555;
+    font-size: 12px;
+    margin: 4px 0;
+    white-space: pre-wrap;
+  }
+  .fc-detail .opt {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    padding: 1px 0;
+  }
+  .fc-detail .opt .tag {
+    font-weight: bold;
+    font-family: monospace;
+    color: #0000cc;
+  }
+  .fc-legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: #333333;
+    font-size: 11px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .fc-legend .sw {
+    display: inline-block;
+    width: 12px;
+    height: 10px;
+    border: 1px solid #444444;
+    vertical-align: -1px;
+    margin-right: 3px;
+  }
+  .fc-legend .ln {
+    display: inline-block;
+    width: 16px;
+    height: 0;
+    border-top: 2px solid #555555;
+    vertical-align: 3px;
+    margin-right: 3px;
+  }
+  .fc-legend .ln.dash {
+    border-top-style: dashed;
+  }
+  footer {
+    margin-top: 30px;
+    padding: 15px 0;
+    text-align: center;
+    font-size: 12px;
+    color: #555555;
+    border-top: 1px solid #e0e0e0;
+  }
+</style>
+</head>
+<body>
+
+<p class="center">
+  <strong><font size="6">しおり達成状況確認ツール</font></strong>
+</p>
+<p class="center sub">
+  どうしても行き詰まってしまった人のために・・・<br>
+  ROM (.sfc) とセーブデータ (.srm / .sram) をブラウザ内で直接解析します。ファイルは外部に送信されません。<br>
+  本ツールはスパイク・チュンソフト様とは一切関係しない非公式のものとなります。<br>
+  ROMデータはくれぐれも合法的な手段で入手して下さいね。
+</p>
+
+<table class="form-table">
+  <tr>
+    <th>ROM (.sfc)</th>
+    <td>
+      <input type="file" id="romFile" accept=".sfc,.smc">
+      <div id="romHash" style="font-size: 11px; margin-top: 3px; color: #555555;"></div>
+    </td>
+  </tr>
+  <tr>
+    <th>セーブデータ (.srm/.sram)</th>
+    <td><input type="file" id="srmFile" accept=".srm,.sram,.bin"></td>
+  </tr>
+  <tr>
+    <th>対象スロット</th>
+    <td><select id="slotSelect"></select></td>
+  </tr>
+  <tr>
+    <td colspan="2" class="center">
+      <button id="run" disabled>解析する</button>
+    </td>
+  </tr>
+</table>
+
+<div class="center">
+  <div id="status">ROM とセーブデータを選択してください。</div>
+
+  <table class="stats-table" id="stats" hidden>
+    <tr>
+      <th>見たエンディング</th>
+      <th>完全に選んだ選択肢</th>
+      <th>プレイ回数</th>
+    </tr>
+    <tr>
+      <td><b id="nEnd" style="font-size: 16px;">0</b></td>
+      <td><b id="nChoice" style="font-size: 16px;">0</b></td>
+      <td><b id="nPlay" style="font-size: 16px;">0</b></td>
+    </tr>
+  </table>
+
+  <div class="gold" id="goldStatus" hidden></div>
+  <div class="bar" id="barWrap" hidden><i id="bar" style="width:0"></i></div>
+  <div class="hint" id="hintBox" hidden></div>
+
+  <div class="tabs">
+    <button class="chip on" data-view="end">エンディング</button>
+    <button class="chip" data-view="choice">選択肢</button>
+    <button class="chip" data-view="flow">フローチャート</button>
+  </div>
+</div>
+
+<div class="data-container" id="grid" hidden>
+  <div id="endCard">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 50px;">ID</th>
+          <th>エンディング</th>
+          <th style="width: 60px; text-align: center;">状態</th>
+        </tr>
+      </thead>
+      <tbody id="endBody"></tbody>
+    </table>
+  </div>
+
+  <div id="choiceCard" hidden>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 50px;">ID</th>
+          <th>選択肢 A〜E</th>
+          <th style="width: 60px; text-align: center;">状態</th>
+        </tr>
+      </thead>
+      <tbody id="choiceBody"></tbody>
+    </table>
+  </div>
+
+  <div id="flowCard" class="fc-box" hidden>
+    <div class="fc-toolbar">
+      <span>スクリプトの実際の制御フローから生成した分岐図です。各ノードをクリックすると詳細が出ます。</span>
+      <span class="btns">
+        <button id="fcZoomOut">−</button>
+        <button id="fcZoomIn">＋</button>
+        <button id="fcZoomReset">等倍</button>
+        <button id="fcFit">幅に合わせる</button>
+      </span>
+    </div>
+    <div class="fc-scroll" id="fcScroll"></div>
+    <div class="fc-detail" id="fcDetail"></div>
+    <div class="fc-legend">
+      <span><span class="sw" style="background:#a89e3a"></span>章（シーン）</span>
+      <span><span class="sw" style="background:#782856"></span>選択肢</span>
+      <span><span class="sw" style="background:#208838"></span>名前入力</span>
+      <span><span class="sw" style="background:#9a181e"></span>END（閲覧済）</span>
+      <span><span class="sw" style="background:#5c1014"></span>END（未閲覧）</span>
+      <span><span class="ln"></span>接続線</span>
+      <span>選択肢文字: <span style="color:#55cc66; font-weight:bold;">選んだ選択肢（緑）</span> / <span style="color:#887788; font-weight:bold;">未選択（灰）</span></span>
+    </div>
+  </div>
+</div>
+
+<footer>
+  しおり達成状況確認ツール
+</footer>
+
+<script src="charmap.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
