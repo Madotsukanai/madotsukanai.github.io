@@ -44,8 +44,8 @@ const INPUT_INDEX = { 154: 0, 157: 1, 158: 1, 159: 2, 160: 2 };
 // so present the five actual dispositions in the order the game tests them:
 // Mikimoto, Tanaka, Kayama, Midori, other. The high option bits then line up
 // with the saved second input (e.g. 0x09 = Mikimoto / option A).
-function arrangeNameInput157(options) {
-  if (!options || options.length !== 5) return options;
+function arrangeNameInput157(options, options158) {
+  if (!options) return options;
   const used = new Set();
   const take = match => {
     for (let i = 0; i < options.length; i++) {
@@ -62,7 +62,9 @@ function arrangeNameInput157(options) {
   if (!mikimoto || !tanaka || !kayama || !midori) return options;
   const at = (mikimoto.branch || '').indexOf('「犯人は、');
   const mikimotoClean = at > 0 ? { ...mikimoto, branch: mikimoto.branch.slice(at) } : mikimoto;
-  return [mikimotoClean, tanaka, kayama, midori, { label: '（その他）', branch: '' }];
+  const opt4 = (options158 && options158[0]) || { label: '', branch: '' };
+  const opt5 = (options158 && options158[1]) || { label: '', branch: '' };
+  return [mikimotoClean, tanaka, kayama, midori, opt4, opt5];
 }
 // What the player actually types at each name-input prompt. The direct
 // branches use the primary hiragana name; the generic "other" branches list
@@ -80,14 +82,16 @@ const NAME_INPUT_LABELS = {
     'たなか',
     'かやま',
     'みどり',
-    'こばやし／きょうこ／はるこ／としお／あき／かなこ／けいこ／さんにんぐみ'
+    'こばやし／きょうこ／はるこ／としお／あき／かなこ／けいこ／さんにんぐみ',
+    '（一致しない名前）'
   ],
   159: [
     'みきもと',
     'あき／かなこ／けいこ',
     'さんにんぐみ',
     'はるこ',
-    'こばやし／きょうこ／としお／みどり'
+    'こばやし／きょうこ／としお／みどり',
+    '（一致しない名前）'
   ]
 };
 function applyNameInputLabels(id, options) {
@@ -269,6 +273,7 @@ function decodeChoices(rom) {
   // with the most options (and the longest context on a tie).
   const map = new Map();
   variants.forEach((list, id) => {
+    if (id === 158 || id === 160) return;
     let best = list[0];
     for (const v of list) {
       if (v.options.length > best.options.length ||
@@ -276,8 +281,19 @@ function decodeChoices(rom) {
         best = v;
       }
     }
-    const arranged = id === 157 ? arrangeNameInput157(best.options) : best.options;
-    const options = applyNameInputLabels(id, arranged);
+    let rawOptions = best.options;
+    if (id === 157) {
+      const v158 = variants.get(158);
+      const opt158 = v158 ? v158[0].options : null;
+      rawOptions = arrangeNameInput157(best.options, opt158);
+    } else if (id === 159) {
+      const v160 = variants.get(160);
+      const opt160 = v160 ? v160[0].options : null;
+      const opt4 = (opt160 && opt160[0]) || { label: '', branch: '' };
+      const opt5 = (opt160 && opt160[1]) || { label: '', branch: '' };
+      rawOptions = [best.options[0], best.options[1], best.options[2], best.options[3], opt4, opt5];
+    }
+    const options = applyNameInputLabels(id, rawOptions);
     map.set(id, {
       context: best.context,
       count: options.length,
@@ -378,34 +394,66 @@ function accusedLabel(branch, optionIndex) {
   return name;
 }
 
-// Name-input rows have no choice byte. The saved input name identifies the
-// route, but only when exactly one derived option label matches it (154 A
-// 美樹本, for example). 157/158 share the second input name, so duplicates
-// deliberately stay unresolved.
+const NAME_ALIASES = {
+  'みきもと': ['みきもと', '美樹本'],
+  'たなか': ['たなか', '田中'],
+  'としお': ['としお', '俊夫'],
+  'かやま': ['かやま', '香山'],
+  'みどり': ['みどり'],
+  'こばやし': ['こばやし', '小林'],
+  'きょうこ': ['きょうこ', '今日子'],
+  'はるこ': ['はるこ', '春子'],
+  'あき': ['あき', '亜希', '渡瀬'],
+  'かなこ': ['かなこ', '可奈子', '北野'],
+  'けいこ': ['けいこ', '啓子', '河村'],
+  'さんにんぐみ': ['さんにんぐみ', '三人組', '３人組', '三人娘', '３人娘']
+};
+
 function inputSelectedIndices(info, slot) {
   if (!info || !info.nameInput || info.inputIndex < 0) return [];
   const name = slot.inputNames[info.inputIndex];
   if (!name) return [];
-  const bare = name.replace(/さん$/, '');
-  const norm = s => s.replace(/[\s\u3000]/g, '');
-  const want = [norm(name), norm(bare)].filter(Boolean);
+  const bare = name.replace(/さん$|ちゃん$/, '').replace(/[\s\u3000]/g, '');
   const hits = [];
+  let unmatchedIdx = -1;
   info.options.forEach((opt, k) => {
-    let label = opt.label;
-    if (!label || /犯人は|[\u0003-\u0006]/.test(label)) {
-      const named = accusedLabel(opt.branch || label, info.inputIndex === 0 ? k : -1);
-      if (named) label = named;
+    const label = opt.inputLabel || opt.label;
+    if (label === '（一致しない名前）') {
+      unmatchedIdx = k;
+      return;
     }
-    if (!label) return;
-    const filled = norm(fillNames(label, slot.names, slot.culpritName, slot.inputNames));
-    if (want.includes(filled)) hits.push(k);
+    const parts = label.split('／');
+    for (const part of parts) {
+      const p = part.trim();
+      if (bare === p || (NAME_ALIASES[p] && NAME_ALIASES[p].includes(bare))) {
+        hits.push(k);
+        break;
+      }
+    }
   });
+  if (hits.length === 0 && unmatchedIdx >= 0) {
+    hits.push(unmatchedIdx);
+  }
   return hits;
 }
 
 function inputSelectedIndex(info, slot) {
   const hits = inputSelectedIndices(info, slot);
   return hits.length === 1 ? hits[0] : -1;
+}
+
+function isChoiceOptionRead(slot, id, k) {
+  if (id === 157) {
+    if (k < 4) return optionRead(slot.choiceBytes[156], k);
+    if (k === 4) return optionRead(slot.choiceBytes[157], 0);
+    if (k === 5) return optionRead(slot.choiceBytes[157], 1);
+  }
+  if (id === 159) {
+    if (k < 4) return optionRead(slot.choiceBytes[158], k);
+    if (k === 4) return optionRead(slot.choiceBytes[159], 0);
+    if (k === 5) return optionRead(slot.choiceBytes[159], 1);
+  }
+  return optionRead(slot.choiceBytes[id - 1], k);
 }
 
 function dedupeLines(text) {
@@ -425,14 +473,8 @@ function choiceOptionView(id, info, k, v, slot, inferredHit) {
   const isName = !!(info && info.nameInput);
   const inputLabel = isName ? (opt.inputLabel || '') : '';
   let label = inputLabel || opt.label;
-  if (!inputLabel && isName && (!label || /犯人は|[\u0003-\u0006]/.test(label))) {
-    const named = accusedLabel(opt.branch || label, info.inputIndex === 0 ? k : -1);
-    if (named) label = named;
-  }
   if (!label) label = isName ? '（入力名）' : '（テキストなし）';
-  const did = isName
-    ? (inferredHit >= 0 ? inferredHit === k : optionRead(v, k))
-    : optionRead(v, k);
+  const did = isChoiceOptionRead(slot, id, k) || (isName && inferredHit >= 0 && inferredHit === k);
   let title = '';
   if (isName && opt.branch) {
     title = fillNames(opt.branch, slot.names, slot.culpritName, slot.inputNames);
@@ -632,6 +674,44 @@ function buildFlowGraphData(rom) {
     if (node.kind === 'chapter' && !node.title) node.title = node.text.trim();
   }
 
+  // Merge auxiliary choices 158 into 157, and 160 into 159
+  const k157 = choiceAt.get(157);
+  const k158 = choiceAt.get(158);
+  const k159 = choiceAt.get(159);
+  const k160 = choiceAt.get(160);
+  if (k157 && k158) {
+    const n157 = nodes.get(k157);
+    const n158 = nodes.get(k158);
+    if (n157 && n158) {
+      n157.optionTargets = [...n157.optionTargets.slice(0, 4), ...n158.optionTargets];
+      const edges158 = edges.filter(e => e.from === k158);
+      for (let i = edges.length - 1; i >= 0; i--) {
+        if (edges[i].from === k158 || edges[i].to === k158) edges.splice(i, 1);
+      }
+      edges158.forEach(e => {
+        edges.push({ from: k157, to: e.to, kind: e.kind, opt: e.opt === 0 ? 4 : 5, endFlag: e.endFlag });
+      });
+      nodes.delete(k158);
+      choiceAt.delete(158);
+    }
+  }
+  if (k159 && k160) {
+    const n159 = nodes.get(k159);
+    const n160 = nodes.get(k160);
+    if (n159 && n160) {
+      n159.optionTargets = [...n159.optionTargets.slice(0, 4), ...n160.optionTargets];
+      const edges160 = edges.filter(e => e.from === k160);
+      for (let i = edges.length - 1; i >= 0; i--) {
+        if (edges[i].from === k160 || edges[i].to === k160) edges.splice(i, 1);
+      }
+      edges160.forEach(e => {
+        edges.push({ from: k159, to: e.to, kind: e.kind, opt: e.opt === 0 ? 4 : 5, endFlag: e.endFlag });
+      });
+      nodes.delete(k160);
+      choiceAt.delete(160);
+    }
+  }
+
   return { nodes, edges, root, choiceAt, endingAt, chapters };
 }
 
@@ -674,16 +754,17 @@ function buildChartModel(raw) {
             if (!pairSeen.has(pk)) { pairSeen.add(pk); cEdges.push({ from: src.key, to: e.to, kind: e.kind, opt: e.opt, flag: e.flag, loop: true }); }
             continue;
           }
-          if (seen.has(e.to)) continue;
+          const via = fr.via || e;
+          const viaOpt = via.opt != null ? 'o' + via.opt : (via.flag != null ? 'f' + via.flag : 'k' + via.kind);
+          const stateKey = e.to + '/' + viaOpt;
+          if (seen.has(stateKey)) continue;
+          seen.add(stateKey);
           const t = nodes.get(e.to);
           if (!t) continue;
-          const via = fr.via || e;
           if (t.kind !== 'page') {
-            const pk = src.key + '>' + e.to + '/' + (via.opt != null ? 'o' + via.opt : via.flag != null ? 'f' + via.flag : 'x') + via.kind;
+            const pk = src.key + '>' + e.to + '/' + viaOpt + via.kind;
             if (!pairSeen.has(pk)) { pairSeen.add(pk); cEdges.push({ from: src.key, to: e.to, kind: via.kind, opt: via.opt, flag: via.flag }); }
-            seen.add(e.to);
           } else {
-            seen.add(e.to);
             next.push({ key: e.to, via });
           }
         }
@@ -853,9 +934,7 @@ function choiceState(slot, id, info) {
   const inferredHit = inferredHits.length === 1 ? inferredHits[0] : -1;
   const opts = [];
   for (let k = 0; k < count; k++) {
-    opts.push(info && info.nameInput
-      ? (inferredHit >= 0 ? inferredHit === k : optionRead(v, k))
-      : optionRead(v, k));
+    opts.push(isChoiceOptionRead(slot, id, k) || (info && info.nameInput && inferredHit >= 0 && inferredHit === k));
   }
   return { opts, any: opts.some(Boolean), all: opts.length > 0 && opts.every(Boolean), count };
 }
@@ -1024,9 +1103,12 @@ function render() {
   for (let i = 0; i < slot.choiceBytes.length; i++) {
     const id = i + 1;
     if (HIDDEN_CHOICE_IDS.has(id)) continue;
-    if (choiceReadAll(slot.choiceBytes[i], id)) { complete++; continue; }
     const info = choiceInfo.get(id);
-    if (info && !info.nameInput && inputSelectedIndex(info, slot) >= 0) complete++;
+    if (info) {
+      if (choiceState(slot, id, info).all) complete++;
+    } else {
+      if (choiceReadAll(slot.choiceBytes[i], id)) complete++;
+    }
   }
 
   $('nEnd').textContent = seen.length + '/' + ENDING_IDS.length;
