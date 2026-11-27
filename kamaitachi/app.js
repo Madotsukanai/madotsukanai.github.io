@@ -1103,19 +1103,25 @@ function render() {
     // A placeholder-only name input (e.g. 159) makes every option look like the
     // same saved name. Only trust an inference when it identifies one option.
     const inferredHit = inferredHits.length === 1 ? inferredHits[0] : -1;
+    let allRead = count > 0;
     for (let k = 0; k < count; k++) {
       const line = document.createElement('div');
       const view = choiceOptionView(i + 1, info, k, v, slot, inferredHit);
       line.textContent = String.fromCharCode(65 + k) + ' ' + view.label;
       line.append(' ', badge(view.did ? '済' : '未', view.did));
+      if (!view.did) allRead = false;
       if (view.title) line.title = view.title;
       opts.append(line);
     }
     td1.append(opts);
     const td2 = document.createElement('td');
-    const on = optionBits !== 0 || inferredHit >= 0;
+    const on = info ? allRead : choiceReadAll(v, i + 1);
     td2.append(badge(on ? '済' : '未', on));
-    if (!on) td2.title = 'セーブに記録がありません。選択直後のリセットでは記録されません。';
+    if (!on) {
+      td2.title = (optionBits === 0 && inferredHit < 0)
+        ? 'セーブに記録がありません。選択直後のリセットでは記録されません。'
+        : '未読の選択肢があります。';
+    }
     tr.append(td0, td1, td2);
     cf.append(tr);
   });
